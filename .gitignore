@@ -1,0 +1,12 @@
+*.a
+*.d
+*.i
+*.log
+*.o
+*.so
+*.x
+bin/
+build/
+include/
+lib/
+git.info
