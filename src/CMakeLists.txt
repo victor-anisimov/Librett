@@ -1,5 +1,5 @@
 
-set(CUTT_SOURCE_FILES
+set(LIBRETT_SOURCE_FILES
     calls.h
     CudaMem.cpp
     CudaMem.h
@@ -26,14 +26,14 @@ set(CUTT_SOURCE_FILES
     LRUCache.h)
 
 
-add_library(cutt ${CUTT_SOURCE_FILES})
+add_library(librett ${LIBRETT_SOURCE_FILES})
 if(ENABLE_UMPIRE)
-    target_link_libraries(cutt umpire)
-    target_compile_definitions(cutt PUBLIC CUTT_HAS_UMPIRE -DCUTT_USES_THIS_UMPIRE_ALLOCATOR=${CUTT_USES_THIS_UMPIRE_ALLOCATOR})
+    target_link_libraries(librett umpire)
+    target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
 endif()
 
 # install library and include
-install(TARGETS cutt
+install(TARGETS librett
         ARCHIVE
             DESTINATION lib
         LIBRARY
@@ -44,9 +44,9 @@ install(FILES cutt.h
         )
 
 add_executable(cutt_bench EXCLUDE_FROM_ALL cutt_bench.cpp)
-target_link_libraries(cutt_bench PUBLIC cutt)
+target_link_libraries(cutt_bench PUBLIC librett)
 
 add_executable(cutt_test EXCLUDE_FROM_ALL cutt_test.cpp)
-target_link_libraries(cutt_test PUBLIC cutt)
+target_link_libraries(cutt_test PUBLIC librett)
 
 

@@ -105,28 +105,28 @@ endif
 
 CUDA_LFLAGS += -fPIC
 
-CUDA_LFLAGS += -Llib -lcudart -lcutt
+CUDA_LFLAGS += -Llib -lcudart -lrett
 ifdef ENABLE_NVTOOLS
 CUDA_LFLAGS += -lnvToolsExt
 endif
 
-all: create_build lib/libcutt.a bin/cutt_test bin/cutt_bench
+all: create_build lib/librett.a bin/cutt_test bin/cutt_bench
 
 create_build:
 	mkdir -p build
 
-lib/libcutt.a: $(OBJSLIB)
+lib/librett.a: $(OBJSLIB)
 	mkdir -p lib
-	rm -f lib/libcutt.a
-	ar -cvq lib/libcutt.a $(OBJSLIB)
+	rm -f lib/librett.a
+	ar -cvq lib/librett.a $(OBJSLIB)
 	mkdir -p include
 	cp -f src/cutt.h include/cutt.h
 
-bin/cutt_test : lib/libcutt.a $(OBJSTEST)
+bin/cutt_test : lib/librett.a $(OBJSTEST)
 	mkdir -p bin
 	$(HOST_CC) -o bin/cutt_test $(OBJSTEST) $(CUDA_LFLAGS)
 
-bin/cutt_bench : lib/libcutt.a $(OBJSBENCH)
+bin/cutt_bench : lib/librett.a $(OBJSBENCH)
 	mkdir -p bin
 	$(HOST_CC) -o bin/cutt_bench $(OBJSBENCH) $(CUDA_LFLAGS)
 
@@ -134,7 +134,7 @@ clean:
 	rm -f $(OBJS)
 	rm -f build/*.d
 	rm -f *~
-	rm -f lib/libcutt.a
+	rm -f lib/librett.a
 	rm -f bin/cutt_test
 	rm -f bin/cutt_bench
 

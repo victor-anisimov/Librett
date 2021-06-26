@@ -19,7 +19,7 @@ src/                Source code directory
 ## Compilation
 Add -DENABLE_CUDA and -DENABLE_SYCL for nVidia and Intel GPU platforms, respectively.
 ```
-cmake -Bbuild ./CMakeLists.txt
+cmake -H. -Bbuild
 cd build; make
 ```
 
@@ -27,8 +27,8 @@ cd build; make
 
 * `bin/`     cutt_test, cutt_bench
 * `build/`   temporary placeholder for object files
-* `include/` cutt.h
-* `lib/`     libcutt.a
+* `include/` librett.h
+* `lib/`     librett.a
 
 ## Description
 

@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
-project(cuTT)
+project(librett)
+set(CMAKE_STATIC_LIBRARY_PREFIX "")
 
 # enable CXX
 enable_language(CXX)
@@ -28,7 +29,7 @@ message(STATUS "CUDA Host Compiler: " ${CMAKE_CUDA_HOST_COMPILER})
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 option(ENABLE_NVTOOLS "Enable nvvp profiling of CPU code" OFF)
-option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in cuTT" OFF)
+option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
 option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
 include(CheckFunctionExists)
 
@@ -58,10 +59,10 @@ endif()
 # ENABLE_UMPIRE
 if (ENABLE_UMPIRE)
     find_package(umpire REQUIRED)
-    if (NOT CUTT_USES_THIS_UMPIRE_ALLOCATOR)
-        set(CUTT_USES_THIS_UMPIRE_ALLOCATOR "UM")
-    endif(NOT CUTT_USES_THIS_UMPIRE_ALLOCATOR)
-    message(STATUS "Will use Umpire allocator named \"${CUTT_USES_THIS_UMPIRE_ALLOCATOR}\"")
+    if (NOT LIBRETT_USES_THIS_UMPIRE_ALLOCATOR)
+	    set(LIBRE_USES_THIS_UMPIRE_ALLOCATOR "UM")
+    endif(NOT LIBRETT_USES_THIS_UMPIRE_ALLOCATOR)
+    message(STATUS "Will use Umpire allocator named \"${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR}\"")
 endif ()
 
 add_subdirectory(src)
