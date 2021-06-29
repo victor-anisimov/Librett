@@ -5,6 +5,8 @@
 *.o
 *.so
 *.x
+*.swp
+.*.swp
 bin/
 build/
 include/

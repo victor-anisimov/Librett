@@ -34,7 +34,7 @@ SOFTWARE.
 #include <cmath>
 #include <cctype>
 #include <random>
-#include "cutt.h"
+#include "librett.h"
 #include "CudaUtils.h"
 #include "CudaMem.h"
 #include "TensorTester.h"

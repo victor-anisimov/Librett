@@ -122,7 +122,7 @@ lib/librett.a: $(OBJSLIB)
 	rm -f lib/librett.a
 	ar -cvq lib/librett.a $(OBJSLIB)
 	mkdir -p include
-	cp -f src/cutt.h include/cutt.h
+	cp -f src/librett.h include/librett.h
 
 bin/cutt_test : lib/librett.a $(OBJSTEST)
 	mkdir -p bin

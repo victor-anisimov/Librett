@@ -8,7 +8,7 @@ set(LIBRETT_SOURCE_FILES
     CudaUtils.cu
     CudaUtils.h
     cutt.cpp
-    cutt.h
+    librett.h
     cuttGpuModel.cpp
     cuttGpuModel.h
     cuttGpuModelKernel.cu
@@ -39,7 +39,7 @@ install(TARGETS librett
         LIBRARY
             DESTINATION lib
         )
-install(FILES cutt.h
+install(FILES librett.h
         DESTINATION include
         )
 

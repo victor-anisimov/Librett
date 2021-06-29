@@ -31,7 +31,7 @@ SOFTWARE.
 #include <ctime>           // std::time
 #include <cstring>         // strcmp
 #include <cmath>
-#include "cutt.h"
+#include "librett.h"
 #include "CudaUtils.h"
 #include "CudaMem.h"
 #include "TensorTester.h"
