@@ -1,30 +1,29 @@
 
 set(LIBRETT_SOURCE_FILES
     calls.h
-    CudaMem.cpp
-    CudaMem.h
-    CudaMemcpy.cu
-    CudaMemcpy.h
-    CudaUtils.cu
-    CudaUtils.h
-    cutt.cpp
+    Mem.cpp
+    Mem.h
+    Memcpy.cu
+    Memcpy.h
+    Utils.cu
+    Utils.h
+    librett.cpp
     librett.h
-    cuttGpuModel.cpp
-    cuttGpuModel.h
-    cuttGpuModelKernel.cu
-    cuttGpuModelKernel.h
-    cuttkernel.cu
-    cuttkernel.h
-    cuttplan.h
-    cuttplan.cpp
-    cuttTimer.cpp
-    cuttTimer.h
-    cuttTypes.h
+    GpuModel.cpp
+    GpuModel.h
+    GpuModelKernel.cu
+    GpuModelKernel.h
+    kernel.cu
+    kernel.h
+    plan.h
+    plan.cpp
+    Timer.cpp
+    Timer.h
+    Types.h
     int_vector.h
     TensorTester.cu
     TensorTester.h
     LRUCache.h)
-
 
 add_library(librett ${LIBRETT_SOURCE_FILES})
 if(ENABLE_UMPIRE)
@@ -43,10 +42,10 @@ install(FILES librett.h
         DESTINATION include
         )
 
-add_executable(cutt_bench EXCLUDE_FROM_ALL cutt_bench.cpp)
-target_link_libraries(cutt_bench PUBLIC librett)
+add_executable(librett_bench EXCLUDE_FROM_ALL librett_bench.cpp)
+target_link_libraries(librett_bench PUBLIC librett)
 
-add_executable(cutt_test EXCLUDE_FROM_ALL cutt_test.cpp)
-target_link_libraries(cutt_test PUBLIC librett)
+add_executable(librett_test EXCLUDE_FROM_ALL librett_test.cpp)
+target_link_libraries(librett_test PUBLIC librett)
 
 

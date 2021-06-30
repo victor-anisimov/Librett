@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #include <cuda.h>
-#include "CudaUtils.h"
-#include "CudaMemcpy.h"
+#include "Utils.h"
+#include "Memcpy.h"
 
 const int numthread = 64;
 

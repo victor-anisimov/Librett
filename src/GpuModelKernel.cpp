@@ -24,9 +24,9 @@ SOFTWARE.
 *******************************************************************************/
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
-#include "CudaUtils.h"
-#include "CudaMem.h"
-#include "cuttGpuModelKernel.h"
+#include "Utils.h"
+#include "Mem.h"
+#include "GpuModelKernel.h"
 
 #define RESTRICT //__restrict__
 
@@ -952,7 +952,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-bool cuttGpuModelKernel(cuttPlan_t &plan, const int accWidth,
+bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth,
                         const int cacheWidth, int &gld_tran, int &gst_tran,
                         int &gld_req, int &gst_req, int &cl_full_l2,
                         int &cl_part_l2, int &cl_full_l1, int &cl_part_l1) try {
@@ -1006,7 +1006,7 @@ workgroup size if needed.
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
-        printf("cuttGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0
@@ -1061,7 +1061,7 @@ workgroup size if needed.
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
-        printf("cuttGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0

@@ -27,12 +27,12 @@ SOFTWARE.
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
 #endif
-#include "cuttTimer.h"
-#include "CudaUtils.h"
+#include "Timer.h"
+#include "Utils.h"
 // #include <limits>       // std::numeric_limits
 #include <algorithm>
 #ifdef RUNTIME_EVENT_TIMER
-#include "CudaUtils.h"
+#include "Utils.h"
 #endif
 
 #ifdef RUNTIME_EVENT_TIMER
@@ -165,17 +165,17 @@ double Timer::seconds() {
 //
 // Class constructor
 //
-cuttTimer::cuttTimer(int sizeofType) : sizeofType(sizeofType) {}
+librettTimer::librettTimer(int sizeofType) : sizeofType(sizeofType) {}
 
 //
 // Class destructor
 //
-cuttTimer::~cuttTimer() {}
+librettTimer::~librettTimer() {}
 
 //
 // Start timer
 //
-void cuttTimer::start(std::vector<int>& dim, std::vector<int>& permutation) {
+void librettTimer::start(std::vector<int>& dim, std::vector<int>& permutation) {
   curDim = dim;
   curPermutation = permutation;
   curBytes = sizeofType*2;   // "2x" because every element is read and also written out
@@ -189,7 +189,7 @@ void cuttTimer::start(std::vector<int>& dim, std::vector<int>& permutation) {
 //
 // Stop timer and record statistics
 //
-void cuttTimer::stop() {
+void librettTimer::stop() {
   timer.stop();
   double bandwidth = GBs();
   auto it = stats.find(curDim.size());
@@ -213,14 +213,14 @@ void cuttTimer::stop() {
 //
 // Returns the duration of the last run in seconds
 //
-double cuttTimer::seconds() {
+double librettTimer::seconds() {
   return timer.seconds();
 }
 
 //
 // Returns the bandwidth of the last run in GB/s
 //
-double cuttTimer::GBs() {
+double librettTimer::GBs() {
   const double BILLION = 1000000000.0;
   double sec = seconds();
   return (sec == 0.0) ? 0.0 : (double)(curBytes)/(BILLION*sec);
@@ -229,7 +229,7 @@ double cuttTimer::GBs() {
 //
 // Returns the bandwidth of the last run in GiB/s
 //
-double cuttTimer::GiBs() {
+double librettTimer::GiBs() {
   const double iBILLION = 1073741824.0;
   double sec = seconds();
   return (sec == 0.0) ? 0.0 : (double)(curBytes)/(iBILLION*sec);
@@ -238,7 +238,7 @@ double cuttTimer::GiBs() {
 //
 // Returns the best performing tensor transpose for rank
 //
-double cuttTimer::getBest(int rank) {
+double librettTimer::getBest(int rank) {
   auto it = stats.find(rank);
   if (it == stats.end()) return 0.0;
   Stat& stat = it->second;
@@ -248,7 +248,7 @@ double cuttTimer::getBest(int rank) {
 //
 // Returns the worst performing tensor transpose for rank
 //
-double cuttTimer::getWorst(int rank) {
+double librettTimer::getWorst(int rank) {
   auto it = stats.find(rank);
   if (it == stats.end()) return 0.0;
   Stat& stat = it->second;
@@ -258,7 +258,7 @@ double cuttTimer::getWorst(int rank) {
 //
 // Returns the worst performing tensor transpose for rank
 //
-double cuttTimer::getWorst(int rank, std::vector<int>& dim, std::vector<int>& permutation) {
+double librettTimer::getWorst(int rank, std::vector<int>& dim, std::vector<int>& permutation) {
   auto it = stats.find(rank);
   if (it == stats.end()) return 0.0;
   Stat& stat = it->second;
@@ -270,7 +270,7 @@ double cuttTimer::getWorst(int rank, std::vector<int>& dim, std::vector<int>& pe
 //
 // Returns the median bandwidth for rank
 //
-double cuttTimer::getMedian(int rank) {
+double librettTimer::getMedian(int rank) {
   auto it = stats.find(rank);
   if (it == stats.end()) return 0.0;
   Stat& stat = it->second;
@@ -291,7 +291,7 @@ double cuttTimer::getMedian(int rank) {
 //
 // Returns the average bandwidth for rank
 //
-double cuttTimer::getAverage(int rank) {
+double librettTimer::getAverage(int rank) {
   auto it = stats.find(rank);
   if (it == stats.end()) return 0.0;
   Stat& stat = it->second;
@@ -301,7 +301,7 @@ double cuttTimer::getAverage(int rank) {
 //
 // Returns all data for rank
 //
-std::vector<double> cuttTimer::getData(int rank) {
+std::vector<double> librettTimer::getData(int rank) {
   std::vector<double> res;
   auto it = stats.find(rank);
   if (it != stats.end()) {
@@ -314,7 +314,7 @@ std::vector<double> cuttTimer::getData(int rank) {
 //
 // Returns the worst performing tensor transpose of all
 //
-double cuttTimer::getWorst(std::vector<int>& dim, std::vector<int>& permutation) {
+double librettTimer::getWorst(std::vector<int>& dim, std::vector<int>& permutation) {
   double worstBW = 1.0e20;
   int worstRank = 0;
   for (auto it=ranks.begin(); it != ranks.end(); it++) {

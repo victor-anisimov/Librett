@@ -28,8 +28,8 @@ SOFTWARE.
 //
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
-#include "CudaUtils.h"
-#include "CudaMem.h"
+#include "Utils.h"
+#include "Mem.h"
 #include "TensorTester.h"
 #include <cmath>
 

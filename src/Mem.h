@@ -22,16 +22,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
-#ifndef CUDAMEM_H
-#define CUDAMEM_H
+#ifndef LIBRETTMEM_H
+#define LIBRETTMEM_H
 
-#include "CudaUtils.h"
+#include "Utils.h"
 
-#ifdef CUTT_HAS_UMPIRE
+#ifdef LIBRETT_HAS_UMPIRE
 #include <umpire/Umpire.hpp>
 
-// defined in cutt.cpp
-extern umpire::Allocator cutt_umpire_allocator;
+// defined in librett.cpp
+extern umpire::Allocator librett_umpire_allocator;
 #endif
 
 void allocate_device_T(void **pp, const size_t len, const size_t sizeofT);
@@ -58,4 +58,4 @@ void deallocate_device(T **pp) {
 }
 
 
-#endif //CUDAMEM_H
+#endif //LIBRETTMEM_H

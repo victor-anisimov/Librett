@@ -24,8 +24,8 @@ SOFTWARE.
 *******************************************************************************/
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
-#include "CudaUtils.h"
-#include "CudaMemcpy.h"
+#include "Utils.h"
+#include "Memcpy.h"
 
 // suppress Clang warning about it being unable to unroll a loop
 #if defined(__clang__)

@@ -22,8 +22,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTT_H
-#define CUTT_H
+#ifndef LIBRETT_H
+#define LIBRETT_H
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
@@ -31,36 +31,36 @@ SOFTWARE.
 #include <cuda_runtime.h>
 #endif
 
-// Handle type that is used to store and access cutt plans
-typedef unsigned int cuttHandle;
+// Handle type that is used to store and access librett plans
+typedef unsigned int librettHandle;
 
 // Return value
-typedef enum cuttResult_t {
-  CUTT_SUCCESS,            // Success
-  CUTT_INVALID_PLAN,       // Invalid plan handle
-  CUTT_INVALID_PARAMETER,  // Invalid input parameter
-  CUTT_INVALID_DEVICE,     // Execution tried on device different than where plan was created
-  CUTT_INTERNAL_ERROR,     // Internal error
-  CUTT_UNDEFINED_ERROR,    // Undefined error
-} cuttResult;
+typedef enum librettResult_t {
+  LIBRETT_SUCCESS,            // Success
+  LIBRETT_INVALID_PLAN,       // Invalid plan handle
+  LIBRETT_INVALID_PARAMETER,  // Invalid input parameter
+  LIBRETT_INVALID_DEVICE,     // Execution tried on device different than where plan was created
+  LIBRETT_INTERNAL_ERROR,     // Internal error
+  LIBRETT_UNDEFINED_ERROR,    // Undefined error
+} librettResult;
 
-// Initializes cuTT
+// Initializes LIBRETT
 //
 // This is only needed for the Umpire allocator's lifetime management:
-// - if CUTT_HAS_UMPIRE is defined, will grab Umpire's allocator;
+// - if LIBRETT_HAS_UMPIRE is defined, will grab Umpire's allocator;
 // - otherwise this is a no-op
-void cuttInitialize();
+void librettInitialize();
 
-// Finalizes cuTT
+// Finalizes LIBRETT
 //
 // This is currently a no-op
-void cuttFinalize();
+void librettFinalize();
 
 //
 // Create plan
 //
 // Parameters
-// handle            = Returned handle to cuTT plan
+// handle            = Returned handle to LIBRETT plan
 // rank              = Rank of the tensor
 // dim[rank]         = Dimensions of the tensor
 // permutation[rank] = Transpose permutation
@@ -71,10 +71,10 @@ void cuttFinalize();
 // Success/unsuccess code
 //
 #ifdef SYCL
-cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation,
+librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation,
                     size_t sizeofType, sycl::queue *stream);
 #else
-cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
+librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
   cudaStream_t stream);
 #endif
 
@@ -82,7 +82,7 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
 // Create plan and choose implementation by measuring performance
 //
 // Parameters
-// handle            = Returned handle to cuTT plan
+// handle            = Returned handle to LIBRETT plan
 // rank              = Rank of the tensor
 // dim[rank]         = Dimensions of the tensor
 // permutation[rank] = Transpose permutation
@@ -95,10 +95,10 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
 // Success/unsuccess code
 //
 #ifdef SYCL
-cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
+librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
   sycl::queue *stream, void *idata, void *odata);
 #else
-cuttResult cuttPlanMeasure(cuttHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
+librettResult librettPlanMeasure(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
   cudaStream_t stream, void* idata, void* odata);
 #endif
 
@@ -106,24 +106,24 @@ cuttResult cuttPlanMeasure(cuttHandle* handle, int rank, int* dim, int* permutat
 // Destroy plan
 //
 // Parameters
-// handle            = Handle to the cuTT plan
+// handle            = Handle to the LIBRETT plan
 // 
 // Returns
 // Success/unsuccess code
 //
-cuttResult cuttDestroy(cuttHandle handle);
+librettResult librettDestroy(librettHandle handle);
 
 //
 // Execute plan out-of-place
 //
 // Parameters
-// handle            = Returned handle to cuTT plan
+// handle            = Returned handle to LIBRETT plan
 // idata             = Input data size product(dim)
 // odata             = Output data size product(dim)
 // 
 // Returns
 // Success/unsuccess code
 //
-cuttResult cuttExecute(cuttHandle handle, void* idata, void* odata);
+librettResult librettExecute(librettHandle handle, void* idata, void* odata);
 
-#endif // CUTT_H
+#endif // LIBRETT_H

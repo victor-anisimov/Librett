@@ -22,16 +22,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTTGPUMODEL_H
-#define CUTTGPUMODEL_H
+#ifndef LIBRETTGPUMODEL_H
+#define LIBRETTGPUMODEL_H
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
 #endif
 #include <vector>
-#include "cuttTypes.h"
-#include "cuttplan.h"
+#include "Types.h"
+#include "plan.h"
 #include "int_vector.h"
 
 void computePos(const int vol0, const int vol1,
@@ -101,4 +101,4 @@ double cyclesTiled(const bool isCopy, const size_t sizeofType, const cudaDeviceP
 
 bool testCounters(const int warpSize, const int accWidth, const int cacheWidth);
 
-#endif // CUTTGPUMODEL_H
+#endif // LIBRETTGPUMODEL_H

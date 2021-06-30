@@ -32,10 +32,10 @@ SOFTWARE.
 #include <algorithm>
 #include <random>
 #include <cstring> // memcpy
-#include "cuttGpuModel.h"
-#include "cuttGpuModelKernel.h"
+#include "GpuModel.h"
+#include "GpuModelKernel.h"
 #ifdef ENABLE_NVTOOLS
-#include "CudaUtils.h"
+#include "Utils.h"
 #endif
 
 // #define CALC_L1_CACHELINES

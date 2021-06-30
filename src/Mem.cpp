@@ -3,7 +3,7 @@
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
 #endif
-#include "CudaMem.h"
+#include "Mem.h"
 
 //----------------------------------------------------------------------------------------
 //
@@ -13,8 +13,8 @@
 //
 #ifdef SYCL
 void allocate_device_T(void **pp, const size_t len, const size_t sizeofT) try {
-#ifdef CUTT_HAS_UMPIRE
-  *pp = cutt_umpire_allocator.allocate(sizeofT*len);
+#ifdef LIBRETT_HAS_UMPIRE
+  *pp = librett_umpire_allocator.allocate(sizeofT*len);
 #else
   /*
   DPCT1003:0: Migrated API does not return error code. (*, 0) is inserted. You
@@ -30,8 +30,8 @@ catch (sycl::exception const &exc) {
 }
 #else // CUDA
 void allocate_device_T(void **pp, const size_t len, const size_t sizeofT) {
-#ifdef CUTT_HAS_UMPIRE
-  *pp = cutt_umpire_allocator.allocate(sizeofT*len);
+#ifdef LIBRETT_HAS_UMPIRE
+  *pp = librett_umpire_allocator.allocate(sizeofT*len);
 #else
   cudaCheck(cudaMalloc(pp, sizeofT*len));
 #endif
@@ -45,8 +45,8 @@ void allocate_device_T(void **pp, const size_t len, const size_t sizeofT) {
 //
 #ifdef SYCL
 void deallocate_device_T(void **pp) try {
-#ifdef CUTT_HAS_UMPIRE
-  cutt_umpire_allocator.deallocate((void *) (*pp) );
+#ifdef LIBRETT_HAS_UMPIRE
+  librett_umpire_allocator.deallocate((void *) (*pp) );
 #else
   if (*pp != NULL) {
     /*
@@ -65,8 +65,8 @@ catch (sycl::exception const &exc) {
 }
 #else // CUDA
 void deallocate_device_T(void **pp) {
-#ifdef CUTT_HAS_UMPIRE
-  cutt_umpire_allocator.deallocate((void *) (*pp) );
+#ifdef LIBRETT_HAS_UMPIRE
+  librett_umpire_allocator.deallocate((void *) (*pp) );
 #else
   if (*pp != NULL) {
     cudaCheck(cudaFree((void *)(*pp)));

@@ -22,8 +22,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUDAUTILS_H
-#define CUDAUTILS_H
+#ifndef LIBRETTUTILS_H
+#define LIBRETTUTILS_H
 
 #include <stdio.h>
 
@@ -145,4 +145,4 @@ void gpuRangeStart(const char *range_name);
 void gpuRangeStop();
 #endif
 
-#endif // CUDAUTILS_H
+#endif // LIBRETTUTILS_H

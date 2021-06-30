@@ -23,9 +23,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #include <cuda.h>
-#include "CudaUtils.h"
-#include "CudaMem.h"
-#include "cuttGpuModelKernel.h"
+#include "Utils.h"
+#include "Mem.h"
+#include "GpuModelKernel.h"
 
 #define RESTRICT //__restrict__
 
@@ -684,7 +684,7 @@ void runCounters(const int warpSize, const int* hostPosData, const int numPosDat
   deallocate_device<int>(&devPosData);
 }
 
-bool cuttGpuModelKernel(cuttPlan_t& plan, const int accWidth, const int cacheWidth,
+bool librettGpuModelKernel(librettPlan_t& plan, const int accWidth, const int cacheWidth,
   int& gld_tran, int& gst_tran, int& gld_req, int& gst_req,
   int& cl_full_l2, int& cl_part_l2, int& cl_full_l1, int& cl_part_l1) {
 
@@ -711,7 +711,7 @@ bool cuttGpuModelKernel(cuttPlan_t& plan, const int accWidth, const int cacheWid
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
-        printf("cuttGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0
@@ -735,7 +735,7 @@ bool cuttGpuModelKernel(cuttPlan_t& plan, const int accWidth, const int cacheWid
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
-        printf("cuttGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettGpuModelKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0

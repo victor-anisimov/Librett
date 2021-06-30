@@ -22,8 +22,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTTPLAN_H
-#define CUTTPLAN_H
+#ifndef LIBRETTPLAN_H
+#define LIBRETTPLAN_H
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
@@ -34,7 +34,7 @@ SOFTWARE.
 
 #include <list>
 #include <vector>
-#include "cuttTypes.h"
+#include "Types.h"
 
 const int TILEDIM = 32;
 const int TILEROWS = 8;
@@ -125,7 +125,7 @@ public:
 };
 
 // Class that stores the plan data
-class cuttPlan_t {
+class librettPlan_t {
 public:
   // Device for which this plan was made
   int deviceID;
@@ -191,8 +191,8 @@ public:
   // For TiledSingleOutRank
   TensorConv* Mm;
 
-  cuttPlan_t();
-  ~cuttPlan_t();
+  librettPlan_t();
+  ~librettPlan_t();
   void print();
 #ifdef SYCL
   void setStream(sycl::queue *stream_in);
@@ -207,44 +207,44 @@ public:
 #ifdef SYCL
   static bool createPlans(const int rank, const int *dim, const int *permutation, 
     const int redRank, const int *redDim, const int *redPermutation, const size_t sizeofType, 
-    const int deviceID, const dpct::device_info &prop, std::list<cuttPlan_t> &plans);
+    const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
 #else
   static bool createPlans(const int rank, const int* dim, const int* permutation,
     const int redRank, const int* redDim, const int* redPermutation, const size_t sizeofType, 
-    const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
 #endif
 
 private:
 #ifdef SYCL
   static bool createTrivialPlans(const int rank, const int *dim, const int *permutation,
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<cuttPlan_t> &plans);
+    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
 
   static bool createTiledPlans(const int rank, const int *dim, const int *permutation, 
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<cuttPlan_t> &plans);
+    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
 
   static bool createTiledCopyPlans(const int rank, const int *dim, const int *permutation,
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<cuttPlan_t> &plans);
+    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
 
   static bool createPackedPlans(const int rank, const int *dim, const int *permutation, 
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<cuttPlan_t> &plans);
+    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
 
   static bool createPackedSplitPlans(const int rank, const int *dim, const int *permutation,
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<cuttPlan_t> &plans);
+    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
 #else
   static bool createTrivialPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
 
   static bool createTiledPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
 
   static bool createTiledCopyPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
 
   static bool createPackedPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
 
   static bool createPackedSplitPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
 #endif
 
   bool setup(const int rank_in, const int* dim, const int* permutation,
@@ -254,14 +254,14 @@ private:
 };
 
 #ifdef SYCL
-void printMatlab(const dpct::device_info &prop, std::list<cuttPlan_t> &plans, std::vector<double> &times);
+void printMatlab(const dpct::device_info &prop, std::list<librettPlan_t> &plans, std::vector<double> &times);
 #else
-void printMatlab(const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans, std::vector<double>& times);
+void printMatlab(const cudaDeviceProp& prop, std::list<librettPlan_t>& plans, std::vector<double>& times);
 #endif
 
 void reduceRanks(const int rank, const int* dim, const int* permutation,
   std::vector<int>& redDim, std::vector<int>& redPermutation);
 
-std::list<cuttPlan_t>::iterator choosePlanHeuristic(std::list<cuttPlan_t>& plans);
+std::list<librettPlan_t>::iterator choosePlanHeuristic(std::list<librettPlan_t>& plans);
 
-#endif // CUTTPLAN_H
+#endif // LIBRETTPLAN_H

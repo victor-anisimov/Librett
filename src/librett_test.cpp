@@ -32,29 +32,29 @@ SOFTWARE.
 #include <cstring>         // strcmp
 #include <cmath>
 #include "librett.h"
-#include "CudaUtils.h"
-#include "CudaMem.h"
+#include "Utils.h"
+#include "Mem.h"
 #include "TensorTester.h"
-#include "cuttTimer.h"
-#include "cuttGpuModel.h"  // testCounters
+#include "Timer.h"
+#include "GpuModel.h"      // testCounters
 
 //
-// Error checking wrapper for cutt
+// Error checking wrapper for librett
 //
-#define cuttCheck(stmt) do {                                 \
-  cuttResult err = stmt;                            \
-  if (err != CUTT_SUCCESS) {                          \
+#define librettCheck(stmt) do {                                                   \
+  librettResult err = stmt;                                                       \
+  if (err != LIBRETT_SUCCESS) {                                                      \
     fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-    exit(1); \
-  }                                                  \
+    exit(1);                                                                      \
+  }                                                                               \
 } while(0)
 
 #ifdef SYCL
 sycl::queue q = dpct::get_default_queue();
 #endif
 
-cuttTimer* timerFloat;
-cuttTimer* timerDouble;
+librettTimer* timerFloat;
+librettTimer* timerDouble;
 
 long long int* dataIn  = NULL;
 long long int* dataOut = NULL;
@@ -88,7 +88,7 @@ try
   }
 
   if (!arg_ok) {
-    printf("cutt_test [options]\n");
+    printf("librett_test [options]\n");
     printf("Options:\n");
     printf("-device gpuid : use GPU with ID gpuid\n");
     return 1;
@@ -109,8 +109,8 @@ try
   cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
 #endif
 
-  timerFloat = new cuttTimer(4);
-  timerDouble = new cuttTimer(8);
+  timerFloat = new librettTimer(4);
+  timerDouble = new librettTimer(8);
 
   // Allocate device data, 100M elements
   allocate_device<long long int>(&dataIn, dataSize);
@@ -426,11 +426,11 @@ try
 #endif
 
 
-  cuttHandle plans[numStream];
+  librettHandle plans[numStream];
 
   for (int i=0;i < numStream;i++) {
-    cuttCheck(cuttPlan(&plans[i], dim.size(), dim.data(), permutation.data(), sizeof(double), streams[i]));
-    cuttCheck(cuttExecute(plans[i], dataIn, dataOut));
+    librettCheck(librettPlan(&plans[i], dim.size(), dim.data(), permutation.data(), sizeof(double), streams[i]));
+    librettCheck(librettExecute(plans[i], dataIn, dataOut));
   }
 
 #ifdef SYCL
@@ -448,7 +448,7 @@ try
 #endif
 
   for (int i=0;i < numStream;i++) {
-    cuttCheck(cuttDestroy(plans[i]));
+    librettCheck(librettDestroy(plans[i]));
 #ifdef SYCL
     cudaCheck((dpct::get_current_device().destroy_queue(streams[i]), 0));
 #else // CUDA
@@ -519,31 +519,31 @@ try
   printf("permutation\n");
   printVec(permutation);
 
-  cuttTimer* timer;
+  librettTimer* timer;
   if (sizeof(T) == 4) {
     timer = timerFloat;
   } else {
     timer = timerDouble;
   }
 
-  cuttHandle plan;
+  librettHandle plan;
 #ifdef SYCL
   sycl::queue q = dpct::get_default_queue();
-  cuttCheck(cuttPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
+  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
   set_device_array<T>((T *)dataOut, -1, vol, &q);
   cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
-  cuttCheck(cuttPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
+  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
   set_device_array<T>((T *)dataOut, -1, vol);
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
   if (vol > 1000000) timer->start(dim, permutation);
-  cuttCheck(cuttExecute(plan, dataIn, dataOut));
+  librettCheck(librettExecute(plan, dataIn, dataOut));
   if (vol > 1000000) timer->stop();
   //q.wait();
 
-  cuttCheck(cuttDestroy(plan));
+  librettCheck(librettDestroy(plan));
 
   return tester->checkTranspose<T>(rank, dim.data(), permutation.data(), (T *)dataOut);
 }

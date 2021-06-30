@@ -22,8 +22,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTTTYPES_H
-#define CUTTTYPES_H
+#ifndef LIBRETTTYPES_H
+#define LIBRETTTYPES_H
 
 #define MAX_REG_STORAGE 8
 
@@ -42,4 +42,4 @@ struct TensorConvInOut {
   int ct_out;
 };
 
-#endif // CUTTTYPES_H
+#endif // LIBRETTTYPES_H

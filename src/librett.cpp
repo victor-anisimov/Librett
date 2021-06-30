@@ -30,11 +30,11 @@ SOFTWARE.
 #endif
 #include <list>
 #include <unordered_map>
-#include "CudaUtils.h"
-#include "CudaMem.h"
-#include "cuttplan.h"
-#include "cuttkernel.h"
-#include "cuttTimer.h"
+#include "Utils.h"
+#include "Mem.h"
+#include "plan.h"
+#include "kernel.h"
+#include "Timer.h"
 #include "librett.h"
 #include <atomic>
 #include <mutex>
@@ -42,16 +42,16 @@ SOFTWARE.
 // #include <chrono>
 
 // global Umpire allocator
-#ifdef CUTT_HAS_UMPIRE
-umpire::Allocator cutt_umpire_allocator;
+#ifdef LIBRETT_HAS_UMPIRE
+umpire::Allocator librett_umpire_allocator;
 #endif
 
 // Hash table to store the plans
-static std::unordered_map<cuttHandle, cuttPlan_t* > planStorage;
+static std::unordered_map<librettHandle, librettPlan_t* > planStorage;
 static std::mutex planStorageMutex;
 
 // Current handle
-static std::atomic<cuttHandle> curHandle(0);
+static std::atomic<librettHandle> curHandle(0);
 
 // Table of devices that have been initialized
 #ifdef SYCL
@@ -78,7 +78,7 @@ void getDeviceProp(int &deviceID, dpct::device_info &prop) try {
     may need to rewrite this code.
     */
     cudaCheck( (dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
-    //cuttKernelSetSharedMemConfig();
+    //librettKernelSetSharedMemConfig();
     deviceProps.insert({deviceID, prop});
   } else {
     prop = it->second;
@@ -100,7 +100,7 @@ void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
     cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
-    cuttKernelSetSharedMemConfig();
+    librettKernelSetSharedMemConfig();
     deviceProps.insert({deviceID, prop});
   } else {
     prop = it->second;
@@ -108,14 +108,14 @@ void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
 }
 #endif
 
-cuttResult cuttPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeofType) {
+librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeofType) {
   // Check sizeofType
-  if (sizeofType != 4 && sizeofType != 8) return CUTT_INVALID_PARAMETER;
+  if (sizeofType != 4 && sizeofType != 8) return LIBRETT_INVALID_PARAMETER;
   // Check rank
-  if (rank <= 1) return CUTT_INVALID_PARAMETER;
+  if (rank <= 1) return LIBRETT_INVALID_PARAMETER;
   // Check dim[]
   for (int i=0;i < rank;i++) {
-    if (dim[i] <= 1) return CUTT_INVALID_PARAMETER;
+    if (dim[i] <= 1) return LIBRETT_INVALID_PARAMETER;
   }
   // Check permutation
   bool permutation_fail = false;
@@ -128,12 +128,12 @@ cuttResult cuttPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeo
     }
   }
   delete [] check;
-  if (permutation_fail) return CUTT_INVALID_PARAMETER;  
+  if (permutation_fail) return LIBRETT_INVALID_PARAMETER;  
 
-  return CUTT_SUCCESS;
+  return LIBRETT_SUCCESS;
 }
 
-cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType, 
+librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType, 
 #ifdef SYCL
   sycl::queue *stream
 #else // CUDA
@@ -146,8 +146,8 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
 #endif
 
   // Check that input parameters are valid
-  cuttResult inpCheck = cuttPlanCheckInput(rank, dim, permutation, sizeofType);
-  if (inpCheck != CUTT_SUCCESS) return inpCheck;
+  librettResult inpCheck = librettPlanCheckInput(rank, dim, permutation, sizeofType);
+  if (inpCheck != LIBRETT_SUCCESS) return inpCheck;
 
   // Create new handle
   *handle = curHandle;
@@ -156,7 +156,7 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
   // Check that the current handle is available (it better be!)
   {
     std::lock_guard<std::mutex> lock(planStorageMutex);
-    if (planStorage.count(*handle) != 0) return CUTT_INTERNAL_ERROR;
+    if (planStorage.count(*handle) != 0) return LIBRETT_INTERNAL_ERROR;
   }
 
   // Prepare device
@@ -174,16 +174,16 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
   reduceRanks(rank, dim, permutation, redDim, redPermutation);
 
   // Create plans from reduced ranks
-  std::list<cuttPlan_t> plans;
+  std::list<librettPlan_t> plans;
   // if (rank != redDim.size()) {
-  //   if (!createPlans(redDim.size(), redDim.data(), redPermutation.data(), sizeofType, prop, plans)) return CUTT_INTERNAL_ERROR;
+  //   if (!createPlans(redDim.size(), redDim.data(), redPermutation.data(), sizeofType, prop, plans)) return LIBRETT_INTERNAL_ERROR;
   // }
 
   // // Create plans from non-reduced ranks
-  // if (!createPlans(rank, dim, permutation, sizeofType, prop, plans)) return CUTT_INTERNAL_ERROR;
+  // if (!createPlans(rank, dim, permutation, sizeofType, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 
 #if 0
-  if (!cuttKernelDatabase(deviceID, prop)) return CUTT_INTERNAL_ERROR;
+  if (!librettKernelDatabase(deviceID, prop)) return LIBRETT_INTERNAL_ERROR;
 #endif
 
 #ifdef ENABLE_NVTOOLS
@@ -194,8 +194,8 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
   // std::chrono::high_resolution_clock::time_point plan_start;
   // plan_start = std::chrono::high_resolution_clock::now();
 
-  if (!cuttPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(), 
-    sizeofType, deviceID, prop, plans)) return CUTT_INTERNAL_ERROR;
+  if (!librettPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(), 
+    sizeofType, deviceID, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 
   // std::chrono::high_resolution_clock::time_point plan_end;
   // plan_end = std::chrono::high_resolution_clock::now();
@@ -209,7 +209,7 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
 
   // Count cycles
   for (auto it=plans.begin();it != plans.end();it++) {
-    if (!it->countCycles(prop, 10)) return CUTT_INTERNAL_ERROR;
+    if (!it->countCycles(prop, 10)) return LIBRETT_INTERNAL_ERROR;
   }
 
 #ifdef ENABLE_NVTOOLS
@@ -218,13 +218,13 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
 #endif
 
   // Choose the plan
-  std::list<cuttPlan_t>::iterator bestPlan = choosePlanHeuristic(plans);
-  if (bestPlan == plans.end()) return CUTT_INTERNAL_ERROR;
+  std::list<librettPlan_t>::iterator bestPlan = choosePlanHeuristic(plans);
+  if (bestPlan == plans.end()) return LIBRETT_INTERNAL_ERROR;
 
   // bestPlan->print();
 
   // Create copy of the plan outside the list
-  cuttPlan_t* plan = new cuttPlan_t();
+  librettPlan_t* plan = new librettPlan_t();
   // NOTE: No deep copy needed here since device memory hasn't been allocated yet
   *plan = *bestPlan;
   // Set device pointers to NULL in the old copy of the plan so
@@ -247,10 +247,10 @@ cuttResult cuttPlan(cuttHandle *handle, int rank, int *dim, int *permutation, si
   gpuRangeStop();
 #endif
 
-  return CUTT_SUCCESS;
+  return LIBRETT_SUCCESS;
 }
 
-cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
+librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
 #ifdef SYCL
   sycl::queue *stream, void *idata, void *odata) try 
 #else // CUDA
@@ -259,10 +259,10 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
 {
 
   // Check that input parameters are valid
-  cuttResult inpCheck = cuttPlanCheckInput(rank, dim, permutation, sizeofType);
-  if (inpCheck != CUTT_SUCCESS) return inpCheck;
+  librettResult inpCheck = librettPlanCheckInput(rank, dim, permutation, sizeofType);
+  if (inpCheck != LIBRETT_SUCCESS) return inpCheck;
 
-  if (idata == odata) return CUTT_INVALID_PARAMETER;
+  if (idata == odata) return LIBRETT_INVALID_PARAMETER;
 
   // Create new handle
   *handle = curHandle;
@@ -271,7 +271,7 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
   // Check that the current handle is available (it better be!)
   {
     std::lock_guard<std::mutex> lock(planStorageMutex);
-    if (planStorage.count(*handle) != 0) return CUTT_INTERNAL_ERROR;
+    if (planStorage.count(*handle) != 0) return LIBRETT_INTERNAL_ERROR;
   }
 
   // Prepare device
@@ -289,22 +289,22 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
   reduceRanks(rank, dim, permutation, redDim, redPermutation);
 
   // Create plans from reduced ranks
-  std::list<cuttPlan_t> plans;
+  std::list<librettPlan_t> plans;
 #if 0
   // if (rank != redDim.size()) {
-    if (!createPlans(redDim.size(), redDim.data(), redPermutation.data(), sizeofType, prop, plans)) return CUTT_INTERNAL_ERROR;
+    if (!createPlans(redDim.size(), redDim.data(), redPermutation.data(), sizeofType, prop, plans)) return LIBRETT_INTERNAL_ERROR;
   // }
 
   // Create plans from non-reduced ranks
-  // if (!createPlans(rank, dim, permutation, sizeofType, prop, plans)) return CUTT_INTERNAL_ERROR;
+  // if (!createPlans(rank, dim, permutation, sizeofType, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 #else
-  if (!cuttPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(), 
-    sizeofType, deviceID, prop, plans)) return CUTT_INTERNAL_ERROR;
+  if (!librettPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(), 
+    sizeofType, deviceID, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 #endif
 
   // // Count cycles
   // for (auto it=plans.begin();it != plans.end();it++) {
-  //   if (!it->countCycles(prop, 10)) return CUTT_INTERNAL_ERROR;
+  //   if (!it->countCycles(prop, 10)) return LIBRETT_INTERNAL_ERROR;
   // }
 
   // // Count the number of elements
@@ -329,7 +329,7 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
 #endif
     timer.start();
     // Execute plan
-    if (!cuttKernel(*it, idata, odata)) return CUTT_INTERNAL_ERROR;
+    if (!librettKernel(*it, idata, odata)) return LIBRETT_INTERNAL_ERROR;
     timer.stop();
     double curTime = timer.seconds();
     // it->print();
@@ -340,7 +340,7 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
       bestPlan = it;
     }
   }
-  if (bestPlan == plans.end()) return CUTT_INTERNAL_ERROR;
+  if (bestPlan == plans.end()) return LIBRETT_INTERNAL_ERROR;
 
   // bestPlan = plans.begin();
 
@@ -349,7 +349,7 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
   // bestPlan->print();
 
   // Create copy of the plan outside the list
-  cuttPlan_t* plan = new cuttPlan_t();
+  librettPlan_t* plan = new librettPlan_t();
   *plan = *bestPlan;
   // Set device pointers to NULL in the old copy of the plan so
   // that they won't be deallocated later when the object is destroyed
@@ -367,7 +367,7 @@ cuttResult cuttPlanMeasure(cuttHandle *handle, int rank, int *dim, int *permutat
     planStorage.insert( {*handle, plan} );
   }
 
-  return CUTT_SUCCESS;
+  return LIBRETT_SUCCESS;
 }
 #ifdef SYCL
 catch (sycl::exception const &exc) {
@@ -378,37 +378,37 @@ catch (sycl::exception const &exc) {
 #endif
 
 #ifdef SYCL
-void cuttDestroy_callback(sycl::queue *stream, int status, 
+void librettDestroy_callback(sycl::queue *stream, int status, 
 #else // CUDA
-void CUDART_CB cuttDestroy_callback(cudaStream_t stream, cudaError_t status,
+void CUDART_CB librettDestroy_callback(cudaStream_t stream, cudaError_t status,
 #endif
   void *userData) {
-  cuttPlan_t* plan = (cuttPlan_t*) userData;
+  librettPlan_t* plan = (librettPlan_t*) userData;
   delete plan;
 }
 
-cuttResult cuttDestroy(cuttHandle handle) {
+librettResult librettDestroy(librettHandle handle) {
   std::lock_guard<std::mutex> lock(planStorageMutex);
   auto it = planStorage.find(handle);
-  if (it == planStorage.end()) return CUTT_INVALID_PLAN;
-#ifdef CUTT_HAS_UMPIRE
-  // get the pointer cuttPlan_t
-  cuttPlan_t* plan = it->second;
+  if (it == planStorage.end()) return LIBRETT_INVALID_PLAN;
+#ifdef LIBRETT_HAS_UMPIRE
+  // get the pointer librettPlan_t
+  librettPlan_t* plan = it->second;
   cudaStream_t stream = plan->stream;
   // Delete entry from plan storage
   planStorage.erase(it);
   // register callback to deallocate plan
-  cudaStreamAddCallback(stream, cuttDestroy_callback, plan, 0);
+  cudaStreamAddCallback(stream, librettDestroy_callback, plan, 0);
 #else
-  // Delete instance of cuttPlan_t	 
+  // Delete instance of librettPlan_t	 
   delete it->second;	  
   // Delete entry from plan storage	  
   planStorage.erase(it);
 #endif
-  return CUTT_SUCCESS;
+  return LIBRETT_SUCCESS;
 }
 
-cuttResult cuttExecute(cuttHandle handle, void *idata, void *odata) 
+librettResult librettExecute(librettHandle handle, void *idata, void *odata) 
 #ifdef SYCL 
 try 
 #endif
@@ -416,11 +416,11 @@ try
   // prevent modification when find
   std::lock_guard<std::mutex> lock(planStorageMutex);
   auto it = planStorage.find(handle);
-  if (it == planStorage.end()) return CUTT_INVALID_PLAN;
+  if (it == planStorage.end()) return LIBRETT_INVALID_PLAN;
 
-  if (idata == odata) return CUTT_INVALID_PARAMETER;
+  if (idata == odata) return LIBRETT_INVALID_PARAMETER;
 
-  cuttPlan_t& plan = *(it->second);
+  librettPlan_t& plan = *(it->second);
 
   int deviceID;
 #ifdef SYCL
@@ -428,10 +428,10 @@ try
 #else // CUDA
   cudaCheck(cudaGetDevice(&deviceID));
 #endif
-  if (deviceID != plan.deviceID) return CUTT_INVALID_DEVICE;
+  if (deviceID != plan.deviceID) return LIBRETT_INVALID_DEVICE;
 
-  if (!cuttKernel(plan, idata, odata)) return CUTT_INTERNAL_ERROR;
-  return CUTT_SUCCESS;
+  if (!librettKernel(plan, idata, odata)) return LIBRETT_INTERNAL_ERROR;
+  return LIBRETT_SUCCESS;
 }
 #ifdef SYCL
 catch (sycl::exception const &exc) {
@@ -441,17 +441,17 @@ catch (sycl::exception const &exc) {
 }
 #endif
 
-void cuttInitialize() {
-#ifdef CUTT_HAS_UMPIRE
-  const char* alloc_env_var = std::getenv("CUTT_USES_THIS_UMPIRE_ALLOCATOR");
-#define __CUTT_STRINGIZE(x) #x
-#define __CUTT_XSTRINGIZE(x) __CUTT_STRINGIZE(x)
-  const char* alloc_cstr = alloc_env_var ? alloc_env_var : __CUTT_XSTRINGIZE(CUTT_USES_THIS_UMPIRE_ALLOCATOR);
-  cutt_umpire_allocator = umpire::ResourceManager::getInstance().getAllocator(alloc_cstr);
+void librettInitialize() {
+#ifdef LIBRETT_HAS_UMPIRE
+  const char* alloc_env_var = std::getenv("LIBRETT_USES_THIS_UMPIRE_ALLOCATOR");
+#define __LIBRETT_STRINGIZE(x) #x
+#define __LIBRETT_XSTRINGIZE(x) __LIBRETT_STRINGIZE(x)
+  const char* alloc_cstr = alloc_env_var ? alloc_env_var : __LIBRETT_XSTRINGIZE(LIBRETT_USES_THIS_UMPIRE_ALLOCATOR);
+  librett_umpire_allocator = umpire::ResourceManager::getInstance().getAllocator(alloc_cstr);
 #endif
 }
 
-void cuttFinalize() {
+void librettFinalize() {
 }
 
 #ifdef SYCL

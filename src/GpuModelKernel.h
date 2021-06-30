@@ -22,26 +22,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTTKERNEL_H
-#define CUTTKERNEL_H
+#ifndef LIBRETTGPUMODELKERNEL_H
+#define LIBRETTGPUMODELKERNEL_H
+#include "plan.h"
 
-#ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#endif
-#include "cuttplan.h"
+void runCounters(const int warpSize, const int* hostPosData, const int numPosData,
+  const int accWidth, const int cacheWidth, int* host_tran, int* host_cl_full, int* host_cl_part);
 
-void cuttKernelSetSharedMemConfig();
+bool librettGpuModelKernel(librettPlan_t& plan, const int accWidth, const int cacheWidth,
+  int& gld_tran, int& gst_tran, int& gld_req, int& gst_req,
+  int& cl_full_l2, int& cl_part_l2, int& cl_full_l1, int& cl_part_l1);
 
-#ifdef SYCL
-int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts,
-                                  const int deviceID, const dpct::device_info &prop,
-                                  LaunchConfig &lc);
-#else
-int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
-             const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc);
-#endif
-
-bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut);
-
-#endif // CUTTKERNEL_H
+#endif // LIBRETTGPUMODELKERNEL_H

@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
-#ifndef CUTTTIMER_H
-#define CUTTTIMER_H
+#ifndef LIBRETTTIMER_H
+#define LIBRETTTIMER_H
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
@@ -71,9 +71,9 @@ public:
 };
 
 //
-// Records timings for cuTT and gives out bandwidths and other data
+// Records timings for LIBRETT and gives out bandwidths and other data
 //
-class cuttTimer {
+class librettTimer {
 private:
   // Size of the type we're measuring
   const int sizeofType;
@@ -109,8 +109,8 @@ private:
   std::unordered_map<int, Stat> stats;
 
 public:
-  cuttTimer(int sizeofType);
-  ~cuttTimer();
+  librettTimer(int sizeofType);
+  ~librettTimer();
   void start(std::vector<int>& dim, std::vector<int>& permutation);
   void stop();
   double seconds();
@@ -134,4 +134,4 @@ public:
   }
 };
 
-#endif // CUTTTIMER_H
+#endif // LIBRETTTIMER_H

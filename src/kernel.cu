@@ -23,9 +23,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #include <cuda.h>
-#include "CudaUtils.h"
+#include "Utils.h"
 #include "LRUCache.h"
-#include "cuttkernel.h"
+#include "kernel.h"
 
 #define RESTRICT __restrict__
 
@@ -521,7 +521,7 @@ __global__ void transposeTiledCopy(
 //
 // Sets shared memory bank configuration for all kernels. Needs to be called once per device.
 //
-void cuttKernelSetSharedMemConfig() {  
+void librettKernelSetSharedMemConfig() {  
 #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
 #include "calls.h"
 #undef CALL
@@ -662,7 +662,7 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
 // lc.shmemsize
 // lc.numRegStorage  (for Packed method)
 //
-int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
+int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
   const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc) {
 
   // Return value of numActiveBlock
@@ -837,7 +837,7 @@ int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
   return numActiveBlockReturn;
 }
 
-bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
+bool librettKernel(librettPlan_t& plan, void* dataIn, void* dataOut) {
 
   LaunchConfig& lc = plan.launchConfig;
   TensorSplit& ts = plan.tensorSplit;
@@ -860,7 +860,7 @@ bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
 #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
 #include "calls.h"
         default:
-        printf("cuttKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0
@@ -879,7 +879,7 @@ bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
 #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
 #include "calls.h"
         default:
-        printf("cuttKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0

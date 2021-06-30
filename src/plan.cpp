@@ -31,11 +31,11 @@ SOFTWARE.
 #include <unordered_set>
 #include <cmath>
 #include <random>
-#include "CudaUtils.h"
-#include "CudaMem.h"
-#include "cuttplan.h"
-#include "cuttkernel.h"
-#include "cuttGpuModel.h"
+#include "Utils.h"
+#include "Mem.h"
+#include "plan.h"
+#include "kernel.h"
+#include "GpuModel.h"
 
 void printMethod(int method) {
   switch(method) {
@@ -482,30 +482,30 @@ size_t TensorSplit::shmemAlloc(int sizeofType) const {
 //
 // Returns true if the plan with TensorSplit ts already exists
 //
-bool planExists(TensorSplit& ts, std::list<cuttPlan_t>& plans) {
+bool planExists(TensorSplit& ts, std::list<librettPlan_t>& plans) {
   for (auto it=plans.begin();it != plans.end();it++) {
     if (it->tensorSplit == ts) return true;
   }
   return false;
 }
 
-bool cuttPlan_t::createTrivialPlans(const int rank, const int *dim, const int *permutation,
+bool librettPlan_t::createTrivialPlans(const int rank, const int *dim, const int *permutation,
   const size_t sizeofType, const int deviceID,
 #ifdef SYCL
   const dpct::device_info &prop,
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans) {
+  std::list<librettPlan_t> &plans) {
 
   if (rank == 1) {
     TensorSplit ts;
     ts.method = Trivial;
     ts.update(1, 1, rank, dim, permutation);    
     LaunchConfig lc;
-    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+    int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
-      cuttPlan_t plan;
+      librettPlan_t plan;
       if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
       plans.push_back(plan);
     }
@@ -514,23 +514,23 @@ bool cuttPlan_t::createTrivialPlans(const int rank, const int *dim, const int *p
   return true;
 }
 
-bool cuttPlan_t::createTiledPlans(const int rank, const int *dim, const int *permutation,
+bool librettPlan_t::createTiledPlans(const int rank, const int *dim, const int *permutation,
   const size_t sizeofType, const int deviceID,
 #ifdef SYCL
   const dpct::device_info &prop,
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans) {
+  std::list<librettPlan_t> &plans) {
 
   if (permutation[0] != 0 && rank > 1) {
     TensorSplit ts;
     ts.method = Tiled;
     ts.update(1, 1, rank, dim, permutation);    
     LaunchConfig lc;
-    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+    int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
-      cuttPlan_t plan;
+      librettPlan_t plan;
       if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
       plans.push_back(plan);
     }
@@ -539,14 +539,14 @@ bool cuttPlan_t::createTiledPlans(const int rank, const int *dim, const int *per
   return true;
 }
 
-bool cuttPlan_t::createTiledCopyPlans(const int rank, const int *dim, const int *permutation,
+bool librettPlan_t::createTiledCopyPlans(const int rank, const int *dim, const int *permutation,
   const size_t sizeofType, const int deviceID,
 #ifdef SYCL
   const dpct::device_info &prop,
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans) {
+  std::list<librettPlan_t> &plans) {
 
   // Count number of Mm and Mk which are the same
   int numMmMkSame = 0;
@@ -563,9 +563,9 @@ bool cuttPlan_t::createTiledCopyPlans(const int rank, const int *dim, const int 
       ts.update(numMmMkSame - 1, numMmMkSame, rank, dim, permutation);      
     }
     LaunchConfig lc;
-    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+    int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
-      cuttPlan_t plan;
+      librettPlan_t plan;
       if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
       plans.push_back(plan);
     }
@@ -574,14 +574,14 @@ bool cuttPlan_t::createTiledCopyPlans(const int rank, const int *dim, const int 
   return true;
 }
 
-bool cuttPlan_t::createPackedPlans(const int rank, const int *dim, const int *permutation,
+bool librettPlan_t::createPackedPlans(const int rank, const int *dim, const int *permutation,
   const size_t sizeofType, const int deviceID,
 #ifdef SYCL
   const dpct::device_info &prop,
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans) {
+  std::list<librettPlan_t> &plans) {
 
   LaunchConfig lc;
   for (int numMm=1;numMm < rank;numMm++) {
@@ -589,11 +589,11 @@ bool cuttPlan_t::createPackedPlans(const int rank, const int *dim, const int *pe
       TensorSplit ts;
       ts.method = Packed;
       ts.update(numMm, numMk, rank, dim, permutation);
-      int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+      int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
       // Does not fit on the device, break out of inner loop
       if (numActiveBlock == 0) break;
       if (!planExists(ts, plans)) {
-        cuttPlan_t plan;
+        librettPlan_t plan;
         if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
         plans.push_back(plan);
       }
@@ -603,14 +603,14 @@ bool cuttPlan_t::createPackedPlans(const int rank, const int *dim, const int *pe
   return true;
 }
 
-bool cuttPlan_t::createPackedSplitPlans(const int rank, const int *dim, const int *permutation,
+bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const int *permutation,
   const size_t sizeofType, const int deviceID,
 #ifdef SYCL
   const dpct::device_info &prop,
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans) {
+  std::list<librettPlan_t> &plans) {
 
   LaunchConfig lc;
   for (int numMm=1;numMm < rank;numMm++) {
@@ -676,7 +676,7 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int *dim, const in
         int numActiveBlock0, numActiveBlock1, numActiveBlock2;
         LaunchConfig lc0, lc1, lc2;
         for (ts.numSplit=minNumSplit;ts.numSplit <= maxNumSplit;ts.numSplit++) {
-          numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+          numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
           if (numActiveBlock != 0) {
             int volMmkUsed = ts.volMmkUsed();
             int val1 = volMmkUsed*numActiveBlock;
@@ -712,7 +712,7 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int *dim, const in
         const unsigned long long int dim_cutoff = ((unsigned long long int)1 << 31);
         unsigned long long int dim0 = (unsigned long long int)ts.splitDim*(unsigned long long int)(ts.numSplit + 1);
         if (!planExists(ts, plans) && dim0 < dim_cutoff) {
-          cuttPlan_t plan;
+          librettPlan_t plan;
           if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc0, numActiveBlock0)) return false;
           plans.push_back(plan);
         }
@@ -721,7 +721,7 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int *dim, const in
           ts.update(numMm, numMk, rank, dim, permutation);
           unsigned long long int dim1 = (unsigned long long int)ts.splitDim*(unsigned long long int)(ts.numSplit + 1);
           if (!planExists(ts, plans) && dim1 < dim_cutoff) {
-            cuttPlan_t plan;
+            librettPlan_t plan;
             if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc1, numActiveBlock1)) return false;
             plans.push_back(plan);
           }
@@ -731,7 +731,7 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int *dim, const in
           ts.update(numMm, numMk, rank, dim, permutation);
           unsigned long long int dim2 = (unsigned long long int)ts.splitDim*(unsigned long long int)(ts.numSplit + 1);
           if (!planExists(ts, plans) && dim2 < dim_cutoff) {
-            cuttPlan_t plan;
+            librettPlan_t plan;
             if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc2, numActiveBlock2)) return false;
             plans.push_back(plan);
           }
@@ -746,7 +746,7 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int *dim, const in
 //
 // Create all possible plans
 //
-bool cuttPlan_t::createPlans(const int rank, const int *dim, const int *permutation, 
+bool librettPlan_t::createPlans(const int rank, const int *dim, const int *permutation, 
   const int rankRed, const int *dimRed, const int *permutationRed,
   const size_t sizeofType, const int deviceID,
 #ifdef SYCL
@@ -754,7 +754,7 @@ bool cuttPlan_t::createPlans(const int rank, const int *dim, const int *permutat
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans) {
+  std::list<librettPlan_t> &plans) {
 
   size_t size0 = plans.size();
   /* if (!createTiledCopyPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans)) return false;*/
@@ -771,7 +771,7 @@ bool cuttPlan_t::createPlans(const int rank, const int *dim, const int *permutat
   return true;
 }
 
-bool operator>(const cuttPlan_t& lhs, const cuttPlan_t& rhs) {
+bool operator>(const librettPlan_t& lhs, const librettPlan_t& rhs) {
 
   const TensorSplit& lts = lhs.tensorSplit;
   const TensorSplit& rts = rhs.tensorSplit;
@@ -820,7 +820,7 @@ bool operator>(const cuttPlan_t& lhs, const cuttPlan_t& rhs) {
   // }
 }
 
-bool operator<(const cuttPlan_t& lhs, const cuttPlan_t& rhs) {
+bool operator<(const librettPlan_t& lhs, const librettPlan_t& rhs) {
   return !(lhs > rhs);
 }
 
@@ -828,7 +828,7 @@ bool operator<(const cuttPlan_t& lhs, const cuttPlan_t& rhs) {
 // Returns best plan according to heuristic criteria
 // Returns plans.end() on invalid input or when nothing can be chosen
 //
-std::list<cuttPlan_t>::iterator choosePlanHeuristic(std::list<cuttPlan_t>& plans) {
+std::list<librettPlan_t>::iterator choosePlanHeuristic(std::list<librettPlan_t>& plans) {
 
   // Choose the "largest" plan
   auto bestIt = plans.end();
@@ -847,7 +847,7 @@ void printMatlab(
 #else // CUDA
   const cudaDeviceProp &prop,
 #endif
-  std::list<cuttPlan_t> &plans, std::vector<double> &times) {
+  std::list<librettPlan_t> &plans, std::vector<double> &times) {
   static int count = 0;
   count++;
   int i = 0;
@@ -890,7 +890,7 @@ void LaunchConfig::print() {
 //
 // Output contents of the plan
 //
-void cuttPlan_t::print() {
+void librettPlan_t::print() {
   printf("method ");
   printMethod(tensorSplit.method);
   printf("\n");
@@ -902,10 +902,10 @@ void cuttPlan_t::print() {
 
 //
 // Setup plan
-// NOTE: Expects that cuttKernelLaunchConfiguration() has been called to setup
+// NOTE: Expects that librettKernelLaunchConfiguration() has been called to setup
 // launchConfig_in and numActiveBlock_in
 //
-bool cuttPlan_t::setup(const int rank_in, const int* dim, const int* permutation,
+bool librettPlan_t::setup(const int rank_in, const int* dim, const int* permutation,
   const size_t sizeofType_in, const TensorSplit& tensorSplit_in,
   const LaunchConfig& launchConfig_in, const int numActiveBlock_in) {
   
@@ -926,7 +926,7 @@ bool cuttPlan_t::setup(const int rank_in, const int* dim, const int* permutation
   }
 
   // Setup launch configuration
-  // numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, tensorSplit, prop, launchConfig);
+  // numActiveBlock = librettKernelLaunchConfiguration(sizeofType, tensorSplit, prop, launchConfig);
 
   // Build cI
   int* I = new int[rank];
@@ -1151,7 +1151,7 @@ bool cuttPlan_t::setup(const int rank_in, const int* dim, const int* permutation
 //
 // Count the number of cycles using the MWP-CWP model
 //
-bool cuttPlan_t::countCycles(
+bool librettPlan_t::countCycles(
 #ifdef SYCL
   const dpct::device_info &prop,
 #else // CUDA
@@ -1313,7 +1313,7 @@ bool cuttPlan_t::countCycles(
       }
     }
     if (indRoundUp != numRoundUp || indRoundDown != num_ipos) {
-      printf("cuttPlan_t::countCycles, fatal implemention bug\n");
+      printf("librettPlan_t::countCycles, fatal implemention bug\n");
       return false;
     }
     // Round up is in pos[0 ... numRoundUp - 1]
@@ -1793,7 +1793,7 @@ bool cuttPlan_t::countCycles(
 //
 // Activates the plan: Allocates device memory buffers and copies data to them
 //
-void cuttPlan_t::activate() {
+void librettPlan_t::activate() {
 
   if (tensorSplit.sizeMbar > 0) {
     if (Mbar == NULL) {
@@ -1822,7 +1822,7 @@ void cuttPlan_t::activate() {
 //
 // Set device buffers to NULL
 //
-void cuttPlan_t::nullDevicePointers() {
+void librettPlan_t::nullDevicePointers() {
   Mbar = NULL;
   Mmk = NULL;
   Msh = NULL;
@@ -1831,7 +1831,7 @@ void cuttPlan_t::nullDevicePointers() {
 }
 
 #ifdef SYCL
-cuttPlan_t::cuttPlan_t() try {
+librettPlan_t::librettPlan_t() try {
   cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
   //stream = 0;
   stream = & dpct::get_default_queue();
@@ -1844,7 +1844,7 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 #else // CUDA
-cuttPlan_t::cuttPlan_t() {
+librettPlan_t::librettPlan_t() {
   cudaCheck(cudaGetDevice(&deviceID));
   stream = 0;
   numActiveBlock = 0;
@@ -1852,7 +1852,7 @@ cuttPlan_t::cuttPlan_t() {
 }
 #endif
 
-cuttPlan_t::~cuttPlan_t() {
+librettPlan_t::~librettPlan_t() {
   // Deallocate device buffers
   if (Mbar != NULL) deallocate_device<TensorConvInOut>(&Mbar);
   if (Mmk != NULL) deallocate_device<TensorConvInOut>(&Mmk);
@@ -1862,9 +1862,9 @@ cuttPlan_t::~cuttPlan_t() {
 }
 
 #ifdef SYCL
-void cuttPlan_t::setStream(sycl::queue *stream_in) 
+void librettPlan_t::setStream(sycl::queue *stream_in) 
 #else // CUDA
-void cuttPlan_t::setStream(cudaStream_t stream_in) 
+void librettPlan_t::setStream(cudaStream_t stream_in) 
 #endif
 {
   stream = stream_in;

@@ -83,9 +83,9 @@ ifdef NO_ALIGNED_ALLOC
 DEFS += -DNO_ALIGNED_ALLOC
 endif
 
-OBJSLIB = build/cutt.o build/cuttplan.o build/cuttkernel.o build/cuttGpuModel.o build/CudaMem.o build/CudaUtils.o build/cuttTimer.o build/cuttGpuModelKernel.o
-OBJSTEST = build/cutt_test.o build/TensorTester.o build/CudaMem.o build/CudaUtils.o build/cuttTimer.o
-OBJSBENCH = build/cutt_bench.o build/TensorTester.o build/CudaMem.o build/CudaUtils.o build/cuttTimer.o build/CudaMemcpy.o
+OBJSLIB = build/librett.o build/plan.o build/kernel.o build/GpuModel.o build/Mem.o build/Utils.o build/Timer.o build/GpuModelKernel.o
+OBJSTEST = build/librett_test.o build/TensorTester.o build/Mem.o build/Utils.o build/Timer.o
+OBJSBENCH = build/librett_bench.o build/TensorTester.o build/Mem.o build/Utils.o build/Timer.o build/Memcpy.o
 OBJS = $(OBJSLIB) $(OBJSTEST) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
@@ -112,7 +112,7 @@ ifdef ENABLE_NVTOOLS
 CUDA_LFLAGS += -lnvToolsExt
 endif
 
-all: create_build lib/librett.a bin/cutt_test bin/cutt_bench
+all: create_build lib/librett.a bin/librett_test bin/librett_bench
 
 create_build:
 	mkdir -p build
@@ -124,15 +124,15 @@ lib/librett.a: $(OBJSLIB)
 	mkdir -p include
 	cp -f src/librett.h include/librett.h
 
-bin/cutt_test : lib/librett.a $(OBJSTEST)
+bin/librett_test : lib/librett.a $(OBJSTEST)
 	mkdir -p bin
-	$(HOST_CC) -o bin/cutt_test $(OBJSTEST) lib/librett.a
-#	$(HOST_CC) -o bin/cutt_test $(OBJSTEST) $(CUDA_LFLAGS)
+	$(HOST_CC) -o bin/librett_test $(OBJSTEST) lib/librett.a
+#	$(HOST_CC) -o bin/librett_test $(OBJSTEST) $(CUDA_LFLAGS)
 
-bin/cutt_bench : lib/librett.a $(OBJSBENCH)
+bin/librett_bench : lib/librett.a $(OBJSBENCH)
 	mkdir -p bin
-	$(HOST_CC) -o bin/cutt_bench $(OBJSBENCH) lib/librett.a
-#	$(HOST_CC) -o bin/cutt_bench $(OBJSBENCH) $(CUDA_LFLAGS)
+	$(HOST_CC) -o bin/librett_bench $(OBJSBENCH) lib/librett.a
+#	$(HOST_CC) -o bin/librett_bench $(OBJSBENCH) $(CUDA_LFLAGS)
 
 clean:
 	rm -f $(OBJS)
@@ -140,8 +140,8 @@ clean:
 	rm -f build/*.i
 	rm -f *~
 	rm -f lib/librett.a
-	rm -f bin/cutt_test
-	rm -f bin/cutt_bench
+	rm -f bin/librett_test
+	rm -f bin/librett_bench
 
 # Pull in dependencies that already exist
 -include $(OBJS:.o=.d)

@@ -24,9 +24,9 @@ SOFTWARE.
 *******************************************************************************/
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
-#include "CudaUtils.h"
+#include "Utils.h"
 #include "LRUCache.h"
-#include "cuttkernel.h"
+#include "kernel.h"
 
 #define RESTRICT __restrict__
 
@@ -651,7 +651,7 @@ __global__ void transposeTiledCopy(
 //
 // Sets shared memory bank configuration for all kernels. Needs to be called once per device.
 //
-//void cuttKernelSetSharedMemConfig() try {
+//void librettKernelSetSharedMemConfig() try {
 //#define CALL(NREG) cudaCheck(0)
 //#include "calls.h"
 //#undef CALL
@@ -849,7 +849,7 @@ catch (sycl::exception const &exc) {
 // lc.shmemsize
 // lc.numRegStorage  (for Packed method)
 //
-int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts,
+int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts,
                                   const int deviceID,
                                   const dpct::device_info &prop,
                                   LaunchConfig &lc) {
@@ -1073,7 +1073,7 @@ int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts,
   return numActiveBlockReturn;
 }
 
-bool cuttKernel(cuttPlan_t &plan, void *dataIn, void *dataOut) try {
+bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut) try {
 
   LaunchConfig& lc = plan.launchConfig;
   TensorSplit& ts = plan.tensorSplit;
@@ -1128,7 +1128,7 @@ workgroup size if needed.
 #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
 #include "calls.h"
         default:
-        printf("cuttKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0
@@ -1182,7 +1182,7 @@ workgroup size if needed.
 #include <algorithm>
 
         default:
-        printf("cuttKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
+        printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
 #undef CALL
 #undef CALL0

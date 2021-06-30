@@ -22,15 +22,24 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTTGPUMODELKERNEL_H
-#define CUTTGPUMODELKERNEL_H
-#include "cuttplan.h"
+#ifndef LIBRETTMEMCPY_H
+#define LIBRETTMEMCPY_H
 
-void runCounters(const int warpSize, const int* hostPosData, const int numPosData,
-  const int accWidth, const int cacheWidth, int* host_tran, int* host_cl_full, int* host_cl_part);
+#ifdef SYCL
+#include <CL/sycl.hpp>
 
-bool cuttGpuModelKernel(cuttPlan_t& plan, const int accWidth, const int cacheWidth,
-  int& gld_tran, int& gst_tran, int& gld_req, int& gst_req,
-  int& cl_full_l2, int& cl_part_l2, int& cl_full_l1, int& cl_part_l1);
+template <typename T>
+void scalarCopy(const int n, const T *data_in, T *data_out, sycl::queue *stream);
+template <typename T>
+void vectorCopy(const int n, T *data_in, T *data_out, sycl::queue *stream);
+void memcpyFloat(const int n, float *data_in, float *data_out, sycl::queue *stream);
 
-#endif // CUTTGPUMODELKERNEL_H
+#else
+#include <cuda_runtime.h>
+
+template <typename T> void scalarCopy(const int n, const T* data_in, T* data_out, cudaStream_t stream);
+template <typename T> void vectorCopy(const int n, T* data_in, T* data_out, cudaStream_t stream);
+void memcpyFloat(const int n, float* data_in, float* data_out, cudaStream_t stream);
+#endif
+
+#endif // LIBRETTMEMCPY_H

@@ -35,22 +35,22 @@ SOFTWARE.
 #include <cctype>
 #include <random>
 #include "librett.h"
-#include "CudaUtils.h"
-#include "CudaMem.h"
+#include "Utils.h"
+#include "Mem.h"
 #include "TensorTester.h"
-#include "cuttTimer.h"
-#include "CudaMemcpy.h"
+#include "Timer.h"
+#include "Memcpy.h"
 #include "int_vector.h"
 
 #define MILLION 1000000
 #define BILLION 1000000000
 
 //
-// Error checking wrapper for cutt
+// Error checking wrapper for librett
 //
-#define cuttCheck(stmt) do {                                 \
-  cuttResult err = stmt;                            \
-  if (err != CUTT_SUCCESS) {                          \
+#define librettCheck(stmt) do {                                 \
+  librettResult err = stmt;                            \
+  if (err != LIBRETT_SUCCESS) {                          \
     fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
     exit(1); \
   }                                                  \
@@ -61,8 +61,8 @@ char* dataOut = NULL;
 size_t dataSize = 0;
 TensorTester* tester = NULL;
 
-cuttTimer* timer;
-bool use_cuttPlanMeasure;
+librettTimer* timer;
+bool use_librettPlanMeasure;
 bool use_plantimer;
 
 std::default_random_engine generator;
@@ -92,7 +92,7 @@ try
   unsigned seed = unsigned (std::time(0));
   bool arg_ok = true;
   int benchID = 0;
-  use_cuttPlanMeasure = false;
+  use_librettPlanMeasure = false;
   use_plantimer = false;
   int elemsize = 8;
   std::vector<int> dimIn;
@@ -107,7 +107,7 @@ try
         sscanf(argv[i+1], "%d", &benchID);
         i += 2;
       } else if (strcmp(argv[i], "-measure") == 0) {
-        use_cuttPlanMeasure = true;
+        use_librettPlanMeasure = true;
         i++;
       } else if (strcmp(argv[i], "-seed") == 0) {
         sscanf(argv[i+1], "%u", &seed);
@@ -146,10 +146,10 @@ try
   }
 
   if (!arg_ok) {
-    printf("cutt_bench [options]\n");
+    printf("librett_bench [options]\n");
     printf("Options:\n");
     printf("-device [int]    : GPU ID (default is 0)\n");
-    printf("-measure         : use cuttPlanMeasure (default is cuttPlan)\n");
+    printf("-measure         : use librettPlanMeasure (default is librettPlan)\n");
     printf("-plantimer       : planning is timed (default is no)\n");
     printf("-seed [int]      : seed value for random number generator (default is system timer)\n");
     printf("-elemsize [int]  : size of elements in bytes, 4 or 8. (default is 8)\n");
@@ -186,7 +186,7 @@ try
   printDeviceInfo();
   printf("CPU using vector type %s of length %d\n", INT_VECTOR_TYPE, INT_VECTOR_LEN);
 
-  timer = new cuttTimer(elemsize);
+  timer = new librettTimer(elemsize);
 
   //dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
   dataSize = (elemsize == 4) ? 420*MILLION : 530*MILLION;
@@ -835,22 +835,22 @@ sycl::queue q = dpct::get_default_queue();
   printf("permutation\n");
   printVec(permutation);
 
-  cuttHandle plan;
+  librettHandle plan;
   std::chrono::high_resolution_clock::time_point plan_start;
   if (use_plantimer) {
     plan_start = std::chrono::high_resolution_clock::now();
   }
-  if (use_cuttPlanMeasure) {
+  if (use_librettPlanMeasure) {
 #ifdef SYCL
-    cuttCheck(cuttPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q, dataIn, dataOut));
+    librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q, dataIn, dataOut));
 #else // CUDA
-    cuttCheck(cuttPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0, dataIn, dataOut));
+    librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0, dataIn, dataOut));
 #endif
   } else {
 #ifdef SYCL
-    cuttCheck(cuttPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
+    librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
 #else // CUDA
-    cuttCheck(cuttPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
+    librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
 #endif
   }
   if (use_plantimer) {
@@ -870,13 +870,13 @@ sycl::queue q = dpct::get_default_queue();
 #endif
 
     timer->start(dim, permutation);
-    cuttCheck(cuttExecute(plan, dataIn, dataOut));
+    librettCheck(librettExecute(plan, dataIn, dataOut));
     timer->stop();
 
     printf("wall time %lf ms %lf GB/s\n", timer->seconds()*1000.0, timer->GBs());
   }
 
-  cuttCheck(cuttDestroy(plan));
+  librettCheck(librettDestroy(plan));
   return tester->checkTranspose<T>(rank, dim.data(), permutation.data(), (T *)dataOut);
 }
 #ifdef SYCL
@@ -911,7 +911,7 @@ try
   std::vector<int> permutation(1, 0);
 
   {
-    cuttTimer timer(sizeof(T));
+    librettTimer timer(sizeof(T));
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
@@ -932,7 +932,7 @@ try
   }
 
   {
-    cuttTimer timer(sizeof(T));
+    librettTimer timer(sizeof(T));
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
@@ -953,7 +953,7 @@ try
   }
 
   {
-    cuttTimer timer(sizeof(T));
+    librettTimer timer(sizeof(T));
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);

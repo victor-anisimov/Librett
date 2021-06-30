@@ -24,7 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 #ifndef TENSORTESTER_H
 #define TENSORTESTER_H
-#include "cuttTypes.h"
+#include "Types.h"
 
 //
 // Simple tensor transpose tester class

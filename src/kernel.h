@@ -22,24 +22,26 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUDAMEMCPY_H
-#define CUDAMEMCPY_H
+#ifndef LIBRETTKERNEL_H
+#define LIBRETTKERNEL_H
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
+#include "dpct/dpct.hpp"
+#endif
+#include "plan.h"
 
-template <typename T>
-void scalarCopy(const int n, const T *data_in, T *data_out, sycl::queue *stream);
-template <typename T>
-void vectorCopy(const int n, T *data_in, T *data_out, sycl::queue *stream);
-void memcpyFloat(const int n, float *data_in, float *data_out, sycl::queue *stream);
+void librettKernelSetSharedMemConfig();
 
+#ifdef SYCL
+int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts,
+                                  const int deviceID, const dpct::device_info &prop,
+                                  LaunchConfig &lc);
 #else
-#include <cuda_runtime.h>
-
-template <typename T> void scalarCopy(const int n, const T* data_in, T* data_out, cudaStream_t stream);
-template <typename T> void vectorCopy(const int n, T* data_in, T* data_out, cudaStream_t stream);
-void memcpyFloat(const int n, float* data_in, float* data_out, cudaStream_t stream);
+int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
+             const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc);
 #endif
 
-#endif // CUDAMEMCPY_H
+bool librettKernel(librettPlan_t& plan, void* dataIn, void* dataOut);
+
+#endif // LIBRETTKERNEL_H
