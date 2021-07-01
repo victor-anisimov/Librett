@@ -23,7 +23,7 @@ Manual compilation of a stand-alone library:
 make cuda    or    make sycl
 
 CMake compilation:
-Add -DCMAKE_CUDA_ARCHITECTURES=70 for nVidia V100
+Add -DCMAKE_CUDA_ARCHITECTURES=70 for nVidia V100.
 To do: Add -DENABLE_CUDA and -DENABLE_SYCL for nVidia and Intel GPU platforms, respectively.
 ```
 cmake -H. -Bbuild
