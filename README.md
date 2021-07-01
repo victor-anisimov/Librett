@@ -4,7 +4,7 @@ LibreTT is a free Tensor Transpose Library for nVidia and Intel GPU accelerators
 
 ## About
 
-LibreTT incorporates and enhances the original cuTT library, https://github.com/ap-hynninen/cutt, which is no longer supported due to a tragic death of its author, Antti-Pekka Hynninen in a car accident. Enhancements include adding thread safety implemented by Valeyev Lab at Virginia Tech, https://github.com/ValeevGroup/cutt and incorporating SYCL support by Argonne National Laboratory.
+LibreTT incorporates and enhances the original cuTT library, https://github.com/ap-hynninen/cutt, which is no longer supported due to tragic death of its author, Antti-Pekka Hynninen in a car accident. Enhancements include adding thread safety implemented by Valeyev Lab at Virginia Tech, https://github.com/ValeevGroup/cutt and incorporating SYCL support by Argonne National Laboratory.
 
 ## Directory Structure
 ```
