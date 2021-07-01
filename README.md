@@ -1,10 +1,10 @@
-# Librett - Tensor Transpose Library
+# LibreTT - Tensor Transpose Library
 
-Librett is a free Tensor Transpose Library for nVidia and Intel GPU accelerators.
+LibreTT is a free Tensor Transpose Library for nVidia and Intel GPU accelerators.
 
 ## About
 
-Librett incorporates and enhances the original cuTT library.
+LibreTT incorporates and enhances the original cuTT library, https://github.com/ap-hynninen/cutt, which is no longer supported due to a tragic death of its author, Antti-Pekka Hynninen in a car accident. Enhancements include adding thread safety implemented by Valeyev Lab at Virginia Tech, https://github.com/ValeevGroup/cutt and incorporating SYCL support by Argonne National Laboratory.
 
 ## Directory Structure
 ```
@@ -18,14 +18,19 @@ src/                Source code directory
 ```
 
 ## Compilation
-Add -DENABLE_CUDA and -DENABLE_SYCL for nVidia and Intel GPU platforms, respectively.
+
+Manual compilation of a stand-alone library:
+make cuda    or    make sycl
+
+CMake compilation:
 Add -DCMAKE_CUDA_ARCHITECTURES=70 for nVidia V100
+To do: Add -DENABLE_CUDA and -DENABLE_SYCL for nVidia and Intel GPU platforms, respectively.
 ```
 cmake -H. -Bbuild
 cd build; make; make librett_test; make librett_bench
 ```
 
-## The outcome of manual build, make -f Makefile.[platform], where [platform] is cuda or sycl
+## The outcome of manual build
 
 * `bin/`     librett_test, librett_bench
 * `build/`   temporary placeholder for object files
