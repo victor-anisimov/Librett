@@ -4,7 +4,11 @@ LibreTT is a free Tensor Transpose Library for nVidia and Intel GPU accelerators
 
 ## About
 
-LibreTT incorporates and enhances the original cuTT library, https://github.com/ap-hynninen/cutt, which is no longer supported due to tragic death of its author, Antti-Pekka Hynninen in a car accident. Enhancements include adding thread safety implemented by Valeyev Lab at Virginia Tech, https://github.com/ValeevGroup/cutt and incorporating SYCL support by Argonne National Laboratory.
+LibreTT is a portable Tensor Transpose library that incorporates and superseds the original 
+cuTT library, https://github.com/ap-hynninen/cutt, which is no longer supported due to tragic 
+death of its author, Antti-Pekka Hynninen in a car accident. Enhancements include adding thread 
+safety implemented by Valeyev Lab at Virginia Tech, https://github.com/ValeevGroup/cutt and 
+incorporating SYCL support by Argonne National Laboratory.
 
 ## Directory Structure
 ```
@@ -17,18 +21,9 @@ README.md           This file
 src/                Source code directory
 ```
 
-## Compilation
+## Manual Compilation
 
-Manual compilation of a stand-alone library:
-make cuda    or    make sycl
-
-CMake compilation:
-Add -DCMAKE_CUDA_ARCHITECTURES=70 for nVidia V100.
-To do: Add -DENABLE_CUDA and -DENABLE_SYCL for nVidia and Intel GPU platforms, respectively.
-```
-cmake -H. -Bbuild
-cd build; make; make librett_test; make librett_bench
-```
+`make cuda`    or    `make sycl`
 
 ## The outcome of manual build
 
@@ -36,6 +31,16 @@ cd build; make; make librett_test; make librett_bench
 * `build/`   temporary placeholder for object files
 * `include/` librett.h
 * `lib/`     librett.a
+
+## CMake compilation:
+
+CUDA platform is set by default. 
+
+Example of CUDA compilation: `cmake -H. -Bbuild -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=70`
+
+Example of SYCL compilation: `cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=dpcpp`
+
+After that: `cd build; make; make librett_test; make librett_bench`
 
 ## Description
 

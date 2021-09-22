@@ -5,45 +5,67 @@ set(CMAKE_STATIC_LIBRARY_PREFIX "")
 # enable CXX
 enable_language(CXX)
 if (NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 11)
+    set(CMAKE_CXX_STANDARD 17)
 endif (NOT CMAKE_CXX_STANDARD)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (NOT CMAKE_CXX_EXTENSIONS)
     set(CMAKE_CXX_EXTENSIONS OFF)
 endif (NOT CMAKE_CXX_EXTENSIONS)
 
-# enable cuda
-enable_language(CUDA)
+# select platform
+if(ENABLE_CUDA AND ENABLE_SYCL)
+  set(ENABLE_SYCL OFF)
+endif(ENABLE_CUDA AND ENABLE_SYCL)
 
-if (NOT CMAKE_CUDA_STANDARD)
+if(NOT ENABLE_CUDA AND NOT ENABLE_SYCL)
+  set(ENABLE_CUDA ON)
+  set(ENABLE_SYCL OFF)
+endif(NOT ENABLE_CUDA AND NOT ENABLE_SYCL)
+
+# enable CUDA
+if(ENABLE_CUDA)
+  message(STATUS "Compiling for CUDA platform")
+  enable_language(CUDA)
+
+  if (NOT CMAKE_CUDA_STANDARD)
     set(CMAKE_CUDA_STANDARD 11)
-endif (NOT CMAKE_CUDA_STANDARD)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-if (NOT CMAKE_CUDA_EXTENSIONS)
+  endif (NOT CMAKE_CUDA_STANDARD)
+  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+  if (NOT CMAKE_CUDA_EXTENSIONS)
     set(CMAKE_CUDA_EXTENSIONS OFF)
-endif (NOT CMAKE_CUDA_EXTENSIONS)
+  endif (NOT CMAKE_CUDA_EXTENSIONS)
 
-message(STATUS "CUDA Include Dirs: " ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-message(STATUS "CUDA Host Compiler: " ${CMAKE_CUDA_HOST_COMPILER})
+  message(STATUS "CUDA Include Dirs: " ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  message(STATUS "CUDA Host Compiler: " ${CMAKE_CUDA_HOST_COMPILER})
 
-include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
-option(ENABLE_NVTOOLS "Enable nvvp profiling of CPU code" OFF)
-option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
-option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
-include(CheckFunctionExists)
+  option(ENABLE_NVTOOLS "Enable nvvp profiling of CPU code" OFF)
+  option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
+  option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
+  include(CheckFunctionExists)
 
-
-
-# ENABLE_NVTOOLS
-if(ENABLE_NVTOOLS)
+  # ENABLE_NVTOOLS
+  if(ENABLE_NVTOOLS)
     add_definitions(-DENABLE_NVTOOLS)
     list(APPEND CUDA_NVCC_FLAGS -lnvToolsExt)
     link_libraries(-lnvToolsExt)
-endif()
+  endif()
 
-message(STATUS "Current CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
+  message(STATUS "Current CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
+endif(ENABLE_CUDA)
 
+#enable SYCL
+if(ENABLE_SYCL)
+  message(STATUS "Compiling for SYCL platform")
+
+  option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
+  option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
+  include(CheckFunctionExists)
+
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-unnamed-lambda -O3 -DSYCL")
+endif(ENABLE_SYCL)
 
 # ENABLE_NO_ALIGNED_ALLOC
 if(ENABLE_NO_ALIGNED_ALLOC)

@@ -1,5 +1,6 @@
 
-set(LIBRETT_SOURCE_FILES
+if(ENABLE_CUDA)
+  set(LIBRETT_SOURCE_FILES
     calls.h
     Mem.cpp
     Mem.h
@@ -24,6 +25,35 @@ set(LIBRETT_SOURCE_FILES
     TensorTester.cu
     TensorTester.h
     LRUCache.h)
+endif(ENABLE_CUDA)
+
+if(ENABLE_SYCL)
+  set(LIBRETT_SOURCE_FILES
+    calls.h
+    Mem.cpp
+    Mem.h
+    Memcpy.cpp
+    Memcpy.h
+    Utils.cpp
+    Utils.h
+    librett.cpp
+    librett.h
+    GpuModel.cpp
+    GpuModel.h
+    GpuModelKernel.cpp
+    GpuModelKernel.h
+    kernel.cpp
+    kernel.h
+    plan.h
+    plan.cpp
+    Timer.cpp
+    Timer.h
+    Types.h
+    int_vector.h
+    TensorTester.cpp
+    TensorTester.h
+    LRUCache.h)
+endif(ENABLE_SYCL)
 
 add_library(librett ${LIBRETT_SOURCE_FILES})
 if(ENABLE_UMPIRE)
