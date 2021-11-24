@@ -9,6 +9,16 @@
 #ifndef __DPCT_HPP__
 #define __DPCT_HPP__
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic ignored "-Wreorder-ctor"
+#pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wunknown-pragmas"
+#pragma clang diagnostic ignored "-Wunused-local-typedef"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <CL/sycl.hpp>
 #include <iostream>
 #include <stdexcept>
@@ -46,6 +56,6 @@ using namespace cl::sycl;
 extern SYCL_EXTERNAL detail::ConvertToOpenCLType_t<sycl::vec<unsigned, 4>> __spirv_GroupNonUniformBallot(int, bool) __attribute__((convergent));
 #endif
 
-extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(ONEAPI::sub_group, bool);
+extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(ext::oneapi::sub_group, bool);
 
 #endif // __DPCT_HPP__

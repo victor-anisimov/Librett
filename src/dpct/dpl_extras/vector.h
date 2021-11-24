@@ -20,7 +20,7 @@
 #include <iterator>
 #include <vector>
 
-#include <dpct/device.hpp>
+#include "../device.hpp"
 
 namespace dpct {
 
