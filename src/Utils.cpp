@@ -39,7 +39,7 @@ void set_device_array_async_T(void *data, int value, const size_t ndata,
   DPCT1003:126: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((stream->memset(data, value, sizeofT * ndata), 0));
+  gpuCheck((stream->memset(data, value, sizeofT * ndata), 0));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -53,7 +53,7 @@ void set_device_array_T(void *data, int value, const size_t ndata,
   DPCT1003:127: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck(
+  gpuCheck(
       (dpct::get_default_queue().memset(data, value, sizeofT * ndata).wait(),
        0));
 }
@@ -73,7 +73,7 @@ void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len,
   DPCT1003:128: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((stream->memcpy(d_array, h_array, sizeofT * array_len), 0));
+  gpuCheck((stream->memcpy(d_array, h_array, sizeofT * array_len), 0));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -87,7 +87,7 @@ void copy_HtoD_T(const void *h_array, void *d_array, size_t array_len,
   DPCT1003:129: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((dpct::get_default_queue()
+  gpuCheck((dpct::get_default_queue()
                  .memcpy(d_array, h_array, sizeofT * array_len)
                  .wait(),
              0));
@@ -109,7 +109,7 @@ void copy_DtoH_async_T(const void *d_array, void *h_array,
   DPCT1003:130: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((stream->memcpy(h_array, d_array, sizeofT * array_len), 0));
+  gpuCheck((stream->memcpy(h_array, d_array, sizeofT * array_len), 0));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -123,7 +123,7 @@ void copy_DtoH_T(const void *d_array, void *h_array, const size_t array_len,
   DPCT1003:131: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((dpct::get_default_queue()
+  gpuCheck((dpct::get_default_queue()
                  .memcpy(h_array, d_array, sizeofT * array_len)
                  .wait(),
              0));

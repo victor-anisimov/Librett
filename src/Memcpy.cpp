@@ -71,7 +71,7 @@ void scalarCopy(const int n, const T *data_in, T *data_out,
   DPCT1010:123: SYCL uses exceptions to report errors and does not use the error
   codes. The call was replaced with 0. You need to rewrite this code.
   */
-  cudaCheck(0);
+  gpuCheck(0);
 }
 // -----------------------------------------------------------------------------------
 
@@ -127,7 +127,7 @@ void vectorCopy(const int n, T *data_in, T *data_out, sycl::queue *stream) {
   DPCT1010:124: SYCL uses exceptions to report errors and does not use the error
   codes. The call was replaced with 0. You need to rewrite this code.
   */
-  cudaCheck(0);
+  gpuCheck(0);
 }
 // -----------------------------------------------------------------------------------
 
@@ -202,7 +202,7 @@ void memcpyFloat(const int n, float *data_in, float *data_out,
   DPCT1010:125: SYCL uses exceptions to report errors and does not use the error
   codes. The call was replaced with 0. You need to rewrite this code.
   */
-  cudaCheck(0);
+  gpuCheck(0);
 }
 // -----------------------------------------------------------------------------------
 

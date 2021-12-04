@@ -29,6 +29,9 @@ SOFTWARE.
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
+
+template <typename T, typename DIM>
+using localAcc = sycl::accessor<T, DIM, sycl::access_mode::read_write, sycl::target::local>;
 #else
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -37,15 +40,10 @@ SOFTWARE.
 //
 // Error checking wrapper for CUDA
 //
-/*
-DPCT1009:1: SYCL uses exceptions to report errors and does not use the error
-codes. The original code was commented out and a warning string was inserted.
-You need to rewrite this code.
-*/
 #ifdef SYCL
-#define cudaCheck(stmt) do { int err = stmt; } while (0)
+#define gpuCheck(stmt) do { int err = stmt; } while (0)
 #else
-#define cudaCheck(stmt) do {                                                      \
+#define gpuCheck(stmt) do {                                                      \
   cudaError_t err = stmt;                                                         \
   if (err != cudaSuccess) {                                                       \
     fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \

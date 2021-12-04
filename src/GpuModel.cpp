@@ -25,7 +25,6 @@ SOFTWARE.
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
 #else
 #include <cuda_runtime.h>
 #endif

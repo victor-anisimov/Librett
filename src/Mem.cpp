@@ -20,7 +20,7 @@ void allocate_device_T(void **pp, const size_t len, const size_t sizeofT) try {
   DPCT1003:0: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((*pp = (void *)sycl::malloc_device(sizeofT * len, dpct::get_default_queue()), 0));
+  gpuCheck((*pp = (void *)sycl::malloc_device(sizeofT * len, dpct::get_default_queue()), 0));
 #endif
 }
 catch (sycl::exception const &exc) {
@@ -33,7 +33,7 @@ void allocate_device_T(void **pp, const size_t len, const size_t sizeofT) {
 #ifdef LIBRETT_HAS_UMPIRE
   *pp = librett_umpire_allocator.allocate(sizeofT*len);
 #else
-  cudaCheck(cudaMalloc(pp, sizeofT*len));
+  gpuCheck(cudaMalloc(pp, sizeofT*len));
 #endif
 }
 #endif
@@ -53,7 +53,7 @@ void deallocate_device_T(void **pp) try {
     DPCT1003:2: Migrated API does not return error code. (*, 0) is inserted. You
     may need to rewrite this code.
     */
-    cudaCheck((sycl::free((void *)(*pp), dpct::get_default_queue()), 0));
+    gpuCheck((sycl::free((void *)(*pp), dpct::get_default_queue()), 0));
     *pp = NULL;
   }
 #endif
@@ -69,7 +69,7 @@ void deallocate_device_T(void **pp) {
   librett_umpire_allocator.deallocate((void *) (*pp) );
 #else
   if (*pp != NULL) {
-    cudaCheck(cudaFree((void *)(*pp)));
+    gpuCheck(cudaFree((void *)(*pp)));
     *pp = NULL;
   }
 #endif

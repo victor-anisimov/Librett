@@ -65,7 +65,7 @@ static std::mutex devicePropsMutex;
 // Also sets shared memory configuration
 #ifdef SYCL
 void getDeviceProp(int &deviceID, dpct::device_info &prop) try {
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+  gpuCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
 
   // need to lock this function	
   std::lock_guard<std::mutex> lock(devicePropsMutex);
@@ -77,7 +77,7 @@ void getDeviceProp(int &deviceID, dpct::device_info &prop) try {
     DPCT1003:1: Migrated API does not return error code. (*, 0) is inserted. You
     may need to rewrite this code.
     */
-    cudaCheck( (dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
+    gpuCheck( (dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
     //librettKernelSetSharedMemConfig();
     deviceProps.insert({deviceID, prop});
   } else {
@@ -91,7 +91,7 @@ catch (sycl::exception const &exc) {
 }
 #else // CUDA
 void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
-  cudaCheck(cudaGetDevice(&deviceID));
+  gpuCheck(cudaGetDevice(&deviceID));
 
   // need to lock this function
   std::lock_guard<std::mutex> lock(devicePropsMutex);
@@ -99,7 +99,7 @@ void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
   auto it = deviceProps.find(deviceID);
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
-    cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
+    gpuCheck(cudaGetDeviceProperties(&prop, deviceID));
     librettKernelSetSharedMemConfig();
     deviceProps.insert({deviceID, prop});
   } else {
@@ -322,10 +322,10 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
     // Clear output data to invalidate caches
 #ifdef SYCL
     set_device_array<char>((char *)odata, -1, numBytes, stream);
-    cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+    gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
     set_device_array<char>((char *)odata, -1, numBytes);
-    cudaCheck(cudaDeviceSynchronize());
+    gpuCheck(cudaDeviceSynchronize());
 #endif
     timer.start();
     // Execute plan
@@ -424,9 +424,9 @@ try
 
   int deviceID;
 #ifdef SYCL
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+  gpuCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
 #else // CUDA
-  cudaCheck(cudaGetDevice(&deviceID));
+  gpuCheck(cudaGetDevice(&deviceID));
 #endif
   if (deviceID != plan.deviceID) return LIBRETT_INVALID_DEVICE;
 

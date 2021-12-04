@@ -61,12 +61,12 @@ catch (sycl::exception const &exc) {
 }
 #else
 Timer::Timer() {
-  cudaCheck(cudaEventCreate(&tmstart));
-  cudaCheck(cudaEventCreate(&tmend));
+  gpuCheck(cudaEventCreate(&tmstart));
+  gpuCheck(cudaEventCreate(&tmend));
 }
 Timer::~Timer() {
-  cudaCheck(cudaEventDestroy(tmstart));
-  cudaCheck(cudaEventDestroy(tmend));
+  gpuCheck(cudaEventDestroy(tmstart));
+  gpuCheck(cudaEventDestroy(tmend));
 }
 #endif
 #endif
@@ -88,7 +88,7 @@ catch (sycl::exception const &exc) {
 }
 #else  // CUDA
 void Timer::start() {
-  cudaCheck(cudaEventRecord(tmstart, 0));
+  gpuCheck(cudaEventRecord(tmstart, 0));
 }
 #endif
 #else  // RUNTIME_EVENT_TIMER
@@ -110,7 +110,7 @@ void Timer::stop() try {
   DPCT1003:10: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((tmend.wait_and_throw(), 0));
+  gpuCheck((tmend.wait_and_throw(), 0));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -119,13 +119,13 @@ catch (sycl::exception const &exc) {
 }
 #else  // CUDA
 void Timer::stop() {
-  cudaCheck(cudaEventRecord(tmend, 0));
-  cudaCheck(cudaEventSynchronize(tmend));
+  gpuCheck(cudaEventRecord(tmend, 0));
+  gpuCheck(cudaEventSynchronize(tmend));
 }
 #endif
 #else  // RUNTIME_EVENT_TIMER
 void Timer::stop() {
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
   tmend = std::chrono::high_resolution_clock::now();
 }
 #endif
@@ -141,7 +141,7 @@ double Timer::seconds() try {
   DPCT1003:9: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((ms = std::chrono::duration<float, std::milli>(tmend_ct1 - tmstart_ct1) .count(), 0));
+  gpuCheck((ms = std::chrono::duration<float, std::milli>(tmend_ct1 - tmstart_ct1) .count(), 0));
   return (double)(ms/1000.0f);
 }
 catch (sycl::exception const &exc) {
@@ -152,7 +152,7 @@ catch (sycl::exception const &exc) {
 #else  // CUDA
 double Timer::seconds() {
   float ms;
-  cudaCheck(cudaEventElapsedTime(&ms, tmstart, tmend));
+  gpuCheck(cudaEventElapsedTime(&ms, tmstart, tmend));
   return (double)(ms/1000.0f);
 }
 #endif

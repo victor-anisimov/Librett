@@ -126,7 +126,7 @@ void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata)
   int numthread = 512;
   int numblock = min(65535, (ndata - 1)/numthread + 1 );
   setTensorCheckPatternKernel<<< numblock, numthread >>>(data, ndata);
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 }
 
 // void calcTensorConv(const int rank, const int* dim, const int* permutation,
@@ -191,11 +191,11 @@ template<typename T> bool TensorTester::checkTranspose(int rank, int* dim, int* 
   int numblock = min(maxNumblock, (ndata - 1)/numthread + 1 );
   int shmemsize = numthread*sizeof(unsigned int);
   checkTransposeKernel<<< numblock, numthread, shmemsize >>>(data, ndata, rank, d_tensorConv, d_error, d_fail);
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 
   int h_fail;
   copy_DtoH<int>(d_fail, &h_fail, 1);
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
 
   if (h_fail) {
     copy_DtoH_sync<TensorError_t>(d_error, h_error, maxNumblock);

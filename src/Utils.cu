@@ -32,11 +32,11 @@ SOFTWARE.
 //----------------------------------------------------------------------------------------
 
 void set_device_array_async_T(void *data, int value, const size_t ndata, cudaStream_t stream, const size_t sizeofT) {
-  cudaCheck(cudaMemsetAsync(data, value, sizeofT*ndata, stream));
+  gpuCheck(cudaMemsetAsync(data, value, sizeofT*ndata, stream));
 }
 
 void set_device_array_T(void *data, int value, const size_t ndata, const size_t sizeofT) {
-  cudaCheck(cudaMemset(data, value, sizeofT*ndata));
+  gpuCheck(cudaMemset(data, value, sizeofT*ndata));
 }
 
 
@@ -47,12 +47,12 @@ void set_device_array_T(void *data, int value, const size_t ndata, const size_t 
 //
 void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len, cudaStream_t stream,
            const size_t sizeofT) {
-  cudaCheck(cudaMemcpyAsync(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault, stream));
+  gpuCheck(cudaMemcpyAsync(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault, stream));
 }
 
 void copy_HtoD_T(const void *h_array, void *d_array, size_t array_len,
      const size_t sizeofT) {
-  cudaCheck(cudaMemcpy(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault));
+  gpuCheck(cudaMemcpy(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault));
 }
 
 //----------------------------------------------------------------------------------------
@@ -61,11 +61,11 @@ void copy_HtoD_T(const void *h_array, void *d_array, size_t array_len,
 //
 void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len, cudaStream_t stream,
            const size_t sizeofT) {
-  cudaCheck(cudaMemcpyAsync(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault, stream));
+  gpuCheck(cudaMemcpyAsync(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault, stream));
 }
 
 void copy_DtoH_T(const void *d_array, void *h_array, const size_t array_len, const size_t sizeofT) {
-  cudaCheck(cudaMemcpy(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault));
+  gpuCheck(cudaMemcpy(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault));
 }
 
 //----------------------------------------------------------------------------------------

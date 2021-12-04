@@ -522,27 +522,27 @@ __global__ void transposeTiledCopy(
 // Sets shared memory bank configuration for all kernels. Needs to be called once per device.
 //
 void librettKernelSetSharedMemConfig() {  
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
+#define CALL(NREG) gpuCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
 #include "calls.h"
 #undef CALL
 
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<double, NREG>, cudaSharedMemBankSizeEightByte ))
+#define CALL(NREG) gpuCheck(cudaFuncSetSharedMemConfig(transposePacked<double, NREG>, cudaSharedMemBankSizeEightByte ))
 #include "calls.h"
 #undef CALL
 
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<float, NREG>, cudaSharedMemBankSizeFourByte ))
+#define CALL(NREG) gpuCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<float, NREG>, cudaSharedMemBankSizeFourByte ))
 #include "calls.h"
 #undef CALL
 
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<double, NREG>, cudaSharedMemBankSizeEightByte ))
+#define CALL(NREG) gpuCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<double, NREG>, cudaSharedMemBankSizeEightByte ))
 #include "calls.h"
 #undef CALL
 
-  cudaCheck(cudaFuncSetSharedMemConfig(transposeTiled<float>, cudaSharedMemBankSizeFourByte));
-  cudaCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<float>, cudaSharedMemBankSizeFourByte));
+  gpuCheck(cudaFuncSetSharedMemConfig(transposeTiled<float>, cudaSharedMemBankSizeFourByte));
+  gpuCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<float>, cudaSharedMemBankSizeFourByte));
 
-  cudaCheck(cudaFuncSetSharedMemConfig(transposeTiled<double>, cudaSharedMemBankSizeEightByte));
-  cudaCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<double>, cudaSharedMemBankSizeEightByte));
+  gpuCheck(cudaFuncSetSharedMemConfig(transposeTiled<double>, cudaSharedMemBankSizeEightByte));
+  gpuCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<double>, cudaSharedMemBankSizeEightByte));
 
 }
 
@@ -588,7 +588,7 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
     {
       // Allocate cache structure if needed
       if (numDevices == -1) {
-        cudaCheck(cudaGetDeviceCount(&numDevices));
+        gpuCheck(cudaGetDeviceCount(&numDevices));
       }
       // Build unique key for cache
       int key_warp = (numthread/prop.warpSize - 1);
@@ -845,7 +845,7 @@ bool librettKernel(librettPlan_t& plan, void* dataIn, void* dataOut) {
   switch(ts.method) {
     case Trivial:
     {
-      cudaCheck(cudaMemcpyAsync(dataOut, dataIn, ts.volMmk*ts.volMbar*plan.sizeofType,
+      gpuCheck(cudaMemcpyAsync(dataOut, dataIn, ts.volMmk*ts.volMbar*plan.sizeofType,
         cudaMemcpyDefault, plan.stream));
     }
     break;
@@ -914,6 +914,6 @@ bool librettKernel(librettPlan_t& plan, void* dataIn, void* dataOut) {
 
   }
 
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
   return true;
 }
