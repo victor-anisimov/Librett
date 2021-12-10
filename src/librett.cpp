@@ -22,12 +22,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#else
-#include <cuda.h>
-#endif
 #include <list>
 #include <unordered_map>
 #include "Utils.h"
@@ -55,7 +49,7 @@ static std::atomic<librettHandle> curHandle(0);
 
 // Table of devices that have been initialized
 #ifdef SYCL
-static std::unordered_map<int, dpct::device_info> deviceProps;
+static std::unordered_map<int, librett::syclDeviceProp> deviceProps;
 #else  // CUDA
 static std::unordered_map<int, cudaDeviceProp> deviceProps;
 #endif
@@ -64,8 +58,8 @@ static std::mutex devicePropsMutex;
 // Checks prepares device if it's not ready yet and returns device properties
 // Also sets shared memory configuration
 #ifdef SYCL
-void getDeviceProp(int &deviceID, dpct::device_info &prop) try {
-  gpuCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+void getDeviceProp(int &deviceID, librett::syclDeviceProp &prop) try {
+  deviceID = librett::dev_mgr::instance().current_device_id();
 
   // need to lock this function	
   std::lock_guard<std::mutex> lock(devicePropsMutex);
@@ -73,11 +67,7 @@ void getDeviceProp(int &deviceID, dpct::device_info &prop) try {
   auto it = deviceProps.find(deviceID);
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
-    /*
-    DPCT1003:1: Migrated API does not return error code. (*, 0) is inserted. You
-    may need to rewrite this code.
-    */
-    gpuCheck( (dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
+    dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
     //librettKernelSetSharedMemConfig();
     deviceProps.insert({deviceID, prop});
   } else {

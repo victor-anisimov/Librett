@@ -29,12 +29,15 @@ SOFTWARE.
 
 #ifdef SYCL
 #include <CL/sycl.hpp>
+#include "librett_sycl.hpp"
+using gpuStream_t sycl::queue*;
 
 template <typename T, typename DIM>
 using localAcc = sycl::accessor<T, DIM, sycl::access_mode::read_write, sycl::target::local>;
 #else
 #include <cuda.h>
 #include <cuda_runtime.h>
+using gpuStream_t cudaStream_t;
 #endif
 
 //
@@ -53,19 +56,11 @@ using localAcc = sycl::accessor<T, DIM, sycl::access_mode::read_write, sycl::tar
 } while(0)
 #endif
 
-#ifdef SYCL
-void set_device_array_async_T(void *data, int value, const size_t ndata, sycl::queue *stream, const size_t sizeofT);
-#else
-void set_device_array_async_T(void *data, int value, const size_t ndata, cudaStream_t stream, const size_t sizeofT);
-#endif
+void set_device_array_async_T(void *data, int value, const size_t ndata, gpuStream_t stream, const size_t sizeofT);
 void set_device_array_T(void *data, int value, const size_t ndata, const size_t sizeofT);
 
 template <class T>
-#ifdef SYCL
-void set_device_array(T *data, int value, const size_t ndata, sycl::queue *stream) {
-#else
-void set_device_array(T *data, int value, const size_t ndata, cudaStream_t stream=0) {
-#endif
+void set_device_array(T *data, int value, const size_t ndata, gpuStream_t stream=0) {
   set_device_array_async_T(data, value, ndata, stream, sizeof(T));
 }
 
@@ -77,17 +72,11 @@ void set_device_array_sync(T *data, int value, const size_t ndata) {
 
 //----------------------------------------------------------------------------------------
 
-#ifdef SYCL
-void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len, 
-		sycl::queue *stream, const size_t sizeofT);
-void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len, 
-		sycl::queue *stream, const size_t sizeofT);
-#else
-void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len, cudaStream_t stream,
+void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len, gpuStream_t stream,
            const size_t sizeofT);
-void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len, cudaStream_t stream,
+void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len, gpuStream_t stream,
            const size_t sizeofT);
-#endif
+
 void copy_HtoD_T(const void *h_array, void *d_array, size_t array_len, const size_t sizeofT);
 void copy_DtoH_T(const void *d_array, void *h_array, const size_t array_len, const size_t sizeofT);
 
@@ -96,15 +85,9 @@ void copy_DtoH_T(const void *d_array, void *h_array, const size_t array_len, con
 // Copies memory Host -> Device
 //
 template <class T>
-#ifdef SYCL
-void copy_HtoD(const T *h_array, T *d_array, size_t array_len, sycl::queue *stream) {
+void copy_HtoD(const T *h_array, T *d_array, size_t array_len, gpuStream_t stream=0) {
   copy_HtoD_async_T(h_array, d_array, array_len, stream, sizeof(T));
 }
-#else
-void copy_HtoD(const T *h_array, T *d_array, size_t array_len, cudaStream_t stream=0) {
-  copy_HtoD_async_T(h_array, d_array, array_len, stream, sizeof(T));
-}
-#endif
 
 //----------------------------------------------------------------------------------------
 //
@@ -120,15 +103,10 @@ void copy_HtoD_sync(const T *h_array, T *d_array, size_t array_len) {
 // Copies memory Device -> Host
 //
 template <class T>
-#ifdef SYCL
-void copy_DtoH(const T *d_array, T *h_array, const size_t array_len, sycl::queue *stream) {
+void copy_DtoH(const T *d_array, T *h_array, const size_t array_len, gpuStream_t stream=0) {
   copy_DtoH_async_T(d_array, h_array, array_len, stream, sizeof(T));
 }
-#else
-void copy_DtoH(const T *d_array, T *h_array, const size_t array_len, cudaStream_t stream=0) {
-  copy_DtoH_async_T(d_array, h_array, array_len, stream, sizeof(T));
-}
-#endif
+
 //----------------------------------------------------------------------------------------
 //
 // Copies memory Device -> Host using synchronous calls

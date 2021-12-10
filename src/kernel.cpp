@@ -141,18 +141,22 @@ void transposePacked(
   const TensorConvInOut* RESTRICT gl_Mmk,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const TensorConv* RESTRICT gl_Msh,
-  const T* RESTRICT dataIn, T* RESTRICT dataOut, sycl::nd_item<3>& item,
+  const T* RESTRICT dataIn, T* RESTRICT dataOut, sycl::nd_item<1>& item,
   uint8_t *dpct_local) {
 
   sycl::group work_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
-
+  size_t warpSize = sg.get_local_range().get(0);
+  size_t threadIdx_x = threadIdx_x;
+  size_t blockDim_x = item.get_local_range(0);
+  size_t blockIdx_x = item.get_group(0);
+  size_t gridDim_x = item.get_group_range(0);
+  
   // Shared memory. volMmk elements
   auto shBuffer_char = (char *)dpct_local;
   T* shBuffer = (T *)shBuffer_char;
 
-  const int warpLane = item.get_local_id(2) &
-                       (sg.get_local_range().get(0) - 1);
+  const int warpLane = threadIdx_x & (warpSize - 1);
 
   TensorConvInOut Mmk;
   Mmk.c_in = 1;
@@ -183,16 +187,11 @@ void transposePacked(
   for (int i=0;i < sizeMmk;i++) {
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item.get_local_id(2) + j * item.get_local_range().get(2);
-
-      posMmkIn[j] += ((posMmk / sg.shuffle(Mmk.c_in, i)) %
-                      sg.shuffle(Mmk.d_in, i)) *
+      int posMmk = threadIdx_x + j * blockDim_x;
+      posMmkIn[j] += ((posMmk / sg.shuffle(Mmk.c_in, i)) % sg.shuffle(Mmk.d_in, i)) *
                      sg.shuffle(Mmk.ct_in, i);
 
-      posMmkOut[j] +=
-          ((posMmk / sg.shuffle(Mmk.c_out, i)) %
-           sg.shuffle(Mmk.d_out, i)) *
+      posMmkOut[j] += ((posMmk / sg.shuffle(Mmk.c_out, i)) % sg.shuffle(Mmk.d_out, i)) *
           sg.shuffle(Mmk.ct_out, i);
 
       posSh[j] += ((posMmk / sg.shuffle(Msh.c, i)) %
@@ -211,8 +210,7 @@ void transposePacked(
     Mbar = gl_Mbar[warpLane];
   }
 
-  for (int posMbar = item.get_group(2); posMbar < volMbar;
-       posMbar += item.get_group_range(2))
+  for (int posMbar = blockIdx_x; posMbar < volMbar; posMbar += gridDim_x)
   {
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
@@ -233,7 +231,7 @@ void transposePacked(
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
       int posMmk =
-          item.get_local_id(2) + j * item.get_local_range().get(2);
+          threadIdx_x + j * blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
       if (posMmk < volMmk) shBuffer[posMmk] = dataIn[posIn];
     }
@@ -243,8 +241,7 @@ void transposePacked(
     // Write to global memory
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item.get_local_id(2) + j * item.get_local_range().get(2);
+      int posMmk = threadIdx_x + j * blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
       if (posMmk < volMmk) dataOut[posOut] = shBuffer[posSh[j]];
     }
@@ -790,15 +787,13 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       lc.numblock[2] = 1;
       lc.numblock[1] = 1;
       lc.numblock[0] = 1;
-      lc.numblock[0] = 1;
-      lc.numblock[0] = 1;
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
     }
     break;
 
     case Packed:
-    {
+      { // 1D launch
       // Amount of shared memory required
       lc.shmemsize = ts.shmemAlloc(sizeofType); //ts.volMmk*sizeofType;
 
@@ -829,16 +824,16 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       int bestNumRegStorage = 0;
       int bestNumActiveBlock = 0;
 
-      lc.numthread[1] = 1;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = std::max(1, ts.volMbar);
-      lc.numblock[2] = std::min<unsigned int>(prop.get_max_compute_units() * 18,
-                                              lc.numblock[2]);
-      lc.numblock[1] = 1;
-      lc.numblock[0] = 1;
+      lc.numthread[1] = 0;
+      lc.numthread[2] = 0;
+      lc.numblock[0] = std::max(1, ts.volMbar);
+      lc.numblock[0] = std::min<unsigned int>(prop.get_max_compute_units() * 18,
+                                              lc.numblock[0]);
+      lc.numblock[1] = 0;
+      lc.numblock[2] = 0;
 
       for (lc.numRegStorage=minNumRegStorage;lc.numRegStorage <= maxNumRegStorage;lc.numRegStorage++) {
-        lc.numthread[2] = ((ts.volMmk - 1) / (prop.get_max_sub_group_size() *
+        lc.numthread[0] = ((ts.volMmk - 1) / (prop.get_max_sub_group_size() *
                                               lc.numRegStorage) +
                            1) *
                           prop.get_max_sub_group_size();
@@ -856,7 +851,7 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       if (bestNumRegStorage == 0) return 0;
 
       lc.numRegStorage = bestNumRegStorage;
-      lc.numthread[2] = ((ts.volMmk - 1) / (prop.get_max_sub_group_size() *
+      lc.numthread[0] = ((ts.volMmk - 1) / (prop.get_max_sub_group_size() *
                                             lc.numRegStorage) +
                          1) *
                         prop.get_max_sub_group_size();
@@ -865,7 +860,7 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
     break;
 
     case PackedSplit:
-    {
+      { // 2D launch
       // Amount of shared memory required
       lc.shmemsize = ts.shmemAlloc(sizeofType);
 
@@ -899,16 +894,15 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       int bestNumActiveBlock = 0;
 
       lc.numthread[1] = 1;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = ts.numSplit;
+      lc.numthread[2] = 0;
+      lc.numblock[0] = ts.numSplit;
       lc.numblock[1] =
           std::max<unsigned int>(1, std::min<unsigned int>((prop.get_max_compute_units() * 18) /
-                                            lc.numblock[2],
-                                        ts.volMbar));
-      lc.numblock[0] = 1;
+                                            lc.numblock[0], ts.volMbar));
+      lc.numblock[2] = 0;
 
       for (lc.numRegStorage=minNumRegStorage;lc.numRegStorage <= maxNumRegStorage;lc.numRegStorage++) {
-        lc.numthread[2] =
+        lc.numthread[0] =
             ((volMmkWithSplit - 1) /
                  (prop.get_max_sub_group_size() * lc.numRegStorage) +
              1) *
@@ -927,26 +921,25 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       if (bestNumRegStorage == 0) return 0;
 
       lc.numRegStorage = bestNumRegStorage;
-      lc.numthread[2] =
+      lc.numthread[0] =
           ((volMmkWithSplit - 1) /
                (prop.get_max_sub_group_size() * lc.numRegStorage) +
-           1) *
-          prop.get_max_sub_group_size();
+           1) * prop.get_max_sub_group_size();
       numActiveBlockReturn = bestNumActiveBlock;
     }
     break;
 
     case Tiled:
-    {
-      lc.numthread[2] = TILEDIM;
+      { // 3D launch
+      lc.numthread[0] = TILEDIM;
       lc.numthread[1] = TILEROWS;
-      lc.numthread[0] = 1;
-      lc.numblock[2] =
+      lc.numthread[2] = 1;
+      lc.numblock[0] =
           ((ts.volMm - 1) / TILEDIM + 1) * ((ts.volMk - 1) / TILEDIM + 1);
       lc.numblock[1] = 1;
-      lc.numblock[0] =
+      lc.numblock[2] =
           std::max<unsigned int>(1, std::min<unsigned int>((prop.get_max_compute_units() * 8) /
-                                            (lc.numblock[2] * lc.numblock[1]),
+                                            (lc.numblock[0] * lc.numblock[1]),
                                         ts.volMbar));
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
@@ -955,17 +948,16 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
 
     case TiledCopy:
     {
-      lc.numthread[2] = TILEDIM;
+      lc.numthread[0] = TILEDIM;
       lc.numthread[1] = TILEROWS;
-      lc.numthread[0] = 1;
-      lc.numblock[2] =
-          ((ts.volMm - 1) / TILEDIM + 1) * ((ts.volMkBar - 1) / TILEDIM + 1);
+      lc.numthread[2] = 1;
+      lc.numblock[0] = ((ts.volMm - 1) / TILEDIM + 1) * ((ts.volMkBar - 1) / TILEDIM + 1);
       lc.numblock[1] = 1;
-      lc.numblock[0] = ts.volMbar;
-      lc.numblock[0] = std::min<unsigned int>((prop.get_max_compute_units() * 8) /
-                               (lc.numblock[2] * lc.numblock[1]),
-                           lc.numblock[0]);
-      lc.numblock[0] = std::max<unsigned int>(1, lc.numblock[0]);
+      lc.numblock[2] = ts.volMbar;
+      lc.numblock[2] = std::min<unsigned int>((prop.get_max_compute_units() * 8) /
+                               (lc.numblock[0] * lc.numblock[1]),
+                           lc.numblock[2]);
+      lc.numblock[2] = std::max<unsigned int>(1, lc.numblock[2]);
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
     }
@@ -1014,10 +1006,10 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut) try {
       switch(lc.numRegStorage) {
 #define CALL0(TYPE, NREG)                                                      \
   {plan.stream->submit([&](sycl::handler &cgh) {                               \
-    localAcc<uint8_t, 1> local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);\
+    localAcc<uint8_t, 1> local_acc(sycl::range<1>(lc.shmemsize), cgh);         \
                                                                                \
     auto ts_volMmk_ct0 = ts.volMmk;                                            \
-    auto ts_volMbar_ct1 = ts.volMbar;                                          \
+    auto ts_volMbar = ts.volMbar;                                              \
     auto ts_sizeMmk_ct2 = ts.sizeMmk;                                          \
     auto ts_sizeMbar_ct3 = ts.sizeMbar;                                        \
     auto plan_Mmk_ct4 = plan.Mmk;                                              \
@@ -1027,12 +1019,12 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut) try {
     auto dataOut_ct8 = (TYPE *)dataOut;                                        \
                                                                                \
     cgh.parallel_for(                                                          \
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
-        [=](sycl::nd_item<3> item) [[intel::reqd_sub_group_size(32)]] {    \
+        sycl::nd_range<1>(lc.numblock[0] * lc.numthread[0], lc.numthread[0]),  \
+        [=](sycl::nd_item<1> item) [[intel::reqd_sub_group_size(32)]] {        \
           transposePacked<TYPE, NREG>(                                         \
-              ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2, ts_sizeMbar_ct3,  \
+              ts_volMmk_ct0, ts_volMbar, ts_sizeMmk_ct2, ts_sizeMbar_ct3,      \
               plan_Mmk_ct4, plan_Mbar_ct5, plan_Msh_ct6, dataIn_ct7,           \
-              dataOut_ct8, item, local_acc_ct1.get_pointer());        \
+              dataOut_ct8, item, local_acc.get_pointer());                     \
         });                                                                    \
     }); plan.stream->wait(); \
   }

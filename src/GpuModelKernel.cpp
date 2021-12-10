@@ -23,7 +23,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
 #include "Utils.h"
 #include "Mem.h"
 #include "GpuModelKernel.h"
@@ -72,6 +71,7 @@ __sycl_inline__ int tensorPos(const int p, const int rank, const int c,
                               sycl::nd_item<3>& item) {
   sycl::sub_group sg = item.get_sub_group();
   const int numLane = sg.get_local_range().get(0);
+
   int r = ((p / c) % d) * ct;
 #pragma unroll
   for (int i=numLane/2;i >= 1;i/=2) {
@@ -85,9 +85,10 @@ __sycl_inline__ int tensorPos(const int p, const int rank, const int c,
 // Counts number of global memory transactions for a warp that accesses
 // memory at pos using warp lanes 0, ..., n - 1
 //
+template <int DIM>
 __sycl_inline__ int countGlTransactions(const int pos, const int n,
                                         const int accWidth, const int warpLane,
-                                        sycl::nd_item<3>& item) {
+                                        sycl::nd_item<DIM>& item) {
   sycl::sub_group sg = item.get_sub_group();
 
   int seg0 = pos/accWidth;
@@ -102,11 +103,11 @@ __sycl_inline__ int countGlTransactions(const int pos, const int n,
 // Counts number of global memory transactions for a warp that accesses
 // memory at pos using warp lanes 0, ..., n - 1
 //
+template <int DIM>
 __sycl_inline__ int countGlTransactions(const int *segbuf, const int n,
                                         sycl::nd_item<3>& item) {
   int count = 0;
-  for (int i = item.get_local_id(2); i < n;
-       i += item.get_local_range().get(2)) {
+  for (int i = item.get_local_id(2); i < n; i += item.get_local_range().get(2)) {
     int seg      = segbuf[i];
     int seg_prev = (i - 1 >= 0) ? segbuf[i - 1] : -1;
     count += (seg != seg_prev);
@@ -207,14 +208,14 @@ void runCountersKernel(const int* posData, const int numPosData,
   sycl::sub_group sg = item.get_sub_group();
 
   const int warpSize = sg.get_local_range().get(0);
-  const int warpLane = item.get_local_id(0) & (warpSize - 1);
+  const int warpLane = item.get_local_id(0) & (warpSize - 1); // may be sg.get_local_id().get(0);
 
   for (int i = item.get_global_id(0); i < numPosData; i += item.get_global_range(0)) {
     int pos = posData[i];
     int flag = (pos == -1);
     int ffsval = __builtin_ffs(ballot(sg, flag)[0]) - 1;
     int n = (sycl::ONEAPI::any_of(sg, flag)) ? ffsval : warpSize;
-    int tran = countGlTransactions(pos, n, accWidth, warpLane, item);
+    int tran = countGlTransactions<1>(pos, n, accWidth, warpLane, item);
     int cl_full = 0;
     int cl_part = 0;
     countCacheLines(pos, n, cacheWidth, warpLane, cl_full, cl_part, item);
@@ -238,11 +239,14 @@ void runCountersKernel(const int* posData, const int numPosData,
 // Reduce memStat within warp and write result to global memory
 // NOTE: Not super-efficient since every warp does atomicAdd().
 //
-__sycl_inline__ void writeMemStat(const int warpLane, MemStat memStat,
+__sycl_inline__ void writeMemStat(const int warpLane, const size_t warpSize,
+				  MemStat memStat,
                                   MemStat *RESTRICT glMemStat,
                                   sycl::nd_item<3>& item) {
   sycl::sub_group sg = item.get_sub_group();
+  const int warpSize = sg.get_local_range().get(0);
 
+  // TODO: here change 16 to warpSize
   for (int i=16;i >= 1;i/=2) {
     // memStat.gld_tran += __shfl_xor_sync(0xffffffff,memStat.gld_tran,i);
     // memStat.gst_tran += __shfl_xor_sync(0xffffffff,memStat.gst_tran,i);
@@ -292,9 +296,12 @@ countTiled(
   sycl::group work_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
   size_t warpSize = sg.get_local_range().get(0);
-  size_t threadIdx_x = item.get_local_id(2);
+  size_t threadIdx_x = item.get_local_id(0);
   size_t threadIdx_y = item.get_local_id(1);
-
+  size_t blockIdx_x = item.get_group(0);
+  size_t blockIdx_z = item.get_group(2);  
+  size_t gridDim_z = item.get_group_range(2);
+  
   const int warpLane = threadIdx_x & (warpSize - 1);
   TensorConvInOut Mbar;
   Mbar.c_in = 1;
@@ -305,8 +312,8 @@ countTiled(
     Mbar = glMbar[warpLane];
   }
 
-  const int bx = (item.get_group(2) % numMm) * TILEDIM;
-  const int by = (item.get_group(2) / numMm) * TILEDIM;
+  const int bx = (blockIdx_x % numMm) * TILEDIM;
+  const int by = (blockIdx_x / numMm) * TILEDIM;
 
   const int xin = bx + threadIdx_x;
   const int yin = by + threadIdx_y;
@@ -327,8 +334,7 @@ countTiled(
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item.get_group(0); posMbar < volMbar;
-       posMbar += item.get_group_range(0))
+  for (int posMbar = blockIdx_z; posMbar < volMbar; posMbar += gridDim_z)
   {
 
     // Compute global memory positions
@@ -346,8 +352,7 @@ countTiled(
 #pragma unroll
     for (int j=0;j < TILEDIM;j += TILEROWS) {
       int n = sycl::popcount(ballot(sg, maskIny & (1 << j))[0]);
-      memStat.gld_tran +=
-          countGlTransactions(posIn, n, accWidth, warpLane, item);
+      memStat.gld_tran += countGlTransactions<3>(posIn, n, accWidth, warpLane, item);
       memStat.gld_req += sycl::ONEAPI::any_of(work_grp, n > 0);
       posIn += posInAdd;
     }
@@ -355,8 +360,7 @@ countTiled(
 #pragma unroll
     for (int j=0;j < TILEDIM;j += TILEROWS) {
       int n = sycl::popcount(ballot(sg, maskOutx & (1 << j))[0]);
-      memStat.gst_tran +=
-          countGlTransactions(posOut, n, accWidth, warpLane, item);
+      memStat.gst_tran += countGlTransactions<3>(posOut, n, accWidth, warpLane, item);
       memStat.gst_req += sycl::ONEAPI::any_of(work_grp, n > 0);
       countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2,
                       memStat.cl_part_l2, item);
@@ -366,7 +370,7 @@ countTiled(
   }
 
   // Reduce memStat within thread block and write result to global memory
-  writeMemStat(warpLane, memStat, glMemStat, item);
+  writeMemStat(warpLane, warpSize, memStat, glMemStat, item);
 }
 
 //
@@ -374,22 +378,23 @@ countTiled(
 //
 template <int numRegStorage>
 void
-
 countPacked(
   const int volMmk, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const TensorConvInOut* RESTRICT gl_Mmk,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const int accWidth, const int cacheWidth,
-  MemStat* RESTRICT glMemStat, sycl::nd_item<3>& item, uint8_t *dpct_local) {
+  MemStat* RESTRICT glMemStat, sycl::nd_item<1>& item, uint8_t *dpct_local) {
 
   sycl::group work_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
-
+  size_t warpSize = sg.get_local_range().get(0);  
+  size_t threadIdx_x = item.get_local_id(0);
+  size_t blockDim_x = item.get_local_range(0);
+  
   auto shSegOut = (int *)dpct_local;
 
-  const int warpLane = item.get_local_id(2) &
-                       (sg.get_local_range().get(0) - 1);
+  const int warpLane = threadIdx_x & (warpSize - 1);
 
   TensorConvInOut Mmk;
   Mmk.c_in = 1;
@@ -413,7 +418,7 @@ countPacked(
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
       int posMmk =
-          item.get_local_id(2) + j * item.get_local_range().get(2);
+          threadIdx_x + j * blockDim_x;
       posMmkIn[j] += ((posMmk / sg.shuffle(Mmk.c_in, i)) %
                       sg.shuffle(Mmk.d_in, i)) *
                      sg.shuffle(Mmk.ct_in, i);
@@ -437,8 +442,8 @@ countPacked(
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item.get_group(2); posMbar < volMbar;
-       posMbar += item.get_group_range(2))
+  for (int posMbar = item.get_group(0); posMbar < volMbar;
+       posMbar += item.get_group_range(0))
   {
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
@@ -456,24 +461,20 @@ countPacked(
     // Read from global memory
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item.get_local_id(2) + j * item.get_local_range().get(2);
+      int posMmk = threadIdx_x + j * blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
       int n = sycl::popcount(ballot(sg, posMmk < volMmk)[0]);
-      memStat.gld_tran +=
-          countGlTransactions(posIn, n, accWidth, warpLane, item);
+      memStat.gld_tran += countGlTransactions<1>(posIn, n, accWidth, warpLane, item);
       memStat.gld_req += sycl::ONEAPI::any_of(work_grp, n > 0);
     }
 
     // Write to global memory
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item.get_local_id(2) + j * item.get_local_range().get(2);
+      int posMmk = threadIdx_x + j * blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
       int n = sycl::popcount(ballot(sg, posMmk < volMmk)[0]);
-      memStat.gst_tran +=
-          countGlTransactions(posOut, n, accWidth, warpLane, item);
+      memStat.gst_tran += countGlTransactions<1>(posOut, n, accWidth, warpLane, item);
       memStat.gst_req += sycl::ONEAPI::any_of(work_grp, n > 0);
       if (posMmk < volMmk) shSegOut[posMmk] = posOut/cacheWidth;
     }
@@ -483,8 +484,7 @@ countPacked(
     // Go from L2 segments to L1 segments
     sycl::group_barrier(work_grp);
     const int L2toL1 = accWidth/cacheWidth;
-    for (int i = item.get_local_id(2); i < volMmk;
-         i += item.get_local_range().get(2)) {
+    for (int i = threadIdx_x; i < volMmk; i += blockDim_x) {
       shSegOut[i] /= L2toL1;
     }
     sycl::group_barrier(work_grp);
@@ -497,7 +497,7 @@ countPacked(
   }
 
   // Reduce memStat within thread block and write result to global memory
-  writeMemStat(warpLane, memStat, glMemStat, item);
+  writeMemStat(warpLane, warpSize, memStat, glMemStat, item);
 }
 
 //
@@ -515,22 +515,26 @@ countPackedSplit(
   const TensorConvInOut* RESTRICT glMmk,
   const TensorConvInOut* RESTRICT glMbar,
   const int accWidth, const int cacheWidth,
-  MemStat* RESTRICT glMemStat, sycl::nd_item<1>& item, uint8_t *dpct_local) {
+  MemStat* RESTRICT glMemStat, sycl::nd_item<2>& item, uint8_t *dpct_local) {
 
   sycl::group work_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
-  size_t threadIdx_x = item.get_local_id(2);
+  size_t warpSize = sg.get_local_range().get(0);    
+  size_t threadIdx_x = item.get_local_id(0);
+  size_t blockIdx_x = item.get_group(0);
+  size_t gridDim_x = item.get_group_range(0);
+  size_t blockIdx_y = item.get_group(1);
+  size_t gridDim_y = item.get_group_range(1);
+  size_t blockDim_x = item.get_local_range(0);
 
   auto shSegOut = (int *)dpct_local;
 
-  const int warpLane = threadIdx_x &
-                       (sg.get_local_range().get(0) - 1);
+  const int warpLane = threadIdx_x & (warpSize - 1);
 
   // const int plusone = (blockIdx.x < (splitDim % gridDim.x));
-  const int p0 = item.get_group(2) * splitDim / item.get_group_range(2);
-  const int volSplit =
-      (item.get_group(2) + 1) * splitDim / item.get_group_range(2) - p0;
-  const int plusone = volSplit - splitDim / item.get_group_range(2);
+  const int p0 = blockIdx_x * splitDim / gridDim_x;
+  const int volSplit = (blockIdx_x + 1) * splitDim / gridDim_x - p0;
+  const int plusone = volSplit - splitDim / gridDim_x;
 
   TensorConvInOut Mmk;
   Mmk.c_in = 1;
@@ -564,13 +568,11 @@ countPackedSplit(
   for (int i=0;i < sizeMmk;i++) {
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int t = threadIdx_x + j * item.get_local_range().get(2);
+      int t = threadIdx_x + j * blockDim_x;
       posMmkIn[j] += ((t / sg.shuffle(Mmk.c_in, i)) %
-                      sg.shuffle(Mmk.d_in, i)) *
-                     sg.shuffle(Mmk.ct_in, i);
+                      sg.shuffle(Mmk.d_in, i)) * sg.shuffle(Mmk.ct_in, i);
       posMmkOut[j] += ((t / sg.shuffle(Mmk.c_out, i)) %
-                       sg.shuffle(Mmk.d_out, i)) *
-                      sg.shuffle(Mmk.ct_out, i);
+                       sg.shuffle(Mmk.d_out, i)) * sg.shuffle(Mmk.ct_out, i);
     }
   }
 
@@ -586,8 +588,7 @@ countPackedSplit(
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item.get_group(1); posMbar < volMbar;
-       posMbar += item.get_group_range(1))
+  for (int posMbar = blockIdx_y; posMbar < volMbar; posMbar += gridDim_y)
   {
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
@@ -605,24 +606,20 @@ countPackedSplit(
     // Read from global memory
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          threadIdx_x + j * item.get_local_range().get(2);
+      int posMmk = threadIdx_x + j * blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
       int n = sycl::popcount(ballot(sg, posMmk < volMmkSplit)[0]);
-      memStat.gld_tran +=
-          countGlTransactions(posIn, n, accWidth, warpLane, item);
+      memStat.gld_tran += countGlTransactions<2>(posIn, n, accWidth, warpLane, item);
       memStat.gld_req += sycl::ONEAPI::any_of(work_grp, n > 0);
     }
 
     // Write to global memory
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          threadIdx_x + j * item.get_local_range().get(2);
+      int posMmk = threadIdx_x + j * blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
       int n = sycl::popcount(ballot(sg, posMmk < volMmkSplit)[0]);
-      memStat.gst_tran +=
-          countGlTransactions(posOut, n, accWidth, warpLane, item);
+      memStat.gst_tran += countGlTransactions<2>(posOut, n, accWidth, warpLane, item);
       memStat.gst_req += sycl::ONEAPI::any_of(work_grp, n > 0);
       if (posMmk < volMmkSplit) shSegOut[posMmk] = posOut / cacheWidth;
       // countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full, memStat.cl_part);
@@ -634,8 +631,7 @@ countPackedSplit(
     // Go from L2 segments to L1 segments
     sycl::group_barrier(work_grp);
     const int L2toL1 = accWidth/cacheWidth;
-    for (int i = threadIdx_x; i < volMmkSplit;
-         i += item.get_local_range().get(2)) {
+    for (int i = threadIdx_x; i < volMmkSplit; i += blockDim_x) {
       shSegOut[i] /= L2toL1;
     }
     sycl::group_barrier(work_grp);
@@ -648,7 +644,7 @@ countPackedSplit(
   }
 
   // Reduce memStat within thread block and write result to global memory
-  writeMemStat(warpLane, memStat, glMemStat, item);
+  writeMemStat(warpLane, warpSize, memStat, glMemStat, item);
 }
 
 //
@@ -658,7 +654,6 @@ countPackedSplit(
 //  dim3 numblock( ((plan.volMm-1)/TILEDIM+1)*((plan.volMkBar-1)/TILEDIM+1), 1, plan.volMbar);
 //
 void
-
 countTiledCopy(
   const int numMm, const int volMbar, const int sizeMbar,
   const int cuDimMk, const int cuDimMm,
@@ -667,10 +662,16 @@ countTiledCopy(
   const int accWidth, const int cacheWidth,
   MemStat* RESTRICT glMemStat, sycl::nd_item<3>& item) {
 
+  sycl::group work_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
-
-  const int warpLane = item.get_local_id(2) &
-                       (sg.get_local_range().get(0) - 1);
+  size_t warpSize    = sg.get_local_range().get(0);  
+  size_t blockIdx_x  = item.get_group(0);
+  size_t blockIdx_z  = item.get_group(2);  
+  size_t threadIdx_x = item.get_local_id(0);
+  size_t threadIdx_y = item.get_local_id(1);
+  size_t gridDim_z   = item.get_group_range(2);
+    
+  const int warpLane = threadIdx_x & (warpSize - 1);
   TensorConvInOut Mbar;
   Mbar.c_in = 1;
   Mbar.d_in = 1;
@@ -680,50 +681,43 @@ countTiledCopy(
     Mbar = gl_Mbar[warpLane];
   }
 
-  const int bx = (item.get_group(2) % numMm) * TILEDIM;
-  const int by = (item.get_group(2) / numMm) * TILEDIM;
+  const int bx = (blockIdx_x % numMm) * TILEDIM;
+  const int by = (blockIdx_x / numMm) * TILEDIM;
 
-  const int x = bx + item.get_local_id(2);
-  const int y = by + item.get_local_id(1);
+  const int x = bx + threadIdx_x;
+  const int y = by + threadIdx_y;
 
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item.get_group(0); posMbar < volMbar;
-       posMbar += item.get_group_range(0))
+  for (int posMbar = blockIdx_z; posMbar < volMbar; posMbar += gridDim_z)
   {
 
     // Read global memory
     {
-      int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in,
-                           item);
+      int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in, item);
       pos0 += x + y*cuDimMk;
 
 #pragma unroll
       for (int j=0;j < TILEDIM;j += TILEROWS) {
         int pos  = pos0  + j*cuDimMk;
-	int n = sycl::popcount(
-            ballot(sg, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
-        memStat.gld_tran +=
-            countGlTransactions(pos, n, accWidth, warpLane, item);
-        memStat.gld_req += sycl::ONEAPI::any_of(item.get_group(), n > 0);
+	int n = sycl::popcount(ballot(sg, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
+        memStat.gld_tran += countGlTransactions<3>(pos, n, accWidth, warpLane, item);
+        memStat.gld_req += sycl::ONEAPI::any_of(work_grp, n > 0);
       }
     }
 
     // Write global memory
     {
-      int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out,
-                           Mbar.ct_out, item);
+      int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out, Mbar.ct_out, item);
       pos0 += x + y*cuDimMm;
 
 #pragma unroll
       for (int j=0;j < TILEDIM;j += TILEROWS) {
         int pos = pos0 + j*cuDimMm;
-	int n = sycl::popcount(
-            ballot(sg, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
-        memStat.gst_tran +=
-            countGlTransactions(pos, n, accWidth, warpLane, item);
-        memStat.gst_req += sycl::ONEAPI::any_of(item.get_group(), n > 0);
+	int n = sycl::popcount(ballot(sg, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
+        memStat.gst_tran += countGlTransactions<3>(pos, n, accWidth, warpLane, item);
+        memStat.gst_req += sycl::ONEAPI::any_of(work_grp, n > 0);
         countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2,
                         memStat.cl_part_l2, item);
       }
@@ -732,7 +726,7 @@ countTiledCopy(
   }
 
   // Reduce memStat within thread block and write result to global memory
-  writeMemStat(warpLane, memStat, glMemStat, item);
+  writeMemStat(warpLane, warpSize, memStat, glMemStat, item);
 }
 
 //######################################################################################
@@ -815,28 +809,27 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth,
     {
       switch(lc.numRegStorage) {
 #define CALL0(NREG)                                                            \
-  plan.stream->submit([&](sycl::handler &cgh) {                                \
-    localAcc<uint8_t, 1> local_acc(sycl::range<1>(ts.volMmk * sizeof(int)), cgh);      \
-                                                                               \
-    auto ts_volMmk_ct0 = ts.volMmk;                                            \
-    auto ts_volMbar = ts.volMbar;                                          \
-    auto ts_sizeMmk_ct2 = ts.sizeMmk;                                          \
-    auto ts_sizeMbar_ct3 = ts.sizeMbar;                                        \
-    auto plan_Mmk_ct4 = plan.Mmk;                                              \
-    auto plan_Mbar_ct5 = plan.Mbar;                                            \
-    auto accWidth_ct6 = accWidth;                                              \
-    auto cacheWidth_ct7 = cacheWidth;                                          \
-    auto devMemStat_ct8 = devMemStat;                                          \
-                                                                               \
-    cgh.parallel_for(                                                          \
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
-        [=](sycl::nd_item<3> item) {                                       \
-          countPacked<NREG>(ts_volMmk_ct0, ts_volMbar, ts_sizeMmk_ct2,     \
-                            ts_sizeMbar_ct3, plan_Mmk_ct4, plan_Mbar_ct5,      \
-                            accWidth_ct6, cacheWidth_ct7, devMemStat_ct8,      \
-                            item, local_acc.get_pointer());       \
-        });                                                                    \
-  });
+	plan.stream->submit([&](sycl::handler &cgh) {			\
+	    localAcc<uint8_t, 1> local_acc(sycl::range<1>(ts.volMmk * sizeof(int)), cgh); \
+									\
+	    auto ts_volMmk_ct0 = ts.volMmk;				\
+	    auto ts_volMbar = ts.volMbar;				\
+	    auto ts_sizeMmk_ct2 = ts.sizeMmk;				\
+	    auto ts_sizeMbar_ct3 = ts.sizeMbar;				\
+	    auto plan_Mmk_ct4 = plan.Mmk;				\
+	    auto plan_Mbar_ct5 = plan.Mbar;				\
+	    auto accWidth_ct6 = accWidth;				\
+	    auto cacheWidth_ct7 = cacheWidth;				\
+	    auto devMemStat_ct8 = devMemStat;				\
+									\
+	    cgh.parallel_for(sycl::nd_range<1>(lc.numblock[0] * lc.numthread[0], lc.numthread[0]), \
+			     [=](sycl::nd_item<1> item) {		\
+			       countPacked<NREG>(ts_volMmk_ct0, ts_volMbar, ts_sizeMmk_ct2, \
+						 ts_sizeMbar_ct3, plan_Mmk_ct4, plan_Mbar_ct5, \
+						 accWidth_ct6, cacheWidth_ct7, devMemStat_ct8, \
+						 item, local_acc.get_pointer()); \
+			     });					\
+	  });
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
@@ -874,9 +867,10 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth,
     auto cacheWidth0 = cacheWidth;                                         \
     auto devMemStat1 = devMemStat;                                         \
                                                                                \
-    q.parallel_for(							\
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
-        [=](sycl::nd_item<3> item) {                                       \
+    sycl::range<2> globalRange(lc.numblock[0] * lc.numthread[0], lc.numblock[1] * lc.numthread[1]); \
+    sycl::range<2> localRange(lc.numthread[0], lc.numthread[1]);	
+    q.parallel_for( sycl::nd_range<2>(globalRange, localRange)
+		    [=](sycl::nd_item<2> item) {			\
           countPackedSplit<NREG>(                                              \
               ts_splitDim_ct0, ts_volMmkUnsplit, ts_volMbar_ct2,           \
               ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,               \

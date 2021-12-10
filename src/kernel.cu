@@ -678,8 +678,6 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts
       lc.numblock.x = 1;
       lc.numblock.y = 1;
       lc.numblock.z = 1;
-      lc.numblock.z = 1;
-      lc.numblock.z = 1;
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
     }
