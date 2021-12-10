@@ -24,7 +24,6 @@ SOFTWARE.
 *******************************************************************************/
 #ifdef SYCL
 #include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
 #endif
 #include <vector>
 #include <algorithm>
@@ -161,10 +160,10 @@ try
 
 #ifdef SYCL
   if (gpuid >= 0) {
-    cudaCheck((dpct::dev_mgr::instance().select_device(gpuid), 0));
+    gpuCheck((dpct::dev_mgr::instance().select_device(gpuid), 0));
   }
 
-  cudaCheck((dpct::get_current_device().reset(), 0));
+  gpuCheck((dpct::get_current_device().reset(), 0));
   /*
   DPCT1027:7: The call to cudaDeviceSetSharedMemConfig was replaced with 0,
   because DPC++ currently does not support configuring shared memory on
@@ -172,14 +171,14 @@ try
   */
 #else // CUDA
   if (gpuid >= 0) {
-    cudaCheck(cudaSetDevice(gpuid));
+    gpuCheck(cudaSetDevice(gpuid));
   }
 
-  cudaCheck(cudaDeviceReset());
+  gpuCheck(cudaDeviceReset());
   if (elemsize == 4) {
-    cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte));
+    gpuCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte));
   } else {
-    cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
+    gpuCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
   }
 #endif
 
@@ -387,11 +386,11 @@ end:
   delete timer;
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
-  cudaCheck((dpct::get_current_device().reset(), 0));
+  gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  gpuCheck((dpct::get_current_device().reset(), 0));
 #else // CUDA
-  cudaCheck(cudaDeviceSynchronize());
-  cudaCheck(cudaDeviceReset());
+  gpuCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceReset());
 #endif
 
   return 0;
@@ -863,10 +862,10 @@ sycl::queue q = dpct::get_default_queue();
   for (int i=0;i < 4;i++) {
 #ifdef SYCL
     set_device_array<T>((T *)dataOut, -1, vol, &q);
-    cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+    gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
     set_device_array<T>((T *)dataOut, -1, vol);
-    cudaCheck(cudaDeviceSynchronize());
+    gpuCheck(cudaDeviceSynchronize());
 #endif
 
     timer->start(dim, permutation);
@@ -915,12 +914,12 @@ try
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+      gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
       timer.start(dim, permutation);
       scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, &q);
 #else // CUDA
       set_device_array<T>((T *)dataOut, -1, numElem);
-      cudaCheck(cudaDeviceSynchronize());
+      gpuCheck(cudaDeviceSynchronize());
       timer.start(dim, permutation);
       scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
 #endif
@@ -936,12 +935,12 @@ try
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+      gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
       timer.start(dim, permutation);
       vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, &q);
 #else // CUDA
       set_device_array<T>((T *)dataOut, -1, numElem);
-      cudaCheck(cudaDeviceSynchronize());
+      gpuCheck(cudaDeviceSynchronize());
       timer.start(dim, permutation);
       vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
 #endif
@@ -957,12 +956,12 @@ try
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+      gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
       timer.start(dim, permutation);
       memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, &q);
 #else // CUDA
       set_device_array<T>((T *)dataOut, -1, numElem);
-      cudaCheck(cudaDeviceSynchronize());
+      gpuCheck(cudaDeviceSynchronize());
       timer.start(dim, permutation);
       memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, 0);
 #endif
@@ -986,15 +985,15 @@ catch (sycl::exception const &exc) {
 #ifdef SYCL
 void printDeviceInfo() try {
   int deviceID;
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+  gpuCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
   dpct::device_info prop;
-  cudaCheck(( dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
+  gpuCheck(( dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
   int pConfig = 0;
   /*
   DPCT1007:12: Migration of this CUDA API is not supported by the Intel(R) DPC++
   Compatibility Tool.
   */
-  //cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
+  //gpuCheck(cudaDeviceGetSharedMemConfig(&pConfig));
   int shMemBankSize = 4;
   if (pConfig == 2) shMemBankSize = 8;
   //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
@@ -1020,11 +1019,11 @@ catch (sycl::exception const &exc) {
 #else // CUDA
 void printDeviceInfo() {
   int deviceID;
-  cudaCheck(cudaGetDevice(&deviceID));
+  gpuCheck(cudaGetDevice(&deviceID));
   cudaDeviceProp prop;
-  cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
+  gpuCheck(cudaGetDeviceProperties(&prop, deviceID));
   cudaSharedMemConfig pConfig;
-  cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
+  gpuCheck(cudaDeviceGetSharedMemConfig(&pConfig));
   int shMemBankSize = 4;
   if (pConfig == cudaSharedMemBankSizeEightByte) shMemBankSize = 8;
   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;

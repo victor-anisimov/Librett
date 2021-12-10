@@ -670,12 +670,12 @@ void runCounters(const int warpSize, const int* hostPosData, const int numPosDat
   int nblock = (numPosData - 1)/nthread + 1;
   runCountersKernel<<< nblock, nthread >>>(devPosData, numPosData,
     accWidth, cacheWidth, dev_tran, dev_cl_full, dev_cl_part);
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 
   copy_DtoH<int>(dev_tran,    host_tran,    numWarp);
   copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp);
   copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp);
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
 
   deallocate_device<int>(&dev_tran);
   deallocate_device<int>(&dev_cl_full);
@@ -762,11 +762,11 @@ bool librettGpuModelKernel(librettPlan_t& plan, const int accWidth, const int ca
 
   }
 
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 
   MemStat hostMemStat;
   copy_DtoH<MemStat>(devMemStat, &hostMemStat, 1, plan.stream);
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
   deallocate_device<MemStat>(&devMemStat);
 
   gld_tran   = hostMemStat.gld_tran;

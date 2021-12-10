@@ -179,7 +179,7 @@ void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata)
   DPCT1010:121: SYCL uses exceptions to report errors and does not use the error
   codes. The call was replaced with 0. You need to rewrite this code.
   */
-  cudaCheck(0);
+  gpuCheck(0);
 }
 
 // void calcTensorConv(const int rank, const int* dim, const int* permutation,
@@ -279,7 +279,7 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation,
   DPCT1010:114: SYCL uses exceptions to report errors and does not use the error
   codes. The call was replaced with 0. You need to rewrite this code.
   */
-  cudaCheck(0);
+  gpuCheck(0);
 
   int h_fail;
   copy_DtoH<int>(d_fail, &h_fail, 1, &q);
@@ -288,7 +288,7 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation,
   DPCT1003:115: Migrated API does not return error code. (*, 0) is inserted. You
   may need to rewrite this code.
   */
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 
   if (h_fail) {
     copy_DtoH_sync<TensorError_t>(d_error, h_error, maxNumblock);

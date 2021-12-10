@@ -1832,7 +1832,7 @@ void librettPlan_t::nullDevicePointers() {
 
 #ifdef SYCL
 librettPlan_t::librettPlan_t() try {
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+  gpuCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
   //stream = 0;
   stream = & dpct::get_default_queue();
   numActiveBlock = 0;
@@ -1845,7 +1845,7 @@ catch (sycl::exception const &exc) {
 }
 #else // CUDA
 librettPlan_t::librettPlan_t() {
-  cudaCheck(cudaGetDevice(&deviceID));
+  gpuCheck(cudaGetDevice(&deviceID));
   stream = 0;
   numActiveBlock = 0;
   nullDevicePointers();

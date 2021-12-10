@@ -50,7 +50,7 @@ void scalarCopy(const int n, const T* data_in, T* data_out, cudaStream_t stream)
   scalarCopyKernel<T> <<< numblock, numthread, 0, stream >>>
   (n, data_in, data_out);
 
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 }
 // -----------------------------------------------------------------------------------
 
@@ -90,7 +90,7 @@ void vectorCopy(const int n, T* data_in, T* data_out, cudaStream_t stream) {
   vectorCopyKernel<T> <<< numblock, numthread, shmemsize, stream >>>
   (n, data_in, data_out);
 
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 }
 // -----------------------------------------------------------------------------------
 
@@ -141,7 +141,7 @@ void memcpyFloat(const int n, float* data_in, float* data_out, cudaStream_t stre
   // memcpyFloatLoopKernel<NUM_ELEM> <<< numblock, numthread, shmemsize, stream >>>
   // (n/4, (float4 *)data_in, (float4 *)data_out);
 
-  cudaCheck(cudaGetLastError());
+  gpuCheck(cudaGetLastError());
 }
 // -----------------------------------------------------------------------------------
 

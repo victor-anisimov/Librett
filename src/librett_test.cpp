@@ -96,17 +96,17 @@ try
 
   if (gpuid >= 0) {
 #ifdef SYCL
-    cudaCheck((dpct::dev_mgr::instance().select_device(gpuid), 0));
+    gpuCheck((dpct::dev_mgr::instance().select_device(gpuid), 0));
 #else // CUDA
-    cudaCheck(cudaSetDevice(gpuid));
+    gpuCheck(cudaSetDevice(gpuid));
 #endif
   }
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().reset(), 0));
+  gpuCheck((dpct::get_current_device().reset(), 0));
 #else // CUDA
-  cudaCheck(cudaDeviceReset());
-  cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
+  gpuCheck(cudaDeviceReset());
+  gpuCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
 #endif
 
   timerFloat = new librettTimer(4);
@@ -150,9 +150,9 @@ end:
   delete timerDouble;
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().reset(), 0));
+  gpuCheck((dpct::get_current_device().reset(), 0));
 #else // CUDA
-  cudaCheck(cudaDeviceReset());
+  gpuCheck(cudaDeviceReset());
 #endif
   return 0;
 }
@@ -414,15 +414,15 @@ try
 #ifdef SYCL
   sycl::queue *streams[numStream];
   for (int i=0;i < numStream;i++) {
-    cudaCheck((streams[i] = dpct::get_current_device().create_queue(), 0));
+    gpuCheck((streams[i] = dpct::get_current_device().create_queue(), 0));
   }
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
   cudaStream_t streams[numStream];
   for (int i=0;i < numStream;i++) {
-    cudaCheck(cudaStreamCreate(&streams[i]));
+    gpuCheck(cudaStreamCreate(&streams[i]));
   }
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
 #endif
 
 
@@ -434,25 +434,25 @@ try
   }
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
 #endif
 
   bool run_ok = tester->checkTranspose(dim.size(), dim.data(), permutation.data(), (long long int *)dataOut);
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
 #endif
 
   for (int i=0;i < numStream;i++) {
     librettCheck(librettDestroy(plans[i]));
 #ifdef SYCL
-    cudaCheck((dpct::get_current_device().destroy_queue(streams[i]), 0));
+    gpuCheck((dpct::get_current_device().destroy_queue(streams[i]), 0));
 #else // CUDA
-    cudaCheck(cudaStreamDestroy(streams[i]));
+    gpuCheck(cudaStreamDestroy(streams[i]));
 #endif
   }
 
@@ -531,11 +531,11 @@ try
   sycl::queue q = dpct::get_default_queue();
   librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
   set_device_array<T>((T *)dataOut, -1, vol, &q);
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  gpuCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
 #else // CUDA
   librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
   set_device_array<T>((T *)dataOut, -1, vol);
-  cudaCheck(cudaDeviceSynchronize());
+  gpuCheck(cudaDeviceSynchronize());
 #endif
 
   if (vol > 1000000) timer->start(dim, permutation);
