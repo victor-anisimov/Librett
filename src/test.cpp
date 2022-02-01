@@ -100,37 +100,6 @@ try
 
 #ifdef SYCL
 //sycl::queue q = dpct::get_default_queue();
-
-    sycl::platform node( sycl::gpu_selector{} );
-
-    // allocate vector for multiple devices
-    std::vector<sycl::device> dev_vector = node.get_devices(sycl::info::device_type::gpu);
-
-    // check for presence of subdevices
-    int subdev_count = dev_vector[0].get_info<sycl::info::device::partition_max_sub_devices>();
-
-    // create a single queue
-    if(subdev_count == 0) {
-      // no subdevices
-      // create queue for device 0
-      sycl::queue q(dev_vector[0]);
-    }
-    else {
-      // allocate vector for multiple subdevices
-      std::vector<sycl::device> subdev_vector = {};
-
-      // get subdevices for device 0
-      subdev_vector = dev_vector[0].create_sub_devices
-              <sycl::info::partition_property::partition_by_affinity_domain>
-              (sycl::info::partition_affinity_domain::numa);
-
-      // create queue for subdevice 0 of device 0
-      //sycl::queue q(subdev_vector[0]);
-      sycl::queue q(dev_vector[0]);
-    }
-
-    std::cout << "Number of GPUs per node      = " << dev_vector.size() << std::endl;
-    std::cout << "Number of subdevices per GPU = " << subdev_count << std::endl;
 #endif
 
   if (gpuid >= 0) {
@@ -402,18 +371,41 @@ bool test3() {
   */
 
   {
-    std::vector<int> dim(5);
-    std::vector<int> permutation(5);
+    int rank = 3;
+    std::vector<int> dim(rank);
+    std::vector<int> permutation(rank);
+    dim[0] = 1305;
+    dim[1] = 599;
+    dim[2] = 88;
+    permutation[0] = 0;
+    permutation[1] = 2;
+    permutation[2] = 1;
+    if (!test_tensor<long long int>(dim, permutation)) return false;
+    if (!test_tensor<int>(dim, permutation)) return false;
+  }
+  {
+    std::vector<int> dim(10);
+    std::vector<int> permutation(10);
     dim[0] = 5;
-    dim[1] = 42;
-    dim[2] = 75;
-    dim[3] = 86;
-    dim[4] = 57;
+    dim[1] = 4;
+    dim[2] = 7;
+    dim[3] = 8;
+    dim[4] = 6;
+    dim[5] = 5;
+    dim[6] = 4;
+    dim[7] = 7;
+    dim[8] = 8;
+    dim[9] = 5;
     permutation[0] = 2 - 1;
     permutation[1] = 4 - 1;
     permutation[2] = 5 - 1;
     permutation[3] = 3 - 1;
     permutation[4] = 1 - 1;
+    permutation[5] = 7 - 1;
+    permutation[6] = 9 - 1;
+    permutation[7] = 10 - 1;
+    permutation[8] = 8 - 1;
+    permutation[9] = 6 - 1;
     if (!test_tensor<long long int>(dim, permutation)) return false;
     if (!test_tensor<int>(dim, permutation)) return false;
   }

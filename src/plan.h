@@ -154,7 +154,7 @@ public:
   int cuDimMk;
   int cuDimMm;
 
-  int2 tiledVol;
+  sycl::int2 tiledVol;
 
   // Number of iterations of the kernel
   int num_iter;

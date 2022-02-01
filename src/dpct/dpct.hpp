@@ -56,6 +56,6 @@ using namespace cl::sycl;
 extern SYCL_EXTERNAL detail::ConvertToOpenCLType_t<sycl::vec<unsigned, 4>> __spirv_GroupNonUniformBallot(int, bool) __attribute__((convergent));
 #endif
 
-extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(ext::oneapi::sub_group, bool);
+extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::ONEAPI::sub_group, bool);
 
 #endif // __DPCT_HPP__
