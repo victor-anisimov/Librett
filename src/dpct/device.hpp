@@ -17,6 +17,8 @@
 #include <set>
 #include <sstream>
 #include <map>
+#include <vector>
+#include <thread>
 #if defined(__linux__)
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -55,7 +57,7 @@ public:
   int get_max_clock_frequency() const { return _frequency; }
   int get_max_compute_units() const { return _max_compute_units; }
   int get_max_work_group_size() const { return _max_work_group_size; }
-  //int get_max_sub_group_size() const { return _max_sub_group_size; }
+  //int get_max_sub_group_size() { return _max_sub_group_size; }
   int get_max_sub_group_size() const { return 32; }
   int get_max_work_items_per_compute_unit() {
     return _max_work_items_per_compute_unit;
@@ -122,6 +124,11 @@ public:
   device_ext() : cl::sycl::device(), _ctx(*this) {}
   ~device_ext() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    for (auto &task : _tasks) {
+      if (task.joinable())
+        task.join();
+    }
+    _tasks.clear();
     _queues.clear();
   }
   device_ext(const cl::sycl::device &base)
@@ -193,25 +200,15 @@ public:
         get_info<cl::sycl::info::device::global_mem_size>());
     prop.set_local_mem_size(get_info<cl::sycl::info::device::local_mem_size>());
 
-    // For Intel(R) oneAPI DPC++ Compiler, if current device does not support
-    // "cl_intel_required_subgroup_size" extension, max_sub_group_size will be
-    // initialized to one.
-    // For other compilers, max_sub_group_size will be initialized to one.
-    // This code may need to be updated depending on subgroup support by other
-    // compilers.
     size_t max_sub_group_size = 1;
-#ifdef __SYCL_COMPILER_VERSION
-    if (has_extension("cl_intel_required_subgroup_size")) {
-      cl::sycl::vector_class<size_t> sub_group_sizes =
-          get_info<cl::sycl::info::device::sub_group_sizes>();
+    std::vector<size_t> sub_group_sizes =
+        get_info<cl::sycl::info::device::sub_group_sizes>();
 
-      for (const auto &sub_group_size : sub_group_sizes) {
-        if (max_sub_group_size < sub_group_size)
-          max_sub_group_size = sub_group_size;
-      }
-
+    for (const auto &sub_group_size : sub_group_sizes) {
+      if (max_sub_group_size < sub_group_size)
+        max_sub_group_size = sub_group_size;
     }
-#endif
+
     prop.set_max_sub_group_size(max_sub_group_size);
 
     prop.set_max_work_items_per_compute_unit(
@@ -278,10 +275,11 @@ public:
   }
   void destroy_queue(cl::sycl::queue *&queue) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    std::remove_if(_queues.begin(), _queues.end(),
-                   [=](const std::shared_ptr<cl::sycl::queue> &q) -> bool {
-                     return q.get() == queue;
-                   });
+    _queues.erase(std::remove_if(_queues.begin(), _queues.end(),
+                                  [=](const std::shared_ptr<cl::sycl::queue> &q) -> bool {
+                                    return q.get() == queue;
+                                  }),
+                   _queues.end());
     queue = nullptr;
   }
   void set_saved_queue(cl::sycl::queue* q) {
@@ -316,11 +314,19 @@ private:
     i++;
     minor = std::stoi(&(ver[i]));
   }
+  void add_task(std::thread &&task) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    _tasks.push_back(std::move(task));
+  }
+  friend void async_dpct_free(std::vector<void *>,
+                              std::vector<cl::sycl::event>,
+                              cl::sycl::queue &);
   cl::sycl::queue *_default_queue;
   cl::sycl::queue *_saved_queue;
   cl::sycl::context _ctx;
   std::vector<std::shared_ptr<cl::sycl::queue>> _queues;
   mutable std::mutex m_mutex;
+  std::vector<std::thread> _tasks;
 };
 
 static inline unsigned int get_tid(){
@@ -388,14 +394,10 @@ private:
     std::vector<cl::sycl::device> sycl_all_devs =
         cl::sycl::device::get_devices(cl::sycl::info::device_type::all);
     // Collect other devices except for the default device.
-    const bool default_is_host = default_device.is_host();
     if (default_device.is_cpu())
       _cpu_device = 0;
     for (auto &dev : sycl_all_devs) {
-      const bool dev_is_host = dev.is_host();
-      if ((dev_is_host && default_is_host) ||
-          (!dev_is_host && !default_is_host &&
-           dev == default_device)) {
+      if (dev == default_device) {
         continue;
       }
       _devs.push_back(std::make_shared<device_ext>(dev));

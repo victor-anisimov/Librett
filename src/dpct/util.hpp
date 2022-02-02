@@ -213,6 +213,98 @@ template <typename T> inline T reverse_bits(T a) {
   return a;
 }
 
+/// \param [in] a The first value contains 4 bytes
+/// \param [in] b The second value contains 4 bytes
+/// \param [in] s The selector value, only lower 16bit used
+/// \returns the permutation result of 4 bytes selected in the way
+/// specified by \p s from \p a and \p b
+inline unsigned int byte_level_permute(unsigned int a, unsigned int b,
+                                       unsigned int s) {
+  unsigned int ret;
+  ret =
+      ((((std::uint64_t)b << 32 | a) >> (s & 0x7) * 8) & 0xff) |
+      (((((std::uint64_t)b << 32 | a) >> ((s >> 4) & 0x7) * 8) & 0xff) << 8) |
+      (((((std::uint64_t)b << 32 | a) >> ((s >> 8) & 0x7) * 8) & 0xff) << 16) |
+      (((((std::uint64_t)b << 32 | a) >> ((s >> 12) & 0x7) * 8) & 0xff) << 24);
+  return ret;
+}
+
+namespace experimental {
+/// Synchronize work items from all work groups within a DPC++ kernel.
+/// \param [in] item:  Represents a work group.
+/// \param [in] counter: An atomic object defined on a device memory which can
+/// be accessed by work items in all work groups. The initial value of the
+/// counter should be zero.
+/// Note: Please make sure that all the work items of all work groups within
+/// a DPC++ kernel can be scheduled actively at the same time on a device.
+template <int dimensions = 3>
+inline void
+nd_range_barrier(sycl::nd_item<dimensions> item,
+                 cl::sycl::ext::oneapi::atomic_ref<
+                     unsigned int, cl::sycl::ext::oneapi::memory_order::seq_cst,
+                     cl::sycl::ext::oneapi::memory_scope::device,
+                     cl::sycl::access::address_space::global_space> &counter) {
+
+  static_assert(dimensions == 3, "dimensions must be 3.");
+
+  unsigned int num_groups = item.get_group_range(2) * item.get_group_range(1) *
+                            item.get_group_range(0);
+
+  item.barrier();
+
+  if (item.get_local_linear_id() == 0) {
+    unsigned int inc = 1;
+    unsigned int old_arrive = 0;
+    bool is_group0 =
+        (item.get_group(2) + item.get_group(1) + item.get_group(0) == 0);
+    if (is_group0) {
+      inc = 0x80000000 - (num_groups - 1);
+    }
+
+    old_arrive = counter.fetch_add(inc);
+    // Synchronize all the work groups
+    while (((old_arrive ^ counter.load()) & 0x80000000) == 0)
+      ;
+  }
+
+  item.barrier();
+}
+
+/// Synchronize work items from all work groups within a DPC++ kernel.
+/// \param [in] item:  Represents a work group.
+/// \param [in] counter: An atomic object defined on a device memory which can
+/// be accessed by work items in all work groups. The initial value of the
+/// counter should be zero.
+/// Note: Please make sure that all the work items of all work groups within
+/// a DPC++ kernel can be scheduled actively at the same time on a device.
+template <>
+inline void
+nd_range_barrier(sycl::nd_item<1> item,
+                 cl::sycl::ext::oneapi::atomic_ref<
+                     unsigned int, cl::sycl::ext::oneapi::memory_order::seq_cst,
+                     cl::sycl::ext::oneapi::memory_scope::device,
+                     cl::sycl::access::address_space::global_space> &counter) {
+  unsigned int num_groups = item.get_group_range(0);
+
+  item.barrier();
+
+  if (item.get_local_linear_id() == 0) {
+    unsigned int inc = 1;
+    unsigned int old_arrive = 0;
+    bool is_group0 = (item.get_group(0) == 0);
+    if (is_group0) {
+      inc = 0x80000000 - (num_groups - 1);
+    }
+
+    old_arrive = counter.fetch_add(inc);
+    // Synchronize all the work groups
+    while (((old_arrive ^ counter.load()) & 0x80000000) == 0)
+      ;
+  }
+
+  item.barrier();
+}
+}
 } // namespace dpct
 
 #endif // __DPCT_UTIL_HPP__

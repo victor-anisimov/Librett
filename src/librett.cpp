@@ -455,7 +455,7 @@ void librettFinalize() {
 }
 
 #ifdef SYCL
-sycl::vec<unsigned, 4> ballot(sycl::ONEAPI::sub_group sg, bool predicate = true) __attribute__((convergent)) {
+sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attribute__((convergent)) {
 #ifdef __SYCL_DEVICE_ONLY__
   return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
 #else

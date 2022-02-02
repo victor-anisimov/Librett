@@ -30,6 +30,27 @@ using enable_if_execution_policy =
                                 typename std::decay<_ExecPolicy>::type>::value,
                             _T>::type;
 
+template <typename _T> struct is_hetero_execution_policy : ::std::false_type {};
+
+template <typename... PolicyParams>
+struct is_hetero_execution_policy<
+    oneapi::dpl::execution::device_policy<PolicyParams...>> : ::std::true_type {
+};
+
+template <typename _T> struct is_fpga_execution_policy : ::std::false_type {};
+
+#if _ONEDPL_FPGA_DEVICE
+template <unsigned int unroll_factor, typename... PolicyParams>
+struct is_hetero_execution_policy<
+    execution::fpga_policy<unroll_factor, PolicyParams...>> : ::std::true_type {
+};
+#endif
+
+template <class _ExecPolicy, class _T>
+using enable_if_hetero_execution_policy = typename std::enable_if<
+    is_hetero_execution_policy<typename std::decay<_ExecPolicy>::type>::value,
+    _T>::type;
+
 #if _ONEDPL_CPP14_INTEGER_SEQUENCE_PRESENT
 
 template <std::size_t... _Sp>
@@ -223,10 +244,12 @@ private:
 //[pred,op](Ref a){return pred(a) ? op(a) : a; }
 template <typename T, typename Predicate, typename Operator>
 struct transform_if_fun {
-  typedef T result_of;
   transform_if_fun(Predicate _pred, Operator _op) : pred(_pred), op(_op) {}
-  result_of operator()(const T &input) const {
-    return pred(input) ? op(input) : input;
+  template <typename _T>
+  void operator()(_T&& t) const {
+    using std::get;
+    if (pred(get<0>(t)))
+      get<1>(t) = op(get<0>(t));
   }
 
 private:
@@ -236,12 +259,13 @@ private:
 
 //[pred, op](Ref1 a, Ref2 s) { return pred(s) ? op(a) : a; });
 template <typename T, typename Predicate, typename Operator>
-struct transform_if_mask_fun {
-  typedef T result_of;
-  transform_if_mask_fun(Predicate _pred, Operator _op) : pred(_pred), op(_op) {}
-  template <typename M>
-  result_of operator()(const T &input, const M &mask) const {
-    return pred(mask) ? op(input) : input;
+struct transform_if_unary_zip_mask_fun {
+  transform_if_unary_zip_mask_fun(Predicate _pred, Operator _op) : pred(_pred), op(_op) {}
+  template <typename _T>
+  void operator()(_T&& t) const {
+    using std::get;
+    if (pred(get<1>(t)))
+      get<2>(t) = op(get<0>(t));
   }
 
 private:

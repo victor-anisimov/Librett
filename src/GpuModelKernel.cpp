@@ -239,9 +239,9 @@ void runCountersKernel(const int* posData, const int numPosData,
     int ffsval = __builtin_ffs(ballot(item_ct1.get_sub_group(), flag)[0]) - 1;
     /*
     DPCT1023:10: The DPC++ sub-group does not support mask options for
-    sycl::ONEAPI::any_of.
+    sycl::ext::oneapi::any_of.
     */
-    int n = (sycl::ONEAPI::any_of(item_ct1.get_sub_group(), flag)) ? ffsval : warpSize;
+    int n = (sycl::ext::oneapi::any_of(item_ct1.get_sub_group(), flag)) ? ffsval : warpSize;
     int tran = countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
     int cl_full = 0;
     int cl_part = 0;
@@ -409,9 +409,9 @@ countTiled(
           countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
       /*
       DPCT1023:22: The DPC++ sub-group does not support mask options for
-      sycl::ONEAPI::any_of.
+      sycl::ext::oneapi::any_of.
       */
-      memStat.gld_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+      memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
       posIn += posInAdd;
     }
 
@@ -422,9 +422,9 @@ countTiled(
           countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
       /*
       DPCT1023:24: The DPC++ sub-group does not support mask options for
-      sycl::ONEAPI::any_of.
+      sycl::ext::oneapi::any_of.
       */
-      memStat.gst_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+      memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
       countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2,
                       memStat.cl_part_l2, item_ct1);
       posOut += posOutAdd;
@@ -544,9 +544,9 @@ countPacked(
           countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
       /*
       DPCT1023:33: The DPC++ sub-group does not support mask options for
-      sycl::ONEAPI::any_of.
+      sycl::ext::oneapi::any_of.
       */
-      memStat.gld_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+      memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
     }
 
     // Write to global memory
@@ -560,9 +560,9 @@ countPacked(
           countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
       /*
       DPCT1023:35: The DPC++ sub-group does not support mask options for
-      sycl::ONEAPI::any_of.
+      sycl::ext::oneapi::any_of.
       */
-      memStat.gst_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+      memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
       if (posMmk < volMmk) shSegOut[posMmk] = posOut/cacheWidth;
     }
 
@@ -730,9 +730,9 @@ countPackedSplit(
           countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
       /*
       DPCT1023:44: The DPC++ sub-group does not support mask options for
-      sycl::ONEAPI::any_of.
+      sycl::ext::oneapi::any_of.
       */
-      memStat.gld_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+      memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
     }
 
     // Write to global memory
@@ -746,9 +746,9 @@ countPackedSplit(
           countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
       /*
       DPCT1023:46: The DPC++ sub-group does not support mask options for
-      sycl::ONEAPI::any_of.
+      sycl::ext::oneapi::any_of.
       */
-      memStat.gst_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+      memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
       if (posMmk < volMmkSplit) shSegOut[posMmk] = posOut / cacheWidth;
       // countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full, memStat.cl_part);
     }
@@ -846,9 +846,9 @@ countTiledCopy(
             countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
         /*
         DPCT1023:48: The DPC++ sub-group does not support mask options for
-        sycl::ONEAPI::any_of.
+        sycl::ext::oneapi::any_of.
         */
-        memStat.gld_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+        memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
       }
     }
 
@@ -867,9 +867,9 @@ countTiledCopy(
             countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
         /*
         DPCT1023:50: The DPC++ sub-group does not support mask options for
-        sycl::ONEAPI::any_of.
+        sycl::ext::oneapi::any_of.
         */
-        memStat.gst_req += sycl::ONEAPI::any_of(item_ct1.get_group(), n > 0);
+        memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
         countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2,
                         memStat.cl_part_l2, item_ct1);
       }
