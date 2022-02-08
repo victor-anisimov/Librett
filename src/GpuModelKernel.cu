@@ -24,7 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 #include <cuda.h>
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "GpuModelKernel.h"
 
 #define RESTRICT //__restrict__

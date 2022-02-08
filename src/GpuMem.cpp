@@ -3,7 +3,7 @@
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
 #endif
-#include "Mem.h"
+#include "GpuMem.h"
 
 //----------------------------------------------------------------------------------------
 //

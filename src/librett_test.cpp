@@ -33,7 +33,7 @@ SOFTWARE.
 #include <cmath>
 #include "librett.h"
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuModel.h"      // testCounters

@@ -28,7 +28,7 @@ SOFTWARE.
 //
 #include <cuda.h>
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "TensorTester.h"
 
 __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata) {

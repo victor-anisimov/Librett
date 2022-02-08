@@ -29,7 +29,7 @@ SOFTWARE.
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "TensorTester.h"
 #include <cmath>
 

@@ -32,7 +32,7 @@ SOFTWARE.
 #include <cmath>
 #include <random>
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "plan.h"
 #include "kernel.h"
 #include "GpuModel.h"

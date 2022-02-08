@@ -2,10 +2,10 @@
 if(ENABLE_CUDA)
   set(LIBRETT_SOURCE_FILES
     calls.h
-    Mem.cpp
-    Mem.h
-    Memcpy.cu
-    Memcpy.h
+    GpuMem.cpp
+    GpuMem.h
+    GpuMemcpy.cu
+    GpuMemcpy.h
     Utils.cu
     Utils.h
     librett.cpp
@@ -30,10 +30,10 @@ endif(ENABLE_CUDA)
 if(ENABLE_SYCL)
   set(LIBRETT_SOURCE_FILES
     calls.h
-    Mem.cpp
-    Mem.h
-    Memcpy.cpp
-    Memcpy.h
+    GpuMem.cpp
+    GpuMem.h
+    GpuMemcpy.cpp
+    GpuMemcpy.h
     Utils.cpp
     Utils.h
     librett.cpp

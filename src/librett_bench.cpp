@@ -36,10 +36,10 @@ SOFTWARE.
 #include <random>
 #include "librett.h"
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "TensorTester.h"
 #include "Timer.h"
-#include "Memcpy.h"
+#include "GpuMemcpy.h"
 #include "int_vector.h"
 
 #define MILLION 1000000

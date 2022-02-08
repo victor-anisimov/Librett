@@ -31,7 +31,7 @@ SOFTWARE.
 #include <list>
 #include <unordered_map>
 #include "Utils.h"
-#include "Mem.h"
+#include "GpuMem.h"
 #include "plan.h"
 #include "kernel.h"
 #include "Timer.h"

@@ -24,7 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 #include <cuda.h>
 #include "Utils.h"
-#include "Memcpy.h"
+#include "GpuMemcpy.h"
 
 const int numthread = 64;
 
