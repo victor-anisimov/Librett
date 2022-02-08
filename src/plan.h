@@ -154,7 +154,11 @@ public:
   int cuDimMk;
   int cuDimMm;
 
+#ifdef SYCL
   sycl::int2 tiledVol;
+#else  // CUDA
+  int2 tiledVol;
+#endif
 
   // Number of iterations of the kernel
   int num_iter;

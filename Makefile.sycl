@@ -29,20 +29,6 @@
 HOST_CC = dpcpp
 GPU_CC = dpcpp
 
-# CUDA compiler
-CUDAC = nvcc
-
-# Enable nvvp profiling of CPU code by using "make ENABLE_NVTOOLS=1"
-# If aligned_alloc() is not available, use "make NO_ALIGNED_ALLOC=1"
-
-# SM versions for which code is generated must be sm_30 and above
-GENCODE_SM35  := -gencode arch=compute_35,code=sm_35
-GENCODE_SM50  := -gencode arch=compute_50,code=sm_50
-GENCODE_SM52  := -gencode arch=compute_52,code=sm_52
-GENCODE_SM60  := -gencode arch=compute_60,code=sm_60
-GENCODE_SM70  := -gencode arch=compute_60,code=sm_70
-GENCODE_FLAGS := $(GENCODE_SM70)
-
 #######################################################
 
 # Detect OS
@@ -89,29 +75,25 @@ OBJSTESTX = build/librett_test.o build/TensorTester.o build/Mem.o build/Utils.o 
 OBJSBENCH = build/librett_bench.o build/TensorTester.o build/Mem.o build/Utils.o build/Timer.o build/Memcpy.o
 OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
-CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
-CUDAROOT = $(CUDA_PATH)
+GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
+GPUROOT = $(GPU_PATH)
 
-#CFLAGS = -I${CUDAROOT}/include -std=c++11 $(DEFS) $(OPTLEV) -fPIC
 CFLAGS = -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
 
-CUDA_CFLAGS = -allow-unsupported-compiler -ccbin $(GPU_CC) -I${CUDAROOT}/include -std=c++11 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(CUDA_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
+GPU_CFLAGS = -allow-unsupported-compiler -ccbin $(GPU_CC) -I${GPUROOT}/include -std=c++11 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(GPU_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
 
 ifeq ($(OS),osx)
-CUDA_LFLAGS = -L$(CUDAROOT)/lib
+GPU_LFLAGS = -L$(GPUROOT)/lib
 else
-CUDA_LFLAGS = -L$(CUDAROOT)/lib64
+GPU_LFLAGS = -L$(GPUROOT)/lib64
 endif
 
-CUDA_LFLAGS += -fPIC
+GPU_LFLAGS += -fPIC
 
-CUDA_LFLAGS += -Llib -lcudart -lrett
-ifdef ENABLE_NVTOOLS
-CUDA_LFLAGS += -lnvToolsExt
-endif
+GPU_LFLAGS += -Llib -lrett
 
 all: create_build lib/librett.a bin/test bin/librett_test bin/librett_bench
 
@@ -128,17 +110,14 @@ lib/librett.a: $(OBJSLIB)
 bin/test : lib/librett.a $(OBJSTEST1)
 	mkdir -p bin
 	$(HOST_CC) -o bin/test $(OBJSTEST1) lib/librett.a
-#	$(HOST_CC) -o bin/test $(OBJSTEST1) $(CUDA_LFLAGS)
 
 bin/librett_test : lib/librett.a $(OBJSTESTX)
 	mkdir -p bin
 	$(HOST_CC) -o bin/librett_test $(OBJSTESTX) lib/librett.a
-#	$(HOST_CC) -o bin/librett_test $(OBJSTESTX) $(CUDA_LFLAGS)
 
 bin/librett_bench : lib/librett.a $(OBJSBENCH)
 	mkdir -p bin
 	$(HOST_CC) -o bin/librett_bench $(OBJSBENCH) lib/librett.a
-#	$(HOST_CC) -o bin/librett_bench $(OBJSBENCH) $(CUDA_LFLAGS)
 
 clean:
 	rm -f $(OBJS)
@@ -150,16 +129,7 @@ clean:
 	rm -f bin/librett_test
 	rm -f bin/librett_bench
 
-# Pull in dependencies that already exist
--include $(OBJS:.o=.d)
-
-#build/%.o : src/%.cu
-#	$(CUDAC) -c $(CUDA_CFLAGS) -o build/$*.o $<
-#	echo -e 'build/\c' > build/$*.d
-#	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
-
 build/%.o : src/%.cpp
-	$(HOST_CC) -E $(CFLAGS) $< > build/$*.i
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
-	echo -e 'build/\c' > build/$*.d
-	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d
+#	$(HOST_CC) -E $(CFLAGS) $< > build/$*.i
+#	$(HOST_CC) -M $(CFLAGS) $< > build/$*.d

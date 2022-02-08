@@ -873,9 +873,6 @@ double cyclesPacked(const bool isSplit, const size_t sizeofType,
   int warps_per_block = nthread/32;
 
 #ifdef SYCL
-  /*
-  DPCT1005:0: The device version is different. You need to rewrite this code.
-  */
   GpuModelProp gpuModelProp(prop.get_major_version());
 #else // CUDA
   GpuModelProp gpuModelProp(prop.major);
@@ -906,9 +903,6 @@ double cyclesTiled(const bool isCopy, const size_t sizeofType,
   int warps_per_block = nthread/32;
 
 #ifdef SYCL
-  /*
-  DPCT1005:1: The device version is different. You need to rewrite this code.
-  */
   GpuModelProp gpuModelProp(prop.get_major_version());
 #else // CUDA
   GpuModelProp gpuModelProp(prop.major);

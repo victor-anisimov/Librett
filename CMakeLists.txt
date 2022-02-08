@@ -35,6 +35,8 @@ if(ENABLE_CUDA)
     set(CMAKE_CUDA_EXTENSIONS OFF)
   endif (NOT CMAKE_CUDA_EXTENSIONS)
 
+  set(CMAKE_CUDA_FLAGS_INIT "-allow-unsupported-compiler" CACHE STRING "Initial CUDA compile flags")
+
   message(STATUS "CUDA Include Dirs: " ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
   message(STATUS "CUDA Host Compiler: " ${CMAKE_CUDA_HOST_COMPILER})
 
