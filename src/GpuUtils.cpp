@@ -29,7 +29,7 @@ SOFTWARE.
 #ifdef ENABLE_NVTOOLS
 #include <nvToolsExtCuda.h>
 #endif
-#include "Utils.h"
+#include "GpuUtils.h"
 
 //----------------------------------------------------------------------------------------
 

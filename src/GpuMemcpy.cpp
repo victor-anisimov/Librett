@@ -22,9 +22,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#include "Utils.h"
+#if SYCL
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
+#elif HIP
+  #include <hip/hip_runtime.h>
+#endif
+
+#include "GpuUtils.h"
 #include "GpuMemcpy.h"
 
 // suppress Clang warning about it being unable to unroll a loop

@@ -24,7 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "LRUCache.h"
 #include "kernel.h"
 

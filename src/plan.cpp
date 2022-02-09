@@ -31,7 +31,7 @@ SOFTWARE.
 #include <unordered_set>
 #include <cmath>
 #include <random>
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "GpuMem.h"
 #include "plan.h"
 #include "kernel.h"

@@ -25,7 +25,7 @@ SOFTWARE.
 #ifndef LIBRETTMEM_H
 #define LIBRETTMEM_H
 
-#include "Utils.h"
+#include "GpuUtils.h"
 
 #ifdef LIBRETT_HAS_UMPIRE
 #include <umpire/Umpire.hpp>

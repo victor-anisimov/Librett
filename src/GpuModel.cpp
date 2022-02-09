@@ -35,7 +35,7 @@ SOFTWARE.
 #include "GpuModel.h"
 #include "GpuModelKernel.h"
 #ifdef ENABLE_NVTOOLS
-#include "Utils.h"
+#include "GpuUtils.h"
 #endif
 
 // #define CALC_L1_CACHELINES

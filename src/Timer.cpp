@@ -28,11 +28,11 @@ SOFTWARE.
 #include "dpct/dpct.hpp"
 #endif
 #include "Timer.h"
-#include "Utils.h"
+#include "GpuUtils.h"
 // #include <limits>       // std::numeric_limits
 #include <algorithm>
 #ifdef RUNTIME_EVENT_TIMER
-#include "Utils.h"
+#include "GpuUtils.h"
 #endif
 
 #ifdef RUNTIME_EVENT_TIMER

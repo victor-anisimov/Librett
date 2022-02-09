@@ -6,8 +6,8 @@ if(ENABLE_CUDA)
     GpuMem.h
     GpuMemcpy.cu
     GpuMemcpy.h
-    Utils.cu
-    Utils.h
+    GpuUtils.cu
+    GpuUtils.h
     librett.cpp
     librett.h
     GpuModel.cpp
@@ -34,8 +34,8 @@ if(ENABLE_SYCL)
     GpuMem.h
     GpuMemcpy.cpp
     GpuMemcpy.h
-    Utils.cpp
-    Utils.h
+    GpuUtils.cpp
+    GpuUtils.h
     librett.cpp
     librett.h
     GpuModel.cpp

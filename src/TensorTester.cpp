@@ -28,7 +28,7 @@ SOFTWARE.
 //
 #include <CL/sycl.hpp>
 #include "dpct/dpct.hpp"
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "GpuMem.h"
 #include "TensorTester.h"
 #include <cmath>

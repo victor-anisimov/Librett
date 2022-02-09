@@ -27,7 +27,7 @@ SOFTWARE.
 // Testing utilities
 //
 #include <cuda.h>
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "GpuMem.h"
 #include "TensorTester.h"
 

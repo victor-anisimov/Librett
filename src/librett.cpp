@@ -30,7 +30,7 @@ SOFTWARE.
 #endif
 #include <list>
 #include <unordered_map>
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "GpuMem.h"
 #include "plan.h"
 #include "kernel.h"

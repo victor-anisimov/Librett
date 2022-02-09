@@ -32,7 +32,7 @@ SOFTWARE.
 #include <cstring>         // strcmp
 #include <cmath>
 #include "librett.h"
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "GpuMem.h"
 #include "TensorTester.h"
 #include "Timer.h"

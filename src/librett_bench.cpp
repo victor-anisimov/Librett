@@ -35,7 +35,7 @@ SOFTWARE.
 #include <cctype>
 #include <random>
 #include "librett.h"
-#include "Utils.h"
+#include "GpuUtils.h"
 #include "GpuMem.h"
 #include "TensorTester.h"
 #include "Timer.h"
