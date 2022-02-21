@@ -27,21 +27,27 @@ SOFTWARE.
 #define LIBRETTTIMER_H
 
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
 #endif
+
 #include <vector>
 #include <chrono>
 #include <cstdlib>
 #include <unordered_map>
 #include <set>
 // -------------------------------------------------
-// By default uses CUDA event timer. Comment out
+// By default uses GPU event timer. Comment out
 // this line if you want to use the wallclock 
-#define RUNTIME_EVENT_TIMER
+#define GPU_EVENT_TIMER
 // -------------------------------------------------
-#ifndef SYCL
-#include <cuda_runtime.h>
+#ifdef GPU_EVENT_TIMER
+  #if SYCL
+  #elif HIP
+    #include <hip/hip_runtime.h>
+  #else
+    #include <cuda_runtime.h>
+  #endif
 #endif
 
 //
@@ -49,19 +55,21 @@ SOFTWARE.
 //
 class Timer {
 private:
-#ifdef RUNTIME_EVENT_TIMER
-#ifdef SYCL
-  sycl::event tmstart, tmend;
-  std::chrono::time_point<std::chrono::steady_clock> tmstart_ct1;
-  std::chrono::time_point<std::chrono::steady_clock> tmend_ct1;
-#else
-  cudaEvent_t tmstart, tmend;
-#endif
+#ifdef GPU_EVENT_TIMER
+  #if SYCL
+    sycl::event tmstart, tmend;
+    std::chrono::time_point<std::chrono::steady_clock> tmstart_ct1;
+    std::chrono::time_point<std::chrono::steady_clock> tmend_ct1;
+  #elif HIP
+    hipEvent_t tmstart, tmend;
+  #else // CUDA
+    cudaEvent_t tmstart, tmend;
+  #endif
 #else
   std::chrono::high_resolution_clock::time_point tmstart, tmend;
 #endif
 public:
-#ifdef RUNTIME_EVENT_TIMER
+#ifdef GPU_EVENT_TIMER
   Timer();
   ~Timer();
 #endif

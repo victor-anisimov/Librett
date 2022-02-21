@@ -40,7 +40,7 @@ Example of CUDA compilation: `cmake -H. -Bbuild -DENABLE_CUDA=ON -DCMAKE_CUDA_AR
 
 Example of SYCL compilation: `cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx`
 
-After that: `cd build; make; make librett_test; make librett_bench`
+After that: `cd build; make; make librett_test; make librett_bench; make test`
 
 ## Description
 

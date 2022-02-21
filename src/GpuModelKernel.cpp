@@ -22,11 +22,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
+#if SYCL
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
+#else // CUDA
+  #include <cuda.h>
+#endif
 #include "GpuUtils.h"
 #include "GpuMem.h"
 #include "GpuModelKernel.h"
+#include "uniapi.h"
 
 #define RESTRICT //__restrict__
 
@@ -48,7 +53,12 @@ struct MemStat {
   int cl_full_l1;
   int cl_part_l1;
   // int l1_tran;
-  __dpct_inline__ void clear() {
+#if SYCL
+  __dpct_inline__ void clear() 
+#else // CUDA
+  __device__ __forceinline__ void clear()
+#endif
+  {
     gld_tran = 0;
     gst_tran = 0;
     gld_req = 0;
@@ -65,19 +75,26 @@ struct MemStat {
 // Returns scalar tensor position. Each lane has the same p
 // NOTE: c and d on inactive warps must be 1 !!
 //
+#if SYCL
 __dpct_inline__ int tensorPos(const int p, const int rank, const int c,
-                              const int d, const int ct,
-                              sycl::nd_item<3> item_ct1) {
-
+                              const int d, const int ct, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__device__ __forceinline__ int tensorPos(const int p, const int rank, const int c, 
+                              const int d, const int ct, const int numLane=warpSize)
+#endif
+{
+#if SYCL
   const int numLane = item_ct1.get_sub_group().get_local_range().get(0);
+#endif
   int r = ((p / c) % d) * ct;
 #pragma unroll
-  for (int i=numLane/2;i >= 1;i/=2) {
-    /*
-    DPCT1023:0: The DPC++ sub-group does not support mask options for
-    shuffle_xor.
-    */
-    r += item_ct1.get_sub_group().shuffle_xor(r, i);
+  for (int i=numLane/2; i >= 1; i/=2) {
+    #if SYCL
+      /* DPCT1023:0: The DPC++ sub-group does not support mask options for shuffle_xor.  */
+      r += item_ct1.get_sub_group().shuffle_xor(r, i);
+    #else // CUDA
+      r += __shfl_xor_sync(0xffffffff,r,i);
+    #endif
   }
   return r;
 
@@ -87,16 +104,23 @@ __dpct_inline__ int tensorPos(const int p, const int rank, const int c,
 // Counts number of global memory transactions for a warp that accesses
 // memory at pos using warp lanes 0, ..., n - 1
 //
+#if SYCL
 __dpct_inline__ int countGlTransactions(const int pos, const int n,
-                                        const int accWidth, const int warpLane,
-                                        sycl::nd_item<3> item_ct1) {
+            const int accWidth, const int warpLane, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__device__ __forceinline__
+int countGlTransactions(const int pos, const int n, const int accWidth, const int warpLane)
+#endif
+{
   int seg0 = pos/accWidth;
   int srcLane = (warpLane == 0 || warpLane >= n) ? (warpLane) : (warpLane - 1);
-  int seg1 = item_ct1.get_sub_group().shuffle(seg0, srcLane);
-  /*
-  DPCT1023:1: The DPC++ sub-group does not support mask options for shuffle.
-  */
-  int count = sycl::popcount(ballot(item_ct1.get_sub_group(), seg0 != seg1)[0]) + 1;
+  #if SYCL
+    int seg1 = subgroup.shuffle(seg0, srcLane);
+    int count = sycl::popcount(ballot(subgroup, seg0 != seg1)[0]) + 1;
+  #else // CUDA
+    int seg1 = __shfl_sync(0xffffffff,seg0,srcLane);
+    int count = __popc(__ballot_sync(0xffffffff,seg0 != seg1)) + 1;
+  #endif
   count = (n == 0) ? 0 : count;
   return count;
 }
@@ -105,11 +129,14 @@ __dpct_inline__ int countGlTransactions(const int pos, const int n,
 // Counts number of global memory transactions for a warp that accesses
 // memory at pos using warp lanes 0, ..., n - 1
 //
-__dpct_inline__ int countGlTransactions(const int *segbuf, const int n,
-                                        sycl::nd_item<3> item_ct1) {
+#if SYCL
+__dpct_inline__ int countGlTransactions(const int *segbuf, const int n, sycl::nd_item<3> item_ct1) 
+#else // CUDDA
+__device__ __forceinline__ int countGlTransactions(const int* segbuf, const int n)
+#endif
+{
   int count = 0;
-  for (int i = item_ct1.get_local_id(2); i < n;
-       i += item_ct1.get_local_range().get(2)) {
+  for (int i = threadIdx_x; i < n; i += blockDim_x) {
     int seg      = segbuf[i];
     int seg_prev = (i - 1 >= 0) ? segbuf[i - 1] : -1;
     count += (seg != seg_prev);
@@ -121,45 +148,48 @@ __dpct_inline__ int countGlTransactions(const int *segbuf, const int n,
 // Counts number of full and partial cache lines for a warp that accesses per warp
 // memory at pos using warp lanes 0, ..., n - 1
 //
+#if SYCL
 __dpct_inline__ void countCacheLines(const int pos, const int n,
-                                     const int cacheWidth, const int warpLane,
-                                     int &cl_full, int &cl_part,
-                                     sycl::nd_item<3> item_ct1) {
-
+  const int cacheWidth, const int warpLane, int &cl_full, int &cl_part, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__device__ __forceinline__ void countCacheLines(const int pos, const int n, 
+  const int cacheWidth, const int warpLane, int& cl_full, int& cl_part)
+#endif
+{
   int seg = pos/cacheWidth;
   // Lane is at the beginning of a full cache line, if seg0 matches seg0 cacheWidth - 1 away
   int readLane = warpLane + (cacheWidth - 1);
-  /*
-  DPCT1023:3: The DPC++ sub-group does not support mask options for shuffle.
-  */
-  int val = (seg == item_ct1.get_sub_group().shuffle(seg, readLane));
+  #if SYCL
+    int warpSize = subgroup.get_local_range().get(0);
+    int val = (seg == subgroup.shuffle(seg, readLane));
+  #else // CUDA
+    int val = (seg == __shfl_sync(0xffffffff,seg,readLane));
+  #endif
   val = (readLane < n) ? val : 0;
   cl_full += val;
 
   unsigned int valbit = (((val << cacheWidth) - 1)*val) << warpLane;
   // Perform warpSize-way bitwise or
 #pragma unroll
-  for (int i = item_ct1.get_sub_group().get_local_range().get(0) / 2; i >= 1;
-       i /= 2) {
-    /*
-    DPCT1023:4: The DPC++ sub-group does not support mask options for
-    shuffle_xor.
-    */
-    valbit |= item_ct1.get_sub_group().shuffle_xor(valbit, i);
+  for (int i=warpSize/2; i >= 1; i/=2) {
+    #if SYCL
+      /* DPCT1023:4: The DPC++ sub-group does not support mask options for shuffle_xor. */
+      valbit |= subgroup.shuffle_xor(valbit, i);
+    #else // CUDA
+      valbit |= __shfl_xor_sync(0xffffffff,valbit,i);
+    #endif
   }
   // Now: lanes with valbit set are part of a full cache line,
   //      lanes with valbit unset are part of a partial cache line
   int full = (valbit >> warpLane) & 1;
 
   seg = (warpLane < n) ? seg : -1;
-  /*
-  DPCT1023:5: The DPC++ sub-group does not support mask options for
-  shuffle_down.
-  */
-  int segP1 = item_ct1.get_sub_group().shuffle_down(seg, 1);
-  segP1 = (warpLane + 1 < item_ct1.get_sub_group().get_local_range().get(0))
-              ? segP1
-              : -1;
+  #if SYCL
+    int segP1 = subgroup.shuffle_down(seg, 1);
+  #else // CUDA
+    int segP1 = __shfl_down_sync(0xffffffff,seg,1);
+  #endif
+  segP1 = (warpLane + 1 < warpSize) ? segP1 : -1;
   int val2 = ((!full) && seg != segP1);
   cl_part += val2;
 }
@@ -168,15 +198,18 @@ __dpct_inline__ void countCacheLines(const int pos, const int n,
 // Counts number of full and partial cache lines for a warp that accesses
 // memory at cachelines segbuf[0] ... segbuf[n - 1]
 //
+#if SYCL
 __dpct_inline__ void countCacheLines(int *segbuf, const int n,
-                                     const int cacheWidth, int &cl_full,
-                                     int &cl_part, sycl::nd_item<3> item_ct1) {
-
+  const int cacheWidth, int &cl_full, int &cl_part, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__device__ __forceinline__ void countCacheLines(int* segbuf, const int n, 
+  const int cacheWidth, int& cl_full, int& cl_part)
+#endif
+{
   const int topbit = (1 << 31);
   const int lowbits = ~(1 << 31);
 
-  for (int i = item_ct1.get_local_id(2); i < n;
-       i += item_ct1.get_local_range().get(2)) {
+  for (int i = threadIdx_x; i < n; i += blockDim_x) {
     // seg[i] is at the beginning of a full cache line, if seg[i] matches seg[i + cacheWidth - 1]
     int i1 = i + (cacheWidth - 1);
     int val = 0;
@@ -184,7 +217,7 @@ __dpct_inline__ void countCacheLines(int *segbuf, const int n,
     cl_full += val;
     // Mark full cache lines with top bit set to 1
     if (val) {
-      for (int j=0;j < cacheWidth;j++) {
+      for (int j=0; j < cacheWidth; j++) {
         if (i + j < n) segbuf[i + j] |= topbit;
       }
     }
@@ -194,10 +227,9 @@ __dpct_inline__ void countCacheLines(int *segbuf, const int n,
   sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
   performance, if there is no access to global memory.
   */
-  item_ct1.barrier();
+  syncthreads();
 
-  for (int i = item_ct1.get_local_id(2); i < n;
-       i += item_ct1.get_local_range().get(2)) {
+  for (int i = threadIdx_x; i < n; i += blockDim_x) {
     int seg = segbuf[i];
     int segP1 = (i + 1 < n) ? segbuf[i + 1] : -1;
     int part = ((seg & topbit) == 0);
@@ -211,9 +243,8 @@ __dpct_inline__ void countCacheLines(int *segbuf, const int n,
   sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
   performance, if there is no access to global memory.
   */
-  item_ct1.barrier();
-  for (int i = item_ct1.get_local_id(2); i < n;
-       i += item_ct1.get_local_range().get(2)) {
+  syncthreads();
+  for (int i = threadIdx_x; i < n; i += blockDim_x) {
     segbuf[i] &= lowbits;
   }
 
@@ -223,109 +254,115 @@ __dpct_inline__ void countCacheLines(int *segbuf, const int n,
 // Runs countGlTransactions and countCacheLines counters for testing
 // Unused values in posData[] are marked with "-1"
 //
-void runCountersKernel(const int* posData, const int numPosData,
-  const int accWidth, const int cacheWidth, int* tranData, int* cl_fullData, int* cl_partData,
-  sycl::nd_item<3> item_ct1) {
+#if SYCL
+void runCountersKernel(const int* posData, const int numPosData, const int accWidth, 
+  const int cacheWidth, int* tranData, int* cl_fullData, int* cl_partData, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__global__ void runCountersKernel(const int* posData, const int numPosData,
+  const int accWidth, const int cacheWidth, int* tranData, int* cl_fullData, int* cl_partData)
+#endif
+{
+#if SYCL
+  const int warpSize = subgroup.get_local_range().get(0);
+#endif
+  const int warpLane = threadIdx_x & (warpSize - 1);
 
-  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
-  const int warpLane = item_ct1.get_local_id(2) & (warpSize - 1);
-
-  for (int i = item_ct1.get_local_id(2) +
-               item_ct1.get_group(2) * item_ct1.get_local_range().get(2);
-       i < numPosData;
-       i += item_ct1.get_local_range().get(2) * item_ct1.get_group_range(2)) {
+  for (int i=threadIdx_x + blockIdx_x*blockDim_x; i < numPosData; i+=blockDim_x*gridDim_x) {
     int pos = posData[i];
     int flag = (pos == -1);
-    int ffsval = __builtin_ffs(ballot(item_ct1.get_sub_group(), flag)[0]) - 1;
-    /*
-    DPCT1023:10: The DPC++ sub-group does not support mask options for
-    sycl::ext::oneapi::any_of.
-    */
-    int n = (sycl::ext::oneapi::any_of(item_ct1.get_sub_group(), flag)) ? ffsval : warpSize;
-    int tran = countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
+    #if SYCL
+      int ffsval = __builtin_ffs(ballot(subgroup, flag)[0]) - 1;
+      int n = (sycl::ext::oneapi::any_of(subgroup, flag)) ? ffsval : warpSize;
+      int tran = countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
+    #else // CUDA
+      int ffsval = __ffs(__ballot_sync(0xffffffff,flag)) - 1;
+      int n = (__any_sync(0xffffffff,flag)) ? ffsval : warpSize;
+      int tran = countGlTransactions(pos, n, accWidth, warpLane);
+    #endif
     int cl_full = 0;
     int cl_part = 0;
-    countCacheLines(pos, n, cacheWidth, warpLane, cl_full, cl_part, item_ct1);
+    #if SYCL
+      countCacheLines(pos, n, cacheWidth, warpLane, cl_full, cl_part, item_ct1);
+    #else // CUDA
+      countCacheLines(pos, n, cacheWidth, warpLane, cl_full, cl_part);
+    #endif
 #pragma unroll
-    for (int k = warpSize / 2; k >= 1;
-         k /= 2) {
-      /*
-      DPCT1023:11: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      cl_full += item_ct1.get_sub_group().shuffle_xor(cl_full, k);
-      /*
-      DPCT1023:12: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      cl_part += item_ct1.get_sub_group().shuffle_xor(cl_part, k);
+    for (int k = warpSize / 2; k >= 1; k /= 2) {
+      #if SYCL
+        cl_full += subgroup.shuffle_xor(cl_full, k);
+        cl_part += subgroup.shuffle_xor(cl_part, k);
+      #else // CUDA
+	cl_full += __shfl_xor_sync(0xffffffff,cl_full,k);
+        cl_part += __shfl_xor_sync(0xffffffff,cl_part,k);
+      #endif
     }
-    // avoid multiple threads writing to the same address space
-    if(item_ct1.get_sub_group().get_local_id()[0] == 0) {
+#if SYCL
+    // avoid multiple threads writing into the same address space
+    if(subgroup.get_local_id()[0] == 0) {
       int j = i / warpSize;
       tranData[j] = tran;
       cl_fullData[j] = cl_full;
       cl_partData[j] = cl_part;
     }
+#else // CUDA
+    int j = i / warpSize;
+    tranData[j] = tran;
+    cl_fullData[j] = cl_full;
+    cl_partData[j] = cl_part;
+#endif
   }
-
 }
 
 //
 // Reduce memStat within warp and write result to global memory
 // NOTE: Not super-efficient since every warp does atomicAdd().
 //
+#if SYCL
 __dpct_inline__ void writeMemStat(const int warpLane, MemStat memStat,
-                                  MemStat *RESTRICT glMemStat,
-                                  sycl::nd_item<3> item_ct1) {
-  for (int i=16;i >= 1;i/=2) {
+  MemStat *RESTRICT glMemStat, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__device__ __forceinline__
+void writeMemStat(const int warpLane, MemStat memStat, MemStat* RESTRICT glMemStat)
+#endif
+{
+  for (int i=16; i >= 1; i/=2) {
     // memStat.gld_tran += __shfl_xor_sync(0xffffffff,memStat.gld_tran,i);
     // memStat.gst_tran += __shfl_xor_sync(0xffffffff,memStat.gst_tran,i);
     // memStat.gld_req  += __shfl_xor_sync(0xffffffff,memStat.gld_req,i);
     // memStat.gst_req  += __shfl_xor_sync(0xffffffff,memStat.gst_req,i);
-    /*
-    DPCT1023:13: The DPC++ sub-group does not support mask options for
-    shuffle_xor.
-    */
-    memStat.cl_full_l2 +=
-        item_ct1.get_sub_group().shuffle_xor(memStat.cl_full_l2, i);
-    /*
-    DPCT1023:14: The DPC++ sub-group does not support mask options for
-    shuffle_xor.
-    */
-    memStat.cl_part_l2 +=
-        item_ct1.get_sub_group().shuffle_xor(memStat.cl_part_l2, i);
-    /*
-    DPCT1023:15: The DPC++ sub-group does not support mask options for
-    shuffle_xor.
-    */
-    memStat.cl_full_l1 +=
-        item_ct1.get_sub_group().shuffle_xor(memStat.cl_full_l1, i);
-    /*
-    DPCT1023:16: The DPC++ sub-group does not support mask options for
-    shuffle_xor.
-    */
-    memStat.cl_part_l1 +=
-        item_ct1.get_sub_group().shuffle_xor(memStat.cl_part_l1, i);
+    #if SYCL
+      memStat.cl_full_l2 += item_ct1.get_sub_group().shuffle_xor(memStat.cl_full_l2, i);
+      memStat.cl_part_l2 += item_ct1.get_sub_group().shuffle_xor(memStat.cl_part_l2, i);
+      memStat.cl_full_l1 += item_ct1.get_sub_group().shuffle_xor(memStat.cl_full_l1, i);
+      memStat.cl_part_l1 += item_ct1.get_sub_group().shuffle_xor(memStat.cl_part_l1, i);
+    #else // CUDA
+      memStat.cl_full_l2  += __shfl_xor_sync(0xffffffff,memStat.cl_full_l2,i);
+      memStat.cl_part_l2  += __shfl_xor_sync(0xffffffff,memStat.cl_part_l2,i);
+      memStat.cl_full_l1  += __shfl_xor_sync(0xffffffff,memStat.cl_full_l1,i);
+      memStat.cl_part_l1  += __shfl_xor_sync(0xffffffff,memStat.cl_part_l1,i);
+    #endif
     // memStat.l1_tran     += __shfl_xor_sync(0xffffffff,memStat.l1_tran,i);
   }
   if (warpLane == 0) {
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gld_tran)))
-        .fetch_add(memStat.gld_tran);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gst_tran)))
-        .fetch_add(memStat.gst_tran);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gld_req)))
-        .fetch_add(memStat.gld_req);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gst_req)))
-        .fetch_add(memStat.gst_req);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_full_l2)))
-        .fetch_add(memStat.cl_full_l2);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_part_l2)))
-        .fetch_add(memStat.cl_part_l2);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_full_l1)))
-        .fetch_add(memStat.cl_full_l1);
-    sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_part_l1)))
-        .fetch_add(memStat.cl_part_l1);
+    #if SYCL
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gld_tran))).fetch_add(memStat.gld_tran);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gst_tran))).fetch_add(memStat.gst_tran);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gld_req))).fetch_add(memStat.gld_req);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->gst_req))).fetch_add(memStat.gst_req);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_full_l2))).fetch_add(memStat.cl_full_l2);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_part_l2))).fetch_add(memStat.cl_part_l2);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_full_l1))).fetch_add(memStat.cl_full_l1);
+      sycl::atomic<int>(sycl::global_ptr<int>(&(glMemStat->cl_part_l1))).fetch_add(memStat.cl_part_l1);
+    #else // CUDA
+      atomicAdd(&(glMemStat->gld_tran), memStat.gld_tran);
+      atomicAdd(&(glMemStat->gst_tran), memStat.gst_tran);
+      atomicAdd(&(glMemStat->gld_req), memStat.gld_req);
+      atomicAdd(&(glMemStat->gst_req), memStat.gst_req);
+      atomicAdd(&(glMemStat->cl_full_l2), memStat.cl_full_l2);
+      atomicAdd(&(glMemStat->cl_part_l2), memStat.cl_part_l2);
+      atomicAdd(&(glMemStat->cl_full_l1), memStat.cl_full_l1);
+      atomicAdd(&(glMemStat->cl_part_l1), memStat.cl_part_l1);
+    #endif
     // atomicAdd(&(glMemStat->l1_tran), memStat.l1_tran);
   }
 }
@@ -336,17 +373,26 @@ __dpct_inline__ void writeMemStat(const int warpLane, MemStat memStat,
 //  dim3 numthread(TILEDIM, TILEROWS, 1);
 //  dim3 numblock( ((plan.volMm-1)/TILEDIM+1)*((plan.volMk-1)/TILEDIM+1), 1, plan.volMbar);
 //
-void
-
-countTiled(
-  const int numMm, const int volMbar, const int sizeMbar,
+#if SYCL
+void countTiled(const int numMm, const int volMbar, const int sizeMbar,
   const sycl::int2 tiledVol, const int cuDimMk, const int cuDimMm,
   const TensorConvInOut* RESTRICT glMbar,
   const int accWidth, const int cacheWidth,
-  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1) {
-
-  const int warpLane = item_ct1.get_local_id(2) &
-                       (item_ct1.get_sub_group().get_local_range().get(0) - 1);
+  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__global__ void
+__launch_bounds__(TILEDIM*TILEROWS, 1)
+countTiled(const int numMm, const int volMbar, const int sizeMbar,
+  const int2 tiledVol, const int cuDimMk, const int cuDimMm,
+  const TensorConvInOut* RESTRICT glMbar,
+  const int accWidth, const int cacheWidth,
+  MemStat* RESTRICT glMemStat)
+#endif
+{
+#if SYCL
+  const int warpSize = subgroup.get_local_range().get(0);
+#endif
+  const int warpLane = threadIdx_x & (warpSize - 1);
   TensorConvInOut Mbar;
   Mbar.c_in = 1;
   Mbar.d_in = 1;
@@ -356,19 +402,22 @@ countTiled(
     Mbar = glMbar[warpLane];
   }
 
-  const int bx = (item_ct1.get_group(2) % numMm) * TILEDIM;
-  const int by = (item_ct1.get_group(2) / numMm) * TILEDIM;
+  const int bx = (blockIdx_x % numMm)*TILEDIM;
+  const int by = (blockIdx_x / numMm)*TILEDIM;
 
-  const int xin = bx + item_ct1.get_local_id(2);
-  const int yin = by + item_ct1.get_local_id(1);
+  const int xin = bx + threadIdx_x;
+  const int yin = by + threadIdx_y;
 
-  const int xout = bx + item_ct1.get_local_id(1);
-  const int yout = by + item_ct1.get_local_id(2);
+  const int xout = bx + threadIdx_y;
+  const int yout = by + threadIdx_x;
 
-  const unsigned int maskIny = 
-      ballot(item_ct1.get_sub_group(), (yin + warpLane < tiledVol.y()))[0] * (xin < tiledVol.x());
-  const unsigned int maskOutx =
-      ballot(item_ct1.get_sub_group(), (xout + warpLane < tiledVol.x()))[0] * (yout < tiledVol.y());
+#if SYCL
+  const unsigned int maskIny = ballot(subgroup, (yin + warpLane < tiledVol.y()))[0] * (xin < tiledVol.x());
+  const unsigned int maskOutx = ballot(subgroup, (xout + warpLane < tiledVol.x()))[0] * (yout < tiledVol.y());
+#else // CUDA
+  const unsigned int maskIny = __ballot_sync(0xffffffff,(yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
+  const unsigned int maskOutx = __ballot_sync(0xffffffff,(xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
+#endif
 
   const int posMinorIn = xin + yin*cuDimMk;
   const int posMinorOut = yout + xout*cuDimMm;
@@ -378,82 +427,95 @@ countTiled(
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item_ct1.get_group(0); posMbar < volMbar;
-       posMbar += item_ct1.get_group_range(0))
+  for (int posMbar=blockIdx_z; posMbar < volMbar; posMbar += gridDim_z)
   {
-
     // Compute global memory positions
     int posMajorIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
     int posMajorOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=16;i >= 1;i/=2) {
-      /*
-      DPCT1023:19: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      posMajorIn += item_ct1.get_sub_group().shuffle_xor(posMajorIn, i);
-      /*
-      DPCT1023:20: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      posMajorOut += item_ct1.get_sub_group().shuffle_xor(posMajorOut, i);
+    for (int i=16; i >= 1; i/=2) {
+      #if SYCL
+        posMajorIn += subgroup.shuffle_xor(posMajorIn, i);
+        posMajorOut += subgroup.shuffle_xor(posMajorOut, i);
+      #else // CUDA
+	posMajorIn += __shfl_xor_sync(0xffffffff,posMajorIn,i);
+        posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
+      #endif
     }
     int posIn = posMajorIn + posMinorIn;
     int posOut = posMajorOut + posMinorOut;
 
     // Read data into shared memory tile
 #pragma unroll
-    for (int j=0;j < TILEDIM;j += TILEROWS) {
-      int n = sycl::popcount(ballot(item_ct1.get_sub_group(), maskIny & (1 << j))[0]);
-      memStat.gld_tran +=
-          countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
-      /*
-      DPCT1023:22: The DPC++ sub-group does not support mask options for
-      sycl::ext::oneapi::any_of.
-      */
-      memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
+    for (int j=0; j < TILEDIM; j += TILEROWS) {
+      #if SYCL
+        int n = sycl::popcount(ballot(subgroup, maskIny & (1 << j))[0]);
+        memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
+        memStat.gld_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+      #else // CUDA
+	int n = __popc(__ballot_sync(0xffffffff,maskIny & (1 << j)));
+        memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
+        memStat.gld_req += __any_sync(0xffffffff,n > 0);
+      #endif
       posIn += posInAdd;
     }
 
 #pragma unroll
-    for (int j=0;j < TILEDIM;j += TILEROWS) {
-      int n = sycl::popcount(ballot(item_ct1.get_sub_group(), maskOutx & (1 << j))[0]);
-      memStat.gst_tran +=
-          countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
-      /*
-      DPCT1023:24: The DPC++ sub-group does not support mask options for
-      sycl::ext::oneapi::any_of.
-      */
-      memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
-      countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2,
-                      memStat.cl_part_l2, item_ct1);
+    for (int j=0; j < TILEDIM; j += TILEROWS) {
+      #if SYCL
+        int n = sycl::popcount(ballot(subgroup, maskOutx & (1 << j))[0]);
+        memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
+        memStat.gst_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+        countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2, item_ct1);
+      #else // CUDA
+        int n = __popc(__ballot_sync(0xffffffff,maskOutx & (1 << j)));
+        memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
+        memStat.gst_req += __any_sync(0xffffffff,n > 0);
+        countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2);
+      #endif
       posOut += posOutAdd;
     }
 
   }
 
   // Reduce memStat within thread block and write result to global memory
+#if SYCL
   writeMemStat(warpLane, memStat, glMemStat, item_ct1);
+#else // CUDA
+  writeMemStat(warpLane, memStat, glMemStat);
+#endif
 }
 
 //
 // Packed transpose. Thread block loads plan.volMmk number of elements
 //
 template <int numRegStorage>
-void
-
-countPacked(
-  const int volMmk, const int volMbar,
+#if SYCL
+void countPacked( const int volMmk, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const TensorConvInOut* RESTRICT gl_Mmk,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const int accWidth, const int cacheWidth,
-  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1, uint8_t *dpct_local) {
-
+  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1, uint8_t *dpct_local) 
+#else // CUDA
+__global__ void
+__launch_bounds__(1024, 1)
+countPacked( const int volMmk, const int volMbar,
+  const int sizeMmk, const int sizeMbar,
+  const TensorConvInOut* RESTRICT gl_Mmk,
+  const TensorConvInOut* RESTRICT gl_Mbar,
+  const int accWidth, const int cacheWidth,
+  MemStat* RESTRICT glMemStat)
+#endif
+{
+#if SYCL
+  const int warpSize = subgroup.get_local_range().get(0);
   auto shSegOut = (int *)dpct_local;
+#else // CUDA
+  extern __shared__ int shSegOut[];
+#endif
 
-  const int warpLane = item_ct1.get_local_id(2) &
-                       (item_ct1.get_sub_group().get_local_range().get(0) - 1);
+  const int warpLane = threadIdx_x & (warpSize - 1);
 
   TensorConvInOut Mmk;
   Mmk.c_in = 1;
@@ -469,30 +531,25 @@ countPacked(
   int posMmkIn[numRegStorage];
   int posMmkOut[numRegStorage];
 #pragma unroll
-  for (int j=0;j < numRegStorage;j++) {
+  for (int j=0; j < numRegStorage; j++) {
     posMmkIn[j] = 0;
     posMmkOut[j] = 0;
   }
-  for (int i=0;i < sizeMmk;i++) {
+  for (int i=0; i < sizeMmk; i++) {
 #pragma unroll
-    for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item_ct1.get_local_id(2) + j * item_ct1.get_local_range().get(2);
-      /*
-      DPCT1023:25: The DPC++ sub-group does not support mask options for
-      shuffle.
-      */
-      posMmkIn[j] += ((posMmk / item_ct1.get_sub_group().shuffle(Mmk.c_in, i)) %
-                      item_ct1.get_sub_group().shuffle(Mmk.d_in, i)) *
-                     item_ct1.get_sub_group().shuffle(Mmk.ct_in, i);
-      /*
-      DPCT1023:26: The DPC++ sub-group does not support mask options for
-      shuffle.
-      */
-      posMmkOut[j] +=
-          ((posMmk / item_ct1.get_sub_group().shuffle(Mmk.c_out, i)) %
-           item_ct1.get_sub_group().shuffle(Mmk.d_out, i)) *
-          item_ct1.get_sub_group().shuffle(Mmk.ct_out, i);
+    for (int j=0; j < numRegStorage; j++) {
+      int posMmk = threadIdx_x + j*blockDim_x;
+      #if SYCL
+        posMmkIn[j]  += ((posMmk / subgroup.shuffle(Mmk.c_in, i)) % subgroup.shuffle(Mmk.d_in, i)) *
+                        subgroup.shuffle(Mmk.ct_in, i);
+        posMmkOut[j] += ((posMmk / subgroup.shuffle(Mmk.c_out, i)) % subgroup.shuffle(Mmk.d_out, i)) *
+                        subgroup.shuffle(Mmk.ct_out, i);
+      #else // CUDA
+	posMmkIn[j]  += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_in,i)) % __shfl_sync(0xffffffff,Mmk.d_in,i)) * 
+		        __shfl_sync(0xffffffff,Mmk.ct_in,i);
+        posMmkOut[j] += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_out,i)) % __shfl_sync(0xffffffff,Mmk.d_out,i)) *
+		        __shfl_sync(0xffffffff,Mmk.ct_out,i);
+      #endif
     }
   }
 
@@ -509,60 +566,59 @@ countPacked(
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item_ct1.get_group(2); posMbar < volMbar;
-       posMbar += item_ct1.get_group_range(2))
+  for (int posMbar=blockIdx_x; posMbar < volMbar; posMbar += gridDim_x)
   {
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=16;i >= 1;i/=2) {
-      /*
-      DPCT1023:30: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      posMbarOut += item_ct1.get_sub_group().shuffle_xor(posMbarOut, i);
+    for (int i=16; i >= 1; i/=2) {
+      #if SYCL
+        posMbarOut += subgroup.shuffle_xor(posMbarOut, i);
+      #else // CUDA
+	posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
+      #endif
     }
 
     int posMbarIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
 #pragma unroll
-    for (int i=16;i >= 1;i/=2) {
-      /*
-      DPCT1023:31: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      posMbarIn += item_ct1.get_sub_group().shuffle_xor(posMbarIn, i);
+    for (int i=16; i >= 1; i/=2) {
+      #if SYCL
+        posMbarIn += subgroup.shuffle_xor(posMbarIn, i);
+      #else // CUDA
+	posMbarIn += __shfl_xor_sync(0xffffffff,posMbarIn,i);
+      #endif
     }
 
     // Read from global memory
 #pragma unroll
-    for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item_ct1.get_local_id(2) + j * item_ct1.get_local_range().get(2);
+    for (int j=0; j < numRegStorage; j++) {
+      int posMmk = threadIdx_x + j*blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
-      int n = sycl::popcount(ballot(item_ct1.get_sub_group(), posMmk < volMmk)[0]);
-      memStat.gld_tran +=
-          countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
-      /*
-      DPCT1023:33: The DPC++ sub-group does not support mask options for
-      sycl::ext::oneapi::any_of.
-      */
-      memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
+      #if SYCL
+        int n = sycl::popcount(ballot(subgroup, posMmk < volMmk)[0]);
+        memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
+        memStat.gld_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+      #else // CUDA
+	int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmk));
+        memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
+        memStat.gld_req += __any_sync(0xffffffff,n > 0);
+      #endif
     }
 
     // Write to global memory
 #pragma unroll
-    for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item_ct1.get_local_id(2) + j * item_ct1.get_local_range().get(2);
+    for (int j=0; j < numRegStorage; j++) {
+      int posMmk = threadIdx_x + j*blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
-      int n = sycl::popcount(ballot(item_ct1.get_sub_group(), posMmk < volMmk)[0]);
-      memStat.gst_tran +=
-          countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
-      /*
-      DPCT1023:35: The DPC++ sub-group does not support mask options for
-      sycl::ext::oneapi::any_of.
-      */
-      memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
+      #if SYCL
+        int n = sycl::popcount(ballot(subgroup, posMmk < volMmk)[0]);
+        memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
+        memStat.gst_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+      #else // CUDA
+	int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmk));
+        memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
+        memStat.gst_req += __any_sync(0xffffffff,n > 0);
+      #endif
       if (posMmk < volMmk) shSegOut[posMmk] = posOut/cacheWidth;
     }
 
@@ -571,19 +627,21 @@ countPacked(
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance, if there is no access to global memory.
     */
-    item_ct1.barrier();
-    countCacheLines(shSegOut, volMmk, cacheWidth, memStat.cl_full_l2,
-                    memStat.cl_part_l2, item_ct1);
+    syncthreads();
+#if SYCL
+    countCacheLines(shSegOut, volMmk, cacheWidth, memStat.cl_full_l2, memStat.cl_part_l2, item_ct1);
+#else // CUDA
+    countCacheLines(shSegOut, volMmk, cacheWidth, memStat.cl_full_l2, memStat.cl_part_l2);
+#endif
     // Go from L2 segments to L1 segments
     /*
     DPCT1065:28: Consider replacing sycl::nd_item::barrier() with
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance, if there is no access to global memory.
     */
-    item_ct1.barrier();
+    syncthreads();
     const int L2toL1 = accWidth/cacheWidth;
-    for (int i = item_ct1.get_local_id(2); i < volMmk;
-         i += item_ct1.get_local_range().get(2)) {
+    for (int i=threadIdx_x; i < volMmk; i+=blockDim_x) {
       shSegOut[i] /= L2toL1;
     }
     /*
@@ -591,9 +649,12 @@ countPacked(
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance, if there is no access to global memory.
     */
-    item_ct1.barrier();
-    countCacheLines(shSegOut, volMmk, accWidth, memStat.cl_full_l1,
-                    memStat.cl_part_l1, item_ct1);
+    syncthreads();
+#if SYCL
+    countCacheLines(shSegOut, volMmk, accWidth, memStat.cl_full_l1, memStat.cl_part_l1, item_ct1);
+#else // CUDA
+    countCacheLines(shSegOut, volMmk, accWidth, memStat.cl_full_l1, memStat.cl_part_l1);
+#endif
 
     // __syncthreads();
     // memStat.l1_tran += countGlTransactions(shSegOut, volMmk);
@@ -601,7 +662,11 @@ countPacked(
   }
 
   // Reduce memStat within thread block and write result to global memory
+#if SYCL
   writeMemStat(warpLane, memStat, glMemStat, item_ct1);
+#else // CUDA
+  writeMemStat(warpLane, memStat, glMemStat);
+#endif
 }
 
 //
@@ -611,27 +676,39 @@ countPacked(
 // dim nblock(ts.numSplit, min(256, max(1, ts.volMbar)), 1)
 //
 template <int numRegStorage>
-void
-
-countPackedSplit(
-  const int splitDim, const int volMmkUnsplit, const int volMbar,
+#if SYCL
+void countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const int cMmSplit, const int cMkSplit,
   const TensorConvInOut* RESTRICT glMmk,
   const TensorConvInOut* RESTRICT glMbar,
   const int accWidth, const int cacheWidth,
-  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1, uint8_t *dpct_local) {
-
+  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1, uint8_t *dpct_local) 
+#else // CUDA
+__global__ void
+__launch_bounds__(1024, 1)
+countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar,
+  const int sizeMmk, const int sizeMbar,
+  const int cMmSplit, const int cMkSplit,
+  const TensorConvInOut* RESTRICT glMmk,
+  const TensorConvInOut* RESTRICT glMbar,
+  const int accWidth, const int cacheWidth,
+  MemStat* RESTRICT glMemStat)
+#endif
+{
+#if SYCL
+  const int warpSize = subgroup.get_local_range().get(0);
   auto shSegOut = (int *)dpct_local;
+#else // CUDA
+  extern __shared__ int shSegOut[];
+#endif
 
-  const int warpLane = item_ct1.get_local_id(2) &
-                       (item_ct1.get_sub_group().get_local_range().get(0) - 1);
+  const int warpLane = threadIdx_x & (warpSize - 1);
 
   // const int plusone = (blockIdx.x < (splitDim % gridDim.x));
-  const int p0 = item_ct1.get_group(2) * splitDim / item_ct1.get_group_range(2);
-  const int volSplit =
-      (item_ct1.get_group(2) + 1) * splitDim / item_ct1.get_group_range(2) - p0;
-  const int plusone = volSplit - splitDim / item_ct1.get_group_range(2);
+  const int p0 = blockIdx_x*splitDim/gridDim_x;
+  const int volSplit = (blockIdx_x + 1)*splitDim/gridDim_x - p0;
+  const int plusone = volSplit - splitDim/gridDim_x;
 
   TensorConvInOut Mmk;
   Mmk.c_in = 1;
@@ -658,28 +735,25 @@ countPackedSplit(
   int posMmkIn[numRegStorage];
   int posMmkOut[numRegStorage];
 #pragma unroll
-  for (int j=0;j < numRegStorage;j++) {
+  for (int j=0; j < numRegStorage; j++) {
     posMmkIn[j]  = posMmkIn0;
     posMmkOut[j] = posMmkOut0;
   }
-  for (int i=0;i < sizeMmk;i++) {
+  for (int i=0; i < sizeMmk; i++) {
 #pragma unroll
     for (int j=0;j < numRegStorage;j++) {
-      int t = item_ct1.get_local_id(2) + j * item_ct1.get_local_range().get(2);
-      /*
-      DPCT1023:36: The DPC++ sub-group does not support mask options for
-      shuffle.
-      */
-      posMmkIn[j] += ((t / item_ct1.get_sub_group().shuffle(Mmk.c_in, i)) %
-                      item_ct1.get_sub_group().shuffle(Mmk.d_in, i)) *
-                     item_ct1.get_sub_group().shuffle(Mmk.ct_in, i);
-      /*
-      DPCT1023:37: The DPC++ sub-group does not support mask options for
-      shuffle.
-      */
-      posMmkOut[j] += ((t / item_ct1.get_sub_group().shuffle(Mmk.c_out, i)) %
-                       item_ct1.get_sub_group().shuffle(Mmk.d_out, i)) *
-                      item_ct1.get_sub_group().shuffle(Mmk.ct_out, i);
+      int t = threadIdx_x + j*blockDim_x;
+      #if SYCL
+        posMmkIn[j]  += ((t / subgroup.shuffle(Mmk.c_in, i)) % subgroup.shuffle(Mmk.d_in, i)) *
+                        subgroup.shuffle(Mmk.ct_in, i);
+        posMmkOut[j] += ((t / subgroup.shuffle(Mmk.c_out, i)) % subgroup.shuffle(Mmk.d_out, i)) *
+                        item_ct1.get_sub_group().shuffle(Mmk.ct_out, i);
+      #else // CUDA
+	posMmkIn[j]  += ((t/__shfl_sync(0xffffffff,Mmk.c_in,i)) % __shfl_sync(0xffffffff,Mmk.d_in,i)) *
+		        __shfl_sync(0xffffffff,Mmk.ct_in,i);
+        posMmkOut[j] += ((t/__shfl_sync(0xffffffff,Mmk.c_out,i)) % __shfl_sync(0xffffffff,Mmk.d_out,i)) *
+		        __shfl_sync(0xffffffff,Mmk.ct_out,i);
+      #endif
     }
   }
 
@@ -695,60 +769,59 @@ countPackedSplit(
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item_ct1.get_group(1); posMbar < volMbar;
-       posMbar += item_ct1.get_group_range(1))
+  for (int posMbar=blockIdx_y; posMbar < volMbar; posMbar+=gridDim_y)
   {
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=16;i >= 1;i/=2) {
-      /*
-      DPCT1023:41: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      posMbarOut += item_ct1.get_sub_group().shuffle_xor(posMbarOut, i);
+    for (int i=16; i >= 1; i/=2) {
+      #if SYCL
+        posMbarOut += subgroup.shuffle_xor(posMbarOut, i);
+      #else // CUDA
+	posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
+      #endif
     }
 
     int posMbarIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
 #pragma unroll
-    for (int i=16;i >= 1;i/=2) {
-      /*
-      DPCT1023:42: The DPC++ sub-group does not support mask options for
-      shuffle_xor.
-      */
-      posMbarIn += item_ct1.get_sub_group().shuffle_xor(posMbarIn, i);
+    for (int i=16; i >= 1; i/=2) {
+      #if SYCL
+        posMbarIn += subgroup.shuffle_xor(posMbarIn, i);
+      #else // CUDA
+	posMbarIn += __shfl_xor_sync(0xffffffff,posMbarIn,i);
+      #endif
     }
 
     // Read from global memory
 #pragma unroll
-    for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item_ct1.get_local_id(2) + j * item_ct1.get_local_range().get(2);
+    for (int j=0; j < numRegStorage; j++) {
+      int posMmk = threadIdx_x + j*blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
-      int n = sycl::popcount(ballot(item_ct1.get_sub_group(), posMmk < volMmkSplit)[0]);
-      memStat.gld_tran +=
-          countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
-      /*
-      DPCT1023:44: The DPC++ sub-group does not support mask options for
-      sycl::ext::oneapi::any_of.
-      */
-      memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
+      #if SYCL
+        int n = sycl::popcount(ballot(subgroup, posMmk < volMmkSplit)[0]);
+        memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane, item_ct1);
+        memStat.gld_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+      #else // CUDA
+        int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmkSplit));
+        memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
+        memStat.gld_req += __any_sync(0xffffffff,n > 0);
+      #endif
     }
 
     // Write to global memory
 #pragma unroll
-    for (int j=0;j < numRegStorage;j++) {
-      int posMmk =
-          item_ct1.get_local_id(2) + j * item_ct1.get_local_range().get(2);
+    for (int j=0; j < numRegStorage; j++) {
+      int posMmk = threadIdx_x + j*blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
-      int n = sycl::popcount(ballot(item_ct1.get_sub_group(), posMmk < volMmkSplit)[0]);
-      memStat.gst_tran +=
-          countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
-      /*
-      DPCT1023:46: The DPC++ sub-group does not support mask options for
-      sycl::ext::oneapi::any_of.
-      */
-      memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
+      #if SYCL
+        int n = sycl::popcount(ballot(subgroup, posMmk < volMmkSplit)[0]);
+        memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane, item_ct1);
+        memStat.gst_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+      #else // CUDA
+	int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmkSplit));
+        memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
+        memStat.gst_req += __any_sync(0xffffffff,n > 0);
+      #endif
       if (posMmk < volMmkSplit) shSegOut[posMmk] = posOut / cacheWidth;
       // countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full, memStat.cl_part);
     }
@@ -758,19 +831,21 @@ countPackedSplit(
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance, if there is no access to global memory.
     */
-    item_ct1.barrier();
-    countCacheLines(shSegOut, volMmkSplit, cacheWidth, memStat.cl_full_l2,
-                    memStat.cl_part_l2, item_ct1);
+    syncthreads();
+#if SYCL
+    countCacheLines(shSegOut, volMmkSplit, cacheWidth, memStat.cl_full_l2, memStat.cl_part_l2, item_ct1);
+#else // CUDA
+    countCacheLines(shSegOut, volMmkSplit, cacheWidth, memStat.cl_full_l2, memStat.cl_part_l2);
+#endif
     // Go from L2 segments to L1 segments
     /*
     DPCT1065:39: Consider replacing sycl::nd_item::barrier() with
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance, if there is no access to global memory.
     */
-    item_ct1.barrier();
+    syncthreads();
     const int L2toL1 = accWidth/cacheWidth;
-    for (int i = item_ct1.get_local_id(2); i < volMmkSplit;
-         i += item_ct1.get_local_range().get(2)) {
+    for (int i=threadIdx_x; i < volMmkSplit; i+=blockDim_x) {
       shSegOut[i] /= L2toL1;
     }
     /*
@@ -778,9 +853,12 @@ countPackedSplit(
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance, if there is no access to global memory.
     */
-    item_ct1.barrier();
-    countCacheLines(shSegOut, volMmkSplit, accWidth, memStat.cl_full_l1,
-                    memStat.cl_part_l1, item_ct1);
+    syncthreads();
+#if SYCL
+    countCacheLines(shSegOut, volMmkSplit, accWidth, memStat.cl_full_l1, memStat.cl_part_l1, item_ct1);
+#else // CUDA
+    countCacheLines(shSegOut, volMmkSplit, accWidth, memStat.cl_full_l1, memStat.cl_part_l1);
+#endif
 
     // __syncthreads();
     // memStat.l1_tran += countGlTransactions(shSegOut, volMmkSplit);
@@ -788,7 +866,11 @@ countPackedSplit(
   }
 
   // Reduce memStat within thread block and write result to global memory
+#if SYCL
   writeMemStat(warpLane, memStat, glMemStat, item_ct1);
+#else // CUDA
+  writeMemStat(warpLane, memStat, glMemStat);
+#endif
 }
 
 //
@@ -797,18 +879,28 @@ countPackedSplit(
 //  dim3 numthread(TILEDIM, TILEROWS, 1);
 //  dim3 numblock( ((plan.volMm-1)/TILEDIM+1)*((plan.volMkBar-1)/TILEDIM+1), 1, plan.volMbar);
 //
-void
-
-countTiledCopy(
-  const int numMm, const int volMbar, const int sizeMbar,
+#if SYCL
+void countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
   const int cuDimMk, const int cuDimMm,
   const sycl::int2 tiledVol,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const int accWidth, const int cacheWidth,
-  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1) {
-
-  const int warpLane = item_ct1.get_local_id(2) &
-                       (item_ct1.get_sub_group().get_local_range().get(0) - 1);
+  MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1) 
+#else // CUDA
+__global__ void
+__launch_bounds__(TILEDIM*TILEROWS, 1)
+countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
+  const int cuDimMk, const int cuDimMm,
+  const int2 tiledVol,
+  const TensorConvInOut* RESTRICT gl_Mbar,
+  const int accWidth, const int cacheWidth,
+  MemStat* RESTRICT glMemStat)
+#endif
+{
+#if SYCL
+  const int warpSize = subgroup.get_local_range().get(0);
+#endif
+  const int warpLane = threadIdx_x & (warpSize - 1);
   TensorConvInOut Mbar;
   Mbar.c_in = 1;
   Mbar.d_in = 1;
@@ -818,84 +910,100 @@ countTiledCopy(
     Mbar = gl_Mbar[warpLane];
   }
 
-  const int bx = (item_ct1.get_group(2) % numMm) * TILEDIM;
-  const int by = (item_ct1.get_group(2) / numMm) * TILEDIM;
+  const int bx = (blockIdx_x % numMm)*TILEDIM;
+  const int by = (blockIdx_x / numMm)*TILEDIM;
 
-  const int x = bx + item_ct1.get_local_id(2);
-  const int y = by + item_ct1.get_local_id(1);
+  const int x = bx + threadIdx_x;
+  const int y = by + threadIdx_y;
 
   MemStat memStat;
   memStat.clear();
 
-  for (int posMbar = item_ct1.get_group(0); posMbar < volMbar;
-       posMbar += item_ct1.get_group_range(0))
+  for (int posMbar=blockIdx_z; posMbar < volMbar; posMbar += gridDim_z)
   {
 
     // Read global memory
     {
-      int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in,
-                           item_ct1);
+      #if SYCL
+        int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in, item_ct1);
+      #else // CUDA
+	int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in);
+      #endif
       pos0 += x + y*cuDimMk;
 
 #pragma unroll
-      for (int j=0;j < TILEDIM;j += TILEROWS) {
+      for (int j=0; j < TILEDIM; j += TILEROWS) {
         int pos  = pos0  + j*cuDimMk;
-	int n = sycl::popcount(
-            ballot(item_ct1.get_sub_group(), (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
-        memStat.gld_tran +=
-            countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
-        /*
-        DPCT1023:48: The DPC++ sub-group does not support mask options for
-        sycl::ext::oneapi::any_of.
-        */
-        memStat.gld_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
+	#if SYCL
+	  int n = sycl::popcount(ballot(subgroup, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
+          memStat.gld_tran += countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
+          memStat.gld_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+	#else // CUDA
+	  int n = __popc(__ballot_sync(0xffffffff,(x < tiledVol.x) && (y + j < tiledVol.y)));
+          memStat.gld_tran += countGlTransactions(pos, n, accWidth, warpLane);
+          memStat.gld_req += __any_sync(0xffffffff,n > 0);
+	#endif
       }
     }
 
     // Write global memory
     {
-      int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out,
-                           Mbar.ct_out, item_ct1);
+      #if SYCL
+        int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out, Mbar.ct_out, item_ct1);
+      #else // CUDA
+	int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out, Mbar.ct_out);
+      #endif
       pos0 += x + y*cuDimMm;
 
 #pragma unroll
-      for (int j=0;j < TILEDIM;j += TILEROWS) {
+      for (int j=0; j < TILEDIM; j += TILEROWS) {
         int pos = pos0 + j*cuDimMm;
-	int n = sycl::popcount(
-            ballot(item_ct1.get_sub_group(), (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
-        memStat.gst_tran +=
-            countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
-        /*
-        DPCT1023:50: The DPC++ sub-group does not support mask options for
-        sycl::ext::oneapi::any_of.
-        */
-        memStat.gst_req += sycl::ext::oneapi::any_of(item_ct1.get_group(), n > 0);
-        countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2,
-                        memStat.cl_part_l2, item_ct1);
+        #if SYCL
+	  int n = sycl::popcount(ballot(subgroup, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
+          memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
+          memStat.gst_req += sycl::ext::oneapi::any_of(subgroup, n > 0);
+          countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2, item_ct1);
+	#else // CUDA
+	  int n = __popc(__ballot_sync(0xffffffff,(x < tiledVol.x) && (y + j < tiledVol.y)));
+          memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane);
+          memStat.gst_req += __any_sync(0xffffffff,n > 0);
+          countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2);
+	#endif
       }
     }
 
   }
   
   // Reduce memStat within thread block and write result to global memory
+#if SYCL
   writeMemStat(warpLane, memStat, glMemStat, item_ct1);
+#else // CUDA
+  writeMemStat(warpLane, memStat, glMemStat);
+#endif
 }
 
 //######################################################################################
 //######################################################################################
 //######################################################################################
 
-void runCounters(const int warpSize, const int *hostPosData,
-                 const int numPosData, const int accWidth, const int cacheWidth,
-                 int *host_tran, int *host_cl_full, int *host_cl_part) try {
-
+void runCounters(const int warpSize, const int *hostPosData, const int numPosData, 
+  const int accWidth, const int cacheWidth, int *host_tran, int *host_cl_full, int *host_cl_part) 
+#if SYCL
+try 
+#endif
+{
   const int numWarp = numPosData/warpSize;
 
   int* devPosData;
+#if SYCL
   allocate_device<int>(&devPosData, numPosData);
   sycl::queue q = dpct::get_default_queue();
   copy_HtoD<int>(hostPosData, devPosData, numPosData, &q);
   q.wait();
+#else // CUDA
+  allocate_device<int>(&devPosData, numPosData);
+  copy_HtoD<int>(hostPosData, devPosData, numPosData);
+#endif
 
   int* dev_tran;
   int* dev_cl_full;
@@ -904,8 +1012,7 @@ void runCounters(const int warpSize, const int *hostPosData,
   allocate_device<int>(&dev_cl_full, numWarp);
   allocate_device<int>(&dev_cl_part, numWarp);
 
-  //int nthread = 512;
-  int nthread = 64;
+  int nthread = 512;
   int nblock = (numPosData - 1)/nthread + 1;
   /*
   DPCT1049:51: The workgroup size passed to the SYCL kernel may exceed the
@@ -913,32 +1020,33 @@ void runCounters(const int warpSize, const int *hostPosData,
   Adjust the workgroup size if needed.
   */
   //dpct::get_default_queue().submit([&](sycl::handler &cgh) {
+#if SYCL
   q.submit([&](sycl::handler &cgh) {
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nblock) *
-                                           sycl::range<3>(1, 1, nthread),
+                                       sycl::range<3>(1, 1, nthread),
                                        sycl::range<3>(1, 1, nthread)),
-                     [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                       runCountersKernel(devPosData, numPosData, accWidth,
-                                         cacheWidth, dev_tran, dev_cl_full,
-                                         dev_cl_part, item_ct1);
-                     });
+    [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+       runCountersKernel(devPosData, numPosData, accWidth,
+       cacheWidth, dev_tran, dev_cl_full, dev_cl_part, item_ct1);
+    });
   });
   q.wait();
-  /*
-  DPCT1010:52: SYCL uses exceptions to report errors and does not use the error
-  codes. The call was replaced with 0. You need to rewrite this code.
-  */
-  cudaCheck(0);
 
   copy_DtoH<int>(dev_tran,    host_tran,    numWarp, &q);
   copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp, &q);
   copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, &q);
-  /*
-  DPCT1003:54: Migrated API does not return error code. (*, 0) is inserted. You
-  may need to rewrite this code.
-  */
-  //cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  //dpct::get_current_device().queues_wait_and_throw();
   q.wait();
+#else // CUDA
+  runCountersKernel<<< nblock, nthread >>>(devPosData, numPosData,
+    accWidth, cacheWidth, dev_tran, dev_cl_full, dev_cl_part);
+  cudaCheck(cudaGetLastError());
+
+  copy_DtoH<int>(dev_tran,    host_tran,    numWarp);
+  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp);
+  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp);
+  cudaCheck(cudaDeviceSynchronize());
+#endif
 
   deallocate_device<int>(&dev_tran);
   deallocate_device<int>(&dev_cl_full);
@@ -946,16 +1054,21 @@ void runCounters(const int warpSize, const int *hostPosData,
 
   deallocate_device<int>(&devPosData);
 }
+#if SYCL
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
+#endif
 
-bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth,
-                        const int cacheWidth, int &gld_tran, int &gst_tran,
-                        int &gld_req, int &gst_req, int &cl_full_l2,
-                        int &cl_part_l2, int &cl_full_l1, int &cl_part_l1) try {
+bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int cacheWidth, 
+  int &gld_tran, int &gst_tran, int &gld_req, int &gst_req, 
+  int &cl_full_l2, int &cl_part_l2, int &cl_full_l1, int &cl_part_l1) 
+#if SYCL
+try 
+#endif
+{
 
   LaunchConfig& lc = plan.launchConfig;
   TensorSplit& ts = plan.tensorSplit;
@@ -978,7 +1091,8 @@ DPCT1049:55: The workgroup size passed to the SYCL kernel may exceed the limit.
 To get the device limit, query info::device::max_work_group_size. Adjust the
 workgroup size if needed.
 */
-#define CALL0(NREG)                                                            \
+#if SYCL
+  #define CALL0(NREG)                                                          \
   plan.stream->submit([&](sycl::handler &cgh) {                                \
     sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,                 \
                    sycl::access::target::local>                                \
@@ -1003,6 +1117,12 @@ workgroup size if needed.
                             item_ct1, dpct_local_acc_ct1.get_pointer());       \
         });                                                                    \
   });
+#else // CUDA
+  #define CALL0(NREG)                                                                       \
+    countPacked<NREG> <<< lc.numblock, lc.numthread, ts.volMmk*sizeof(int), plan.stream >>> \
+      (ts.volMmk, ts.volMbar, ts.sizeMmk, ts.sizeMbar,                                      \
+      plan.Mmk, plan.Mbar, accWidth, cacheWidth, devMemStat)
+#endif
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
@@ -1028,7 +1148,8 @@ DPCT1049:56: The workgroup size passed to the SYCL kernel may exceed the limit.
 To get the device limit, query info::device::max_work_group_size. Adjust the
 workgroup size if needed.
 */
-#define CALL0(NREG)                                                            \
+#if SYCL
+  #define CALL0(NREG)                                                          \
   plan.stream->submit([&](sycl::handler &cgh) {                                \
     sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,                 \
                    sycl::access::target::local>                                \
@@ -1058,6 +1179,12 @@ workgroup size if needed.
               dpct_local_acc_ct1.get_pointer());                               \
         });                                                                    \
   });
+#else // CUDA
+  #define CALL0(NREG)                                                                              \
+    countPackedSplit<NREG> <<< lc.numblock, lc.numthread, volMmkSplit*sizeof(int), plan.stream >>> \
+      (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                        \
+        plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, accWidth, cacheWidth, devMemStat)
+#endif
 #define CALL(ICASE) case ICASE: CALL0(ICASE); break
 #include "calls.h"
         default:
@@ -1077,22 +1204,28 @@ workgroup size if needed.
       limit. To get the device limit, query info::device::max_work_group_size.
       Adjust the workgroup size if needed.
       */
-    plan.stream->submit([&](sycl::handler &cgh) {
-      auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);
+#if SYCL
+      plan.stream->submit([&](sycl::handler &cgh) {
+        auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);
 
-      auto tiledVol = plan.tiledVol;
-      auto cuDimMk  = plan.cuDimMk;
-      auto cuDimMm  = plan.cuDimMm;
-      auto Mbar     = plan.Mbar;
+        auto tiledVol = plan.tiledVol;
+        auto cuDimMk  = plan.cuDimMk;
+        auto cuDimMm  = plan.cuDimMm;
+        auto Mbar     = plan.Mbar;
 
-      cgh.parallel_for(
+        cgh.parallel_for(
           sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),
           [=](sycl::nd_item<3> item_ct1) {
             countTiled(ts_volMm_TILEDIM_ct0, ts.volMbar, ts.sizeMbar,
                        tiledVol, cuDimMk, cuDimMm, Mbar,
                        accWidth, cacheWidth, devMemStat, item_ct1);
-          });
-    });
+        });
+      });
+#else // CUDA
+      countTiled <<< lc.numblock, lc.numthread, 0, plan.stream >>>
+      (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.tiledVol, plan.cuDimMk, 
+        plan.cuDimMm, plan.Mbar, accWidth, cacheWidth, devMemStat);
+#endif
     }
     break;
 
@@ -1103,7 +1236,8 @@ workgroup size if needed.
       limit. To get the device limit, query info::device::max_work_group_size.
       Adjust the workgroup size if needed.
       */
-    plan.stream->submit([&](sycl::handler &cgh) {
+#if SYCL
+      plan.stream->submit([&](sycl::handler &cgh) {
       auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);
 
       auto tiledVol = plan.tiledVol;
@@ -1112,31 +1246,34 @@ workgroup size if needed.
       auto Mbar     = plan.Mbar;
 
       cgh.parallel_for(
-          sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),
-          [=](sycl::nd_item<3> item_ct1) {
-            countTiledCopy(ts_volMm_TILEDIM_ct0, ts.volMbar, ts.sizeMbar,
-                           cuDimMk, cuDimMm, tiledVol, Mbar,
-                           accWidth, cacheWidth, devMemStat, item_ct1);
-          });
-    });
+        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),
+        [=](sycl::nd_item<3> item_ct1) {
+          countTiledCopy(ts_volMm_TILEDIM_ct0, ts.volMbar, ts.sizeMbar,
+                         cuDimMk, cuDimMm, tiledVol, Mbar,
+                         accWidth, cacheWidth, devMemStat, item_ct1);
+        });
+      });
+#else // CUDA
+      countTiledCopy <<< lc.numblock, lc.numthread, 0, plan.stream >>>
+      (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.cuDimMk, plan.cuDimMm, 
+        plan.tiledVol, plan.Mbar, accWidth, cacheWidth, devMemStat);
+#endif
     }
     break;
 
   }
 
-  /*
-  DPCT1010:59: SYCL uses exceptions to report errors and does not use the error
-  codes. The call was replaced with 0. You need to rewrite this code.
-  */
-  cudaCheck(0);
+#ifndef SYCL
+  cudaCheck(cudaGetLastError());
+#endif
 
   MemStat hostMemStat;
   copy_DtoH<MemStat>(devMemStat, &hostMemStat, 1, plan.stream);
-  /*
-  DPCT1003:60: Migrated API does not return error code. (*, 0) is inserted. You
-  may need to rewrite this code.
-  */
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+#if SYCL
+  dpct::get_current_device().queues_wait_and_throw();
+#else // CUDA
+  cudaCheck(cudaDeviceSynchronize());
+#endif
   deallocate_device<MemStat>(&devMemStat);
 
   gld_tran   = hostMemStat.gld_tran;
@@ -1151,8 +1288,10 @@ workgroup size if needed.
 
   return true;
 }
+#if SYCL
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
+#endif

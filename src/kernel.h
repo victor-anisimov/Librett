@@ -26,21 +26,16 @@ SOFTWARE.
 #define LIBRETTKERNEL_H
 
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
 #endif
 #include "plan.h"
+#include "uniapi.h"
 
 void librettKernelSetSharedMemConfig();
 
-#ifdef SYCL
 int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts,
-                                  const int deviceID, const dpct::device_info &prop,
-                                  LaunchConfig &lc);
-#else
-int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
-             const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc);
-#endif
+             const int deviceID, const gpuDeviceProp_t &prop, LaunchConfig &lc);
 
 bool librettKernel(librettPlan_t& plan, void* dataIn, void* dataOut);
 

@@ -25,14 +25,21 @@ SOFTWARE.
 #ifndef LIBRETTGPUMODEL_H
 #define LIBRETTGPUMODEL_H
 
-#ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#endif
 #include <vector>
-#include "Types.h"
-#include "plan.h"
+#if SYCL
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
+  #include "Types.h"
+  #include "plan.h"
+#elif HIP
+  #include "Types.h"
+  #include "cuttplan.h"
+#else // CUDA
+  #include "Types.h"
+  #include "plan.h"
+#endif
 #include "int_vector.h"
+#include "uniapi.h"
 
 void computePos(const int vol0, const int vol1,
   const TensorConvInOut* conv, const int numConv,
@@ -77,27 +84,15 @@ void countTiledGlTransactions(const bool leadVolSame,
   std::vector<TensorConvInOut>& hostMbar, const int sizeMbar,
   int& num_iter, float& mlp, int& gld_tran, int& gst_tran, int& gld_req, int& gst_req, int& cl_full, int& cl_part);
 
-#ifdef SYCL
-double cyclesPacked(const bool isSplit, const size_t sizeofType, const dpct::device_info &prop, 
+double cyclesPacked(const bool isSplit, const size_t sizeofType, const gpuDeviceProp_t &prop, 
   int nthread, int numActiveBlock, float mlp, 
   int gld_req, int gst_req, int gld_tran, int gst_tran, 
   int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part);
 
-double cyclesTiled(const bool isCopy, const size_t sizeofType, const dpct::device_info &prop, 
+double cyclesTiled(const bool isCopy, const size_t sizeofType, const gpuDeviceProp_t &prop, 
   int nthread, int numActiveBlock, float mlp, 
   int gld_req, int gst_req, int gld_tran, int gst_tran, 
   int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part);
-#else
-double cyclesPacked(const bool isSplit, const size_t sizeofType, const cudaDeviceProp& prop,
-  int nthread, int numActiveBlock, float mlp,
-  int gld_req, int gst_req, int gld_tran, int gst_tran,
-  int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part);
-
-double cyclesTiled(const bool isCopy, const size_t sizeofType, const cudaDeviceProp& prop,
-  int nthread, int numActiveBlock, float mlp,
-  int gld_req, int gst_req, int gld_tran, int gst_tran,
-  int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part);
-#endif
 
 bool testCounters(const int warpSize, const int accWidth, const int cacheWidth);
 

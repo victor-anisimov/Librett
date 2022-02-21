@@ -21,36 +21,41 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Modifications Copyright (c) 2022 Advanced Micro Devices, Inc.
+All rights reserved.
 *******************************************************************************/
-#ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#endif
 #include <vector>
 #include <algorithm>
 #include <ctime>           // std::time
 #include <cstring>         // strcmp
 #include <cmath>
-#include "librett.h"
+#if HIP
+  #include "cutt.h"
+#else
+  #include "librett.h"
+#endif
 #include "GpuUtils.h"
 #include "GpuMem.h"
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuModel.h"      // testCounters
 
-//
-// Error checking wrapper for librett
-//
-#define librettCheck(stmt) do {                                                   \
-  librettResult err = stmt;                                                       \
-  if (err != LIBRETT_SUCCESS) {                                                      \
-    fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-    exit(1);                                                                      \
-  }                                                                               \
-} while(0)
-
 #ifdef SYCL
 sycl::queue q = dpct::get_default_queue();
+#endif
+
+#if HIP
+//
+// Error checking wrapper for cutt
+//
+#define cuttCheck(stmt) do {                                 \
+  cuttResult err = stmt;                            \
+  if (err != CUTT_SUCCESS) {                          \
+    fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
+    exit(1); \
+  }                                                  \
+} while(0)
 #endif
 
 librettTimer* timerFloat;
@@ -74,7 +79,6 @@ int main(int argc, char *argv[])
 try 
 #endif
 {
-
   int gpuid = -1;
   bool arg_ok = true;
   if (argc >= 3) {
@@ -95,18 +99,23 @@ try
   }
 
   if (gpuid >= 0) {
-#ifdef SYCL
-    cudaCheck((dpct::dev_mgr::instance().select_device(gpuid), 0));
+#if SYCL
+    dpct::dev_mgr::instance().select_device(gpuid);
+#elif HIP
+    hipCheck(hipSetDevice(gpuid));
 #else // CUDA
     cudaCheck(cudaSetDevice(gpuid));
 #endif
   }
 
-#ifdef SYCL
-  cudaCheck((dpct::get_current_device().reset(), 0));
+#if SYCL
+  dpct::get_current_device().reset();
+#elif HIP
+  hipCheck(hipDeviceReset());
+  // hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
 #else // CUDA
   cudaCheck(cudaDeviceReset());
-  cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
+  // cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
 #endif
 
   timerFloat = new librettTimer(4);
@@ -120,13 +129,14 @@ try
   tester = new TensorTester();
   tester->setTensorCheckPattern((unsigned int *)dataIn, dataSize*2);
 
-  if (!test1()) goto fail;
-  if (!test2()) goto fail;
-  if (!test3()) goto fail;
-  if (!test4()) goto fail;
-  if (!test5()) goto fail;
+  bool passed = true;
+  if(passed){passed = test1(); if(!passed) printf("Test 1 failed\n");}
+  if(passed){passed = test2(); if(!passed) printf("Test 2 failed\n");}
+  if(passed){passed = test3(); if(!passed) printf("Test 3 failed\n");}
+  if(passed){passed = test4(); if(!passed) printf("Test 4 failed\n");}
+  if(passed){passed = test5(); if(!passed) printf("Test 5 failed\n");}
 
-  {
+  if(passed){
     std::vector<int> worstDim;
     std::vector<int> worstPermutation;
     double worstBW = timerDouble->getWorst(worstDim, worstPermutation);
@@ -135,13 +145,9 @@ try
     printVec(worstDim);
     printf("permutation\n");
     printVec(worstPermutation);
+    printf("test OK\n");
   }
 
-  printf("test OK\n");
-  goto end;
-fail:
-  printf("test FAIL\n");
-end:
   deallocate_device<long long int>(&dataIn);
   deallocate_device<long long int>(&dataOut);
   delete tester;
@@ -149,8 +155,10 @@ end:
   delete timerFloat;
   delete timerDouble;
 
-#ifdef SYCL
-  cudaCheck((dpct::get_current_device().reset(), 0));
+#if SYCL
+  dpct::get_current_device().reset();
+#elif HIP
+  hipCheck(hipDeviceReset());
 #else // CUDA
   cudaCheck(cudaDeviceReset());
 #endif
@@ -294,6 +302,37 @@ bool test3() {
     if (!test_tensor<int>(dim, permutation)) return false;
   }
 
+#if HIP
+  {
+    int rank = 3;
+    std::vector<int> dim(rank);
+    std::vector<int> permutation(rank);
+    dim[0] = 651;
+    dim[1] = 299;
+    dim[2] = 44;
+    permutation[0] = 0;
+    permutation[1] = 2;
+    permutation[2] = 1;
+    if (!test_tensor<long long int>(dim, permutation)) return false;
+    if (!test_tensor<int>(dim, permutation)) return false;
+  }
+
+  {
+    int rank = 4;
+    std::vector<int> dim(rank);
+    std::vector<int> permutation(rank);
+    dim[0] = 24;
+    dim[1] = 170;
+    dim[2] = 32;
+    dim[3] = 97;
+    permutation[0] = 1;
+    permutation[1] = 0;
+    permutation[2] = 2;
+    permutation[3] = 3;
+    if (!test_tensor<long long int>(dim, permutation)) return false;
+    if (!test_tensor<int>(dim, permutation)) return false;
+  }
+#else
   {
     int rank = 3;
     std::vector<int> dim(rank);
@@ -323,6 +362,7 @@ bool test3() {
     if (!test_tensor<long long int>(dim, permutation)) return false;
     if (!test_tensor<int>(dim, permutation)) return false;
   }
+#endif
 
   {
     int rank = 4;
@@ -360,6 +400,24 @@ bool test3() {
     if (!test_tensor<int>(dim, permutation)) return false;
   }
 
+#if HIP
+  {
+    std::vector<int> dim(5);
+    std::vector<int> permutation(5);
+    dim[0] = 5;
+    dim[1] = 32;
+    dim[2] = 45;
+    dim[3] = 63;
+    dim[4] = 37;
+    permutation[0] = 2 - 1;
+    permutation[1] = 4 - 1;
+    permutation[2] = 5 - 1;
+    permutation[3] = 3 - 1;
+    permutation[4] = 1 - 1;
+    if (!test_tensor<long long int>(dim, permutation)) return false;
+    if (!test_tensor<int>(dim, permutation)) return false;
+  }
+#else
   {
     std::vector<int> dim(5);
     std::vector<int> permutation(5);
@@ -376,6 +434,7 @@ bool test3() {
     if (!test_tensor<long long int>(dim, permutation)) return false;
     if (!test_tensor<int>(dim, permutation)) return false;
   }
+#endif
 
   {
     std::vector<int> dim(5);
@@ -405,18 +464,23 @@ bool test4()
 try 
 #endif
 {
-
   std::vector<int> dim = {24, 32, 16, 36, 43, 9};
   std::vector<int> permutation = {5, 1, 4, 2, 3, 0};
 
   const int numStream = 10;
 
-#ifdef SYCL
+#if SYCL
   sycl::queue *streams[numStream];
   for (int i=0;i < numStream;i++) {
-    cudaCheck((streams[i] = dpct::get_current_device().create_queue(), 0));
+    streams[i] = dpct::get_current_device().create_queue();
   }
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  dpct::get_current_device().queues_wait_and_throw();
+#elif HIP
+  hipStream_t streams[numStream];
+  for (int i=0;i < numStream;i++) {
+    hipCheck(hipStreamCreate(&streams[i]));
+  }
+  hipCheck(hipDeviceSynchronize());
 #else // CUDA
   cudaStream_t streams[numStream];
   for (int i=0;i < numStream;i++) {
@@ -425,16 +489,26 @@ try
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
-
+#if HIP
+  cuttHandle plans[numStream];
+#else
   librettHandle plans[numStream];
+#endif
 
   for (int i=0;i < numStream;i++) {
+#if HIP
+    cuttCheck(cuttPlan(&plans[i], dim.size(), dim.data(), permutation.data(), sizeof(double), streams[i]));
+    cuttCheck(cuttExecute(plans[i], dataIn, dataOut));
+#else
     librettCheck(librettPlan(&plans[i], dim.size(), dim.data(), permutation.data(), sizeof(double), streams[i]));
     librettCheck(librettExecute(plans[i], dataIn, dataOut));
+#endif
   }
 
-#ifdef SYCL
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+#if SYCL
+  dpct::get_current_device().queues_wait_and_throw();
+#elif HIP
+  hipCheck(hipDeviceSynchronize());
 #else // CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
@@ -442,16 +516,22 @@ try
   bool run_ok = tester->checkTranspose(dim.size(), dim.data(), permutation.data(), (long long int *)dataOut);
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  dpct::get_current_device().queues_wait_and_throw();
+#elif HIP
+  hipCheck(hipDeviceSynchronize());
 #else // CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
   for (int i=0;i < numStream;i++) {
+#if SYCL
     librettCheck(librettDestroy(plans[i]));
-#ifdef SYCL
     cudaCheck((dpct::get_current_device().destroy_queue(streams[i]), 0));
+#elif HIP
+    cuttCheck(cuttDestroy(plans[i]));
+    hipCheck(hipStreamDestroy(streams[i]));
 #else // CUDA
+    librettCheck(librettDestroy(plans[i]));
     cudaCheck(cudaStreamDestroy(streams[i]));
 #endif
   }
@@ -498,7 +578,6 @@ bool test_tensor(std::vector<int> &dim, std::vector<int> &permutation)
 try 
 #endif
 {
-
   int rank = dim.size();
 
   int vol = 1;
@@ -506,18 +585,18 @@ try
     vol *= dim[r];
   }
 
+  printf("Number of elements %d\n",vol);
+  printf("Dimensions\n");
+  printVec(dim);
+  printf("Permutation\n");
+  printVec(permutation);
+
   size_t volmem = vol*sizeof(T);
   size_t datamem = dataSize*sizeof(long long int);
   if (volmem > datamem) {
-    printf("test_tensor, data size exceeded\n");
+    printf("#ERROR(test_tensor): Data size exceeded: %llu %llu\n",volmem,datamem);
     return false;
   }
-
-  printf("number of elements %d\n", vol);
-  printf("dimensions\n");
-  printVec(dim);
-  printf("permutation\n");
-  printVec(permutation);
 
   librettTimer* timer;
   if (sizeof(T) == 4) {
@@ -526,12 +605,20 @@ try
     timer = timerDouble;
   }
 
+#if HIP
+  cuttHandle plan;
+#else
   librettHandle plan;
-#ifdef SYCL
+#endif
+#if SYCL
   sycl::queue q = dpct::get_default_queue();
   librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
   set_device_array<T>((T *)dataOut, -1, vol, &q);
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+  dpct::get_current_device().queues_wait_and_throw();
+#elif HIP
+  cuttCheck(cuttPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
+  set_device_array<T>((T *)dataOut, -1, vol);
+  hipCheck(hipDeviceSynchronize());
 #else // CUDA
   librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
   set_device_array<T>((T *)dataOut, -1, vol);
@@ -539,11 +626,19 @@ try
 #endif
 
   if (vol > 1000000) timer->start(dim, permutation);
+#if HIP
+  cuttCheck(cuttExecute(plan, dataIn, dataOut));
+#else
   librettCheck(librettExecute(plan, dataIn, dataOut));
+#endif
   if (vol > 1000000) timer->stop();
   //q.wait();
 
+#if HIP
+  cuttCheck(cuttDestroy(plan));
+#else
   librettCheck(librettDestroy(plan));
+#endif
 
   return tester->checkTranspose<T>(rank, dim.data(), permutation.data(), (T *)dataOut);
 }

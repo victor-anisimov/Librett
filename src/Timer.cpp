@@ -24,142 +24,143 @@ SOFTWARE.
 *******************************************************************************/
 
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
 #endif
+
 #include "Timer.h"
 #include "GpuUtils.h"
 // #include <limits>       // std::numeric_limits
 #include <algorithm>
-#ifdef RUNTIME_EVENT_TIMER
+#ifdef GPU_EVENT_TIMER
 #include "GpuUtils.h"
 #endif
 
-#ifdef RUNTIME_EVENT_TIMER
-#ifdef SYCL
-Timer::Timer() try {
-  /*
-  DPCT1027:0: The call to cudaEventCreate was replaced with 0, because this call
-  is redundant in DPC++.
-  */
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-Timer::~Timer() try {
-  /*
-  DPCT1027:3: The call to cudaEventDestroy was replaced with 0, because this
-  call is redundant in DPC++.
-  */
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#else
-Timer::Timer() {
-  cudaCheck(cudaEventCreate(&tmstart));
-  cudaCheck(cudaEventCreate(&tmend));
-}
-Timer::~Timer() {
-  cudaCheck(cudaEventDestroy(tmstart));
-  cudaCheck(cudaEventDestroy(tmend));
-}
-#endif
-#endif
+#ifdef GPU_EVENT_TIMER
+  #if SYCL
+    Timer::Timer() try { }
+    catch (sycl::exception const &exc) {
+      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                << ", line:" << __LINE__ << std::endl;
+      std::exit(1);
+    }
+    Timer::~Timer() try { }
+    catch (sycl::exception const &exc) {
+      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                << ", line:" << __LINE__ << std::endl;
+      std::exit(1);
+    }
 
-#ifdef RUNTIME_EVENT_TIMER
-#ifdef SYCL
-void Timer::start() try {
-  /*
-  DPCT1012:5: Detected kernel execution time measurement pattern and generated
-  an initial code for time measurements in SYCL. You can change the way time is
-  measured depending on your goals.
-  */
-  tmstart_ct1 = std::chrono::steady_clock::now();
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#else  // CUDA
-void Timer::start() {
-  cudaCheck(cudaEventRecord(tmstart, 0));
-}
-#endif
-#else  // RUNTIME_EVENT_TIMER
-void Timer::start() {
-  tmstart = std::chrono::high_resolution_clock::now();
-}
-#endif
+  #elif HIP
+    Timer::Timer() {
+      hipCheck(hipEventCreate(&tmstart));
+      hipCheck(hipEventCreate(&tmend));
+    }
+    Timer::~Timer() {
+      hipCheck(hipEventDestroy(tmstart));
+      hipCheck(hipEventDestroy(tmend));
+    }
 
-#ifdef RUNTIME_EVENT_TIMER
-#ifdef SYCL
-void Timer::stop() try {
-  /*
-  DPCT1012:7: Detected kernel execution time measurement pattern and generated
-  an initial code for time measurements in SYCL. You can change the way time is
-  measured depending on your goals.
-  */
-  tmend_ct1 = std::chrono::steady_clock::now();
-  /*
-  DPCT1003:10: Migrated API does not return error code. (*, 0) is inserted. You
-  may need to rewrite this code.
-  */
-  cudaCheck((tmend.wait_and_throw(), 0));
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#else  // CUDA
-void Timer::stop() {
-  cudaCheck(cudaEventRecord(tmend, 0));
-  cudaCheck(cudaEventSynchronize(tmend));
-}
-#endif
-#else  // RUNTIME_EVENT_TIMER
-void Timer::stop() {
-  cudaCheck(cudaDeviceSynchronize());
-  tmend = std::chrono::high_resolution_clock::now();
-}
+  #else // CUDA
+    Timer::Timer() {
+      cudaCheck(cudaEventCreate(&tmstart));
+      cudaCheck(cudaEventCreate(&tmend));
+    }
+    Timer::~Timer() {
+      cudaCheck(cudaEventDestroy(tmstart));
+      cudaCheck(cudaEventDestroy(tmend));
+    }
+  #endif
+#endif // GPU_EVENT_TIMER
+
+void Timer::start()
+#ifdef GPU_EVENT_TIMER
+  #ifdef SYCL
+    try {
+      tmstart_ct1 = std::chrono::steady_clock::now();
+    }
+    catch (sycl::exception const &exc) {
+      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                << ", line:" << __LINE__ << std::endl;
+      std::exit(1);
+    }
+  #elif HIP
+    { hipCheck(hipEventRecord(tmstart, 0)); }
+  #else  // CUDA
+    { cudaCheck(cudaEventRecord(tmstart, 0)); }
+  #endif
+#else  // GPU_EVENT_TIMER
+  { tmstart = std::chrono::high_resolution_clock::now(); }
+#endif 
+
+void Timer::stop() 
+#ifdef GPU_EVENT_TIMER
+  #ifdef SYCL
+    try {
+      tmend_ct1 = std::chrono::steady_clock::now();
+      tmend.wait_and_throw();
+    }
+    catch (sycl::exception const &exc) {
+      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                << ", line:" << __LINE__ << std::endl;
+      std::exit(1);
+    }
+  #elif HIP
+    {
+      hipCheck(hipEventRecord(tmend, 0));
+      hipCheck(hipEventSynchronize(tmend));
+    }
+  #else  // CUDA
+    {
+      cudaCheck(cudaEventRecord(tmend, 0));
+      cudaCheck(cudaEventSynchronize(tmend));
+    }
+  #endif
+#else  // GPU_EVENT_TIMER
+  {
+    #if SYCL
+      // Synchronize Device
+      dpct::get_current_device().queues_wait_and_throw();
+    #elif HIP
+      hipCheck(hipDeviceSynchronize());
+    #else // CUDA
+      cudaCheck(cudaDeviceSynchronize());
+    #endif
+    tmend = std::chrono::high_resolution_clock::now();
+  }
 #endif
 
 //
 // Returns the duration of the last run in seconds
 //
-#ifdef RUNTIME_EVENT_TIMER
-#ifdef SYCL
-double Timer::seconds() try {
-  float ms;
-  /*
-  DPCT1003:9: Migrated API does not return error code. (*, 0) is inserted. You
-  may need to rewrite this code.
-  */
-  cudaCheck((ms = std::chrono::duration<float, std::milli>(tmend_ct1 - tmstart_ct1) .count(), 0));
-  return (double)(ms/1000.0f);
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#else  // CUDA
-double Timer::seconds() {
-  float ms;
-  cudaCheck(cudaEventElapsedTime(&ms, tmstart, tmend));
-  return (double)(ms/1000.0f);
-}
-#endif
-#else  // RUNTIME_EVENT_TIMER
-double Timer::seconds() {
-  return std::chrono::duration_cast< std::chrono::duration<double> >(tmend - tmstart).count();
-}
+double Timer::seconds()
+#ifdef GPU_EVENT_TIMER
+  #ifdef SYCL
+    try {
+    float ms;
+    ms = std::chrono::duration<float, std::milli>(tmend_ct1 - tmstart_ct1).count();
+    return (double)(ms/1000.0f);
+    }
+    catch (sycl::exception const &exc) {
+      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                << ", line:" << __LINE__ << std::endl;
+      std::exit(1);
+    }
+  #elif HIP
+    {
+    float ms;
+    hipCheck(hipEventElapsedTime(&ms, tmstart, tmend));
+    return (double)(ms/1000.0f);
+    }
+  #else  // CUDA
+    {
+    float ms;
+    cudaCheck(cudaEventElapsedTime(&ms, tmstart, tmend));
+    return (double)(ms/1000.0f);
+    }
+  #endif
+#else  // GPU_EVENT_TIMER
+  { return std::chrono::duration_cast< std::chrono::duration<double> >(tmend - tmstart).count(); }
 #endif
 
 //

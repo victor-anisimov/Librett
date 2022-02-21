@@ -91,12 +91,12 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
-CFLAGS = -I${CUDAROOT}/include -std=c++11 $(DEFS) $(OPTLEV) -fPIC
+CFLAGS = -I${CUDAROOT}/include -std=c++17 $(DEFS) $(OPTLEV) -fPIC
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
 
-CUDA_CFLAGS = -ccbin $(GPU_CC) -I${CUDAROOT}/include -std=c++11 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(CUDA_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
+CUDA_CFLAGS = -ccbin $(GPU_CC) -I${CUDAROOT}/include -std=c++17 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(CUDA_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
 
 ifeq ($(OS),osx)
 CUDA_LFLAGS = -L$(CUDAROOT)/lib
@@ -147,10 +147,35 @@ clean:
 # Pull in dependencies that already exist
 -include $(OBJS:.o=.d)
 
-build/%.o : src/%.cu
-	$(CUDAC) -c $(CUDA_CFLAGS) -o build/$*.o $<
-	echo -e 'build/\c' > build/$*.d
-	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
+build/GpuMemcpy.o : src/GpuMemcpy.cpp
+	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+
+build/GpuModelKernel.o : src/GpuModelKernel.cpp
+	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+
+build/GpuUtils.o : src/GpuUtils.cpp
+	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+
+build/kernel.o : src/kernel.cpp
+	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+
+build/TensorTester.o : src/TensorTester.cpp
+	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+
+#build/%.o : src/%.cu
+#	$(CUDAC) -c $(CUDA_CFLAGS) -o build/$*.o $<
+#	echo -e 'build/\c' > build/$*.d
+#	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
 
 build/%.o : src/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
