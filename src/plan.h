@@ -21,22 +21,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Modifications Copyright (c) 2022 Advanced Micro Devices, Inc.
+All rights reserved.
 *******************************************************************************/
 #ifndef LIBRETTPLAN_H
 #define LIBRETTPLAN_H
 
-#ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#else
-#include <cuda.h>
+#if SYCL
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
+#elif HIP
+  #include <hip/hip_runtime.h>
+#else // CUDA
+  #include <cuda.h>
 #endif
 
 #include <list>
 #include <vector>
 #include "Types.h"
+#include "uniapi.h"
 
-const int TILEDIM = 32;
+#if HIP
+  const int TILEDIM = 64;   // AMD change
+#else
+  const int TILEDIM = 32;
+#endif
 const int TILEROWS = 8;
 
 // Transposing methods
@@ -130,12 +140,8 @@ public:
   // Device for which this plan was made
   int deviceID;
 
-  // CUDA stream associated with the plan
-#ifdef SYCL
-  sycl::queue *stream;
-#else
-  cudaStream_t stream;
-#endif
+  // GPU stream associated with the plan
+  gpuStream_t stream;
 
   // Kernel launch configuration
   LaunchConfig launchConfig;
@@ -154,11 +160,7 @@ public:
   int cuDimMk;
   int cuDimMm;
 
-#ifdef SYCL
-  sycl::int2 tiledVol;
-#else  // CUDA
-  int2 tiledVol;
-#endif
+  int2_t tiledVol;
 
   // Number of iterations of the kernel
   int num_iter;
@@ -198,58 +200,30 @@ public:
   librettPlan_t();
   ~librettPlan_t();
   void print();
-#ifdef SYCL
-  void setStream(sycl::queue *stream_in);
-  bool countCycles(const dpct::device_info &prop, const int numPosMbarSample = 0);
-#else
-  void setStream(cudaStream_t stream_in);
-  bool countCycles(const cudaDeviceProp& prop, const int numPosMbarSample=0);
-#endif
+  void setStream(gpuStream_t stream_in);
+  bool countCycles(const gpuDeviceProp_t &prop, const int numPosMbarSample=0);
   void activate();
   void nullDevicePointers();
 
-#ifdef SYCL
-  static bool createPlans(const int rank, const int *dim, const int *permutation, 
-    const int redRank, const int *redDim, const int *redPermutation, const size_t sizeofType, 
-    const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
-#else
   static bool createPlans(const int rank, const int* dim, const int* permutation,
     const int redRank, const int* redDim, const int* redPermutation, const size_t sizeofType, 
-    const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
-#endif
+    const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
 private:
-#ifdef SYCL
-  static bool createTrivialPlans(const int rank, const int *dim, const int *permutation,
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
-
-  static bool createTiledPlans(const int rank, const int *dim, const int *permutation, 
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
-
-  static bool createTiledCopyPlans(const int rank, const int *dim, const int *permutation,
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
-
-  static bool createPackedPlans(const int rank, const int *dim, const int *permutation, 
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
-
-  static bool createPackedSplitPlans(const int rank, const int *dim, const int *permutation,
-    const size_t sizeofType, const int deviceID, const dpct::device_info &prop, std::list<librettPlan_t> &plans);
-#else
   static bool createTrivialPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
   static bool createTiledPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
   static bool createTiledCopyPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
   static bool createPackedPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
   static bool createPackedSplitPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<librettPlan_t>& plans);
-#endif
+    const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
   bool setup(const int rank_in, const int* dim, const int* permutation,
     const size_t sizeofType_in, const TensorSplit& tensorSplit_in,
@@ -257,11 +231,7 @@ private:
 
 };
 
-#ifdef SYCL
-void printMatlab(const dpct::device_info &prop, std::list<librettPlan_t> &plans, std::vector<double> &times);
-#else
-void printMatlab(const cudaDeviceProp& prop, std::list<librettPlan_t>& plans, std::vector<double>& times);
-#endif
+void printMatlab(const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans, std::vector<double>& times);
 
 void reduceRanks(const int rank, const int* dim, const int* permutation,
   std::vector<int>& redDim, std::vector<int>& redPermutation);

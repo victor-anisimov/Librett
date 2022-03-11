@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
 #endif
 #include <algorithm>
 #include <queue>
@@ -36,6 +36,7 @@ SOFTWARE.
 #include "plan.h"
 #include "kernel.h"
 #include "GpuModel.h"
+#include "uniapi.h"
 
 void printMethod(int method) {
   switch(method) {
@@ -490,13 +491,7 @@ bool planExists(TensorSplit& ts, std::list<librettPlan_t>& plans) {
 }
 
 bool librettPlan_t::createTrivialPlans(const int rank, const int *dim, const int *permutation,
-  const size_t sizeofType, const int deviceID,
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans) {
+  const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
   if (rank == 1) {
     TensorSplit ts;
@@ -515,13 +510,7 @@ bool librettPlan_t::createTrivialPlans(const int rank, const int *dim, const int
 }
 
 bool librettPlan_t::createTiledPlans(const int rank, const int *dim, const int *permutation,
-  const size_t sizeofType, const int deviceID,
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans) {
+  const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
   if (permutation[0] != 0 && rank > 1) {
     TensorSplit ts;
@@ -540,13 +529,7 @@ bool librettPlan_t::createTiledPlans(const int rank, const int *dim, const int *
 }
 
 bool librettPlan_t::createTiledCopyPlans(const int rank, const int *dim, const int *permutation,
-  const size_t sizeofType, const int deviceID,
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans) {
+  const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
   // Count number of Mm and Mk which are the same
   int numMmMkSame = 0;
@@ -575,13 +558,7 @@ bool librettPlan_t::createTiledCopyPlans(const int rank, const int *dim, const i
 }
 
 bool librettPlan_t::createPackedPlans(const int rank, const int *dim, const int *permutation,
-  const size_t sizeofType, const int deviceID,
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans) {
+  const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
   LaunchConfig lc;
   for (int numMm=1;numMm < rank;numMm++) {
@@ -604,13 +581,7 @@ bool librettPlan_t::createPackedPlans(const int rank, const int *dim, const int 
 }
 
 bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const int *permutation,
-  const size_t sizeofType, const int deviceID,
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans) {
+  const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
   LaunchConfig lc;
   for (int numMm=1;numMm < rank;numMm++) {
@@ -620,15 +591,8 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
       ts.update(numMm, numMk, rank, dim, permutation);
       // Amount of shared memory required
       size_t shmemsize = ts.shmemAlloc(sizeofType);
-#ifdef SYCL
-      /*
-      DPCT1019:0: local_mem_size in SYCL is not a complete equivalent of
-      sharedMemPerBlock in CUDA. You may need to adjust the code.
-      */
-      if (shmemsize > prop.get_local_mem_size()) 
-#else // CUDA
+      /* DPCT1019:0: local_mem_size in SYCL is not a complete equivalent of sharedMemPerBlock in CUDA. */
       if (shmemsize > prop.sharedMemPerBlock)
-#endif
       {
         // Does not fit into shared memory, need to split
         ts.method = PackedSplit;
@@ -651,15 +615,8 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
         }
         //
         ts.update(numMm, numMk, rank, dim, permutation);
-#ifdef SYCL
-        /*
-        DPCT1019:1: local_mem_size in SYCL is not a complete equivalent of
-        sharedMemPerBlock in CUDA. You may need to adjust the code.
-        */
-        int minNumSplit = (ts.splitDim * ts.volMmkUnsplit * sizeofType - 1)/prop.get_local_mem_size() + 1;
-#else
+        /* DPCT1019:1: local_mem_size in SYCL is not a complete equivalent of sharedMemPerBlock in CUDA. */
 	int minNumSplit = (ts.splitDim*ts.volMmkUnsplit*sizeofType - 1)/prop.sharedMemPerBlock + 1;
-#endif
         int maxNumSplit = std::max(minNumSplit, std::min(ts.splitDim/splitDimMin, minNumSplit + 60));
 
         // Sanity check: do not split too much
@@ -680,11 +637,7 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
           if (numActiveBlock != 0) {
             int volMmkUsed = ts.volMmkUsed();
             int val1 = volMmkUsed*numActiveBlock;
-#ifdef SYCL
-            int val2 = (lc.numthread[2] * lc.numRegStorage * 100) / volMmkUsed;
-#else // CUDA
-	    int val2 = (lc.numthread.x*lc.numRegStorage*100)/volMmkUsed;
-#endif
+	    int val2 = (lc.numthread_x*lc.numRegStorage*100)/volMmkUsed;
             if (bestVal1 < val1) {
               bestVal1 = val1;
               bestNumSplit1 = ts.numSplit;
@@ -748,13 +701,7 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
 //
 bool librettPlan_t::createPlans(const int rank, const int *dim, const int *permutation, 
   const int rankRed, const int *dimRed, const int *permutationRed,
-  const size_t sizeofType, const int deviceID,
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans) {
+  const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
   size_t size0 = plans.size();
   /* if (!createTiledCopyPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans)) return false;*/
@@ -841,33 +788,19 @@ std::list<librettPlan_t>::iterator choosePlanHeuristic(std::list<librettPlan_t>&
   return bestIt;
 }
 
-void printMatlab(
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  std::list<librettPlan_t> &plans, std::vector<double> &times) {
+void printMatlab( const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans, std::vector<double> &times) {
   static int count = 0;
   count++;
   int i = 0;
   // Conversion factor from wallclok time to total number of cycles = (GPU clock in Hz) x #SM
-#ifdef SYCL
-  double freq_SM = (double)(prop.get_max_clock_frequency() * 1000) * (double)prop.get_max_compute_units();
-#else
-  double freq_SM = (double)(prop.clockRate*1000)*(double)prop.multiProcessorCount;
-#endif
+  double freq_SM = (double)(prop.clockRate*1000)*(double)gpuMultiProcessorCount;
   for (auto it=plans.begin();it != plans.end();it++,i++) {
     TensorSplit& ts = it->tensorSplit;
     LaunchConfig& lc = it->launchConfig;
     if (ts.method == Packed || ts.method == PackedSplit ||
         ts.method == Tiled  || ts.method == TiledCopy)
     {
-#ifdef SYCL
-      int numthread = lc.numthread[2] * lc.numthread[1] * lc.numthread[0];
-#else // CUDA
-      int numthread = lc.numthread.x*lc.numthread.y*lc.numthread.z;
-#endif
+      int numthread = lc.numthread_x*lc.numthread_y*lc.numthread_z;
       printf("MATLAB %d %d %d %d %1.3f %d %d %d %d %d %d %d %d %d %d %d %d %d %e %e\n", count, ts.method,
         it->num_iter, numthread, it->mlp, it->numActiveBlock,
         it->gld_req, it->gst_req, it->gld_tran, it->gst_tran, 
@@ -879,12 +812,8 @@ void printMatlab(
 
 void LaunchConfig::print() {
   printf("numthread %zu %zu %zu numblock %zu %zu %zu shmemsize %d numRegStorage %d\n",
-#ifdef SYCL
-    numthread[2], numthread[1], numthread[0], numblock[2], numblock[1], numblock[0], 
-#else // CUDA
-    numthread.x, numthread.y, numthread.z, numblock.x, numblock.y, numblock.z,
-#endif
-   (int)shmemsize, numRegStorage);
+    numthread_x, numthread_y, numthread_z, numblock_x, numblock_y, numblock_z,
+    (int)shmemsize, numRegStorage);
 }
 
 //
@@ -942,24 +871,14 @@ bool librettPlan_t::setup(const int rank_in, const int* dim, const int* permutat
   if (tensorSplit.method == Tiled) {
     cuDimMk = cI.get(permutation[0]);
     cuDimMm = cO.get(0);
-#ifdef SYCL
-    tiledVol.x() = dim[0];
-    tiledVol.y() = dim[permutation[0]];
-#else // CUDA
-    tiledVol.x = dim[0];
-    tiledVol.y = dim[permutation[0]];
-#endif
+    tiledVol_x = dim[0];
+    tiledVol_y = dim[permutation[0]];
   } else if (tensorSplit.method == TiledCopy) {
     int rankMk = permutation[tensorSplit.sizeMk - 1];
     cuDimMk = cI.get(rankMk);
     cuDimMm = cO.get(rankMk);
-#ifdef SYCL
-    tiledVol.x() = tensorSplit.volMm;
-    tiledVol.y() = dim[rankMk];
-#else // CUDA
-    tiledVol.x = tensorSplit.volMm;
-    tiledVol.y = dim[rankMk];
-#endif
+    tiledVol_x = tensorSplit.volMm;
+    tiledVol_y = dim[rankMk];
   }
 
   // Build MmI
@@ -1151,19 +1070,17 @@ bool librettPlan_t::setup(const int rank_in, const int* dim, const int* permutat
 //
 // Count the number of cycles using the MWP-CWP model
 //
-bool librettPlan_t::countCycles(
-#ifdef SYCL
-  const dpct::device_info &prop,
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  const int numPosMbarSample) {
+bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMbarSample) {
 
   // Number of elements that are loaded per memory transaction:
   // 128 bytes per transaction
   const int accWidth = 128/sizeofType;
   // L2 cache line width is 32 bytes
+#if HIP
+  const int cacheWidth = 64/sizeofType;  // AMD change
+#else
   const int cacheWidth = 32/sizeofType;
+#endif
 
   if (tensorSplit.method == Tiled) {
     // Global memory
@@ -1211,11 +1128,7 @@ bool librettPlan_t::countCycles(
     // Number of splits that are "round down"
     int num0 = tensorSplit.numSplit - num1;
     int volMmk0 = dimSplit*tensorSplit.volMmkUnsplit;
-#ifdef SYCL
-    mlp = (float)(volMmk0 * num0 + volMmk1 * num1) / (float)(launchConfig.numthread[2] * (num0 + num1));
-#else // CUDA
-    mlp = (float)(volMmk0*num0 + volMmk1*num1) / (float)(launchConfig.numthread.x*(num0 + num1));
-#endif
+    mlp = (float)(volMmk0*num0 + volMmk1*num1) / (float)(launchConfig.numthread_x*(num0 + num1));
     // Global memory
     gld_tran = 0;
     gst_tran = 0;
@@ -1344,11 +1257,7 @@ bool librettPlan_t::countCycles(
       int cl_full_l2_tmp = 0;
       int cl_part_l2_tmp = 0;
       countPackedGlTransactions0(
-#ifdef SYCL
-        prop.get_max_sub_group_size(), accWidth, cacheWidth, launchConfig.numthread[2], 
-#else // CUDA
-        prop.warpSize, accWidth, cacheWidth, launchConfig.numthread.x,
-#endif
+        prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
 	numPos, posMbarIn, posMbarOut, volMmk1,
         posMmkIn1.data(), posMmkOut1.data(), gld_tran_tmp, gst_tran_tmp,
         gld_req_tmp, gst_req_tmp, cl_full_l2_tmp, cl_part_l2_tmp, cl_full_l1, cl_part_l1);
@@ -1367,12 +1276,7 @@ bool librettPlan_t::countCycles(
       int cl_full_l2_ref = 0;
       int cl_part_l2_ref = 0;
       for (int i=0;i < numPos;i++) {
-        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth,
-#ifdef SYCL
-          launchConfig.numthread[2], 
-#else // CUDA
-          launchConfig.numthread.x,
-#endif
+        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
           posMbarIn[i], posMbarOut[i], volMmk1, posMmkIn1, posMmkOut1,
           gld_tran_ref, gst_tran_ref, gld_req_ref, gst_req_ref,
           cl_full_l2_ref, cl_part_l2_ref, cl_full_l1, cl_part_l1);
@@ -1417,12 +1321,7 @@ bool librettPlan_t::countCycles(
       int gst_req_tmp = 0;
       int cl_full_l2_tmp = 0;
       int cl_part_l2_tmp = 0;
-      countPackedGlTransactions0(
-#ifdef SYCL
-        prop.get_max_sub_group_size(), accWidth, cacheWidth, launchConfig.numthread[2], 
-#else // CUDA
-	prop.warpSize, accWidth, cacheWidth, launchConfig.numthread.x,
-#endif
+      countPackedGlTransactions0( prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
         numPos, posMbarIn, posMbarOut, volMmk0,
         posMmkIn0.data(), posMmkOut0.data(), gld_tran_tmp, gst_tran_tmp,
         gld_req_tmp, gst_req_tmp, cl_full_l2_tmp, cl_part_l2_tmp, cl_full_l1, cl_part_l1);
@@ -1441,12 +1340,7 @@ bool librettPlan_t::countCycles(
       int cl_full_l2_ref = 0;
       int cl_part_l2_ref = 0;
       for (int i=0;i < numPos;i++) {
-        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth,
-#ifdef SYCL
-          launchConfig.numthread[2],
-#else // CUDA
-          launchConfig.numthread.x,
-#endif
+        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
           posMbarIn[i], posMbarOut[i], volMmk0, posMmkIn0, posMmkOut0,
           gld_tran_ref, gst_tran_ref, gld_req_ref, gst_req_ref,
           cl_full_l2_ref, cl_part_l2_ref, cl_full_l1, cl_part_l1);
@@ -1478,12 +1372,7 @@ bool librettPlan_t::countCycles(
     sld_req = 0;
     sst_req = 0;
     // Round down splits
-    countPackedShTransactions0(
-#ifdef SYCL
-      prop.get_max_sub_group_size(), prop.get_max_sub_group_size(), launchConfig.numthread[2],
-#else // CUDA
-      prop.warpSize, prop.warpSize, launchConfig.numthread.x,
-#endif
+    countPackedShTransactions0(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
       volMmk0, hostMsh.data(), tensorSplit.sizeMmk, sld_tran, sst_tran, sld_req, sst_req);
 #ifdef COUNTCYCLE_CHECK
     {
@@ -1491,12 +1380,7 @@ bool librettPlan_t::countCycles(
       int sst_tran_ref = 0;
       int sld_req_ref = 0;
       int sst_req_ref = 0;
-      countPackedShTransactionsRef(prop.warpSize, prop.warpSize,
-#ifdef SYCL
-        launchConfig.numthread[2],
-#else // CUDA
-        launchConfig.numthread.x,
-#endif
+      countPackedShTransactionsRef(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
         volMmk0, hostMsh.data(), tensorSplit.sizeMmk,
         sld_tran_ref, sst_tran_ref, sld_req_ref, sst_req_ref);
       if (sld_tran != sld_tran_ref || sst_tran != sst_tran_ref ||
@@ -1519,12 +1403,7 @@ bool librettPlan_t::countCycles(
       int sst_tran_tmp = 0;
       int sld_req_tmp = 0;
       int sst_req_tmp = 0;
-      countPackedShTransactions0(
-#ifdef SYCL
-        prop.get_max_sub_group_size(), prop.get_max_sub_group_size(), launchConfig.numthread[2],
-#else // CUDA
-        prop.warpSize, prop.warpSize, launchConfig.numthread.x,
-#endif
+      countPackedShTransactions0(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
 	volMmk1, hostMsh.data() + tensorSplit.sizeMmk, tensorSplit.sizeMmk,
         sld_tran_tmp, sst_tran_tmp, sld_req_tmp, sst_req_tmp);
 #ifdef COUNTCYCLE_CHECK
@@ -1533,12 +1412,7 @@ bool librettPlan_t::countCycles(
         int sst_tran_ref = 0;
         int sld_req_ref = 0;
         int sst_req_ref = 0;
-        countPackedShTransactionsRef(prop.warpSize, prop.warpSize,
-#ifdef SYCL
-          launchConfig.numthread[2],
-#else // CUDA
-          launchConfig.numthread.x,
-#endif
+        countPackedShTransactionsRef(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
           volMmk1, hostMsh.data() + tensorSplit.sizeMmk, tensorSplit.sizeMmk,
           sld_tran_ref, sst_tran_ref, sld_req_ref, sst_req_ref);
         if (sld_tran_tmp != sld_tran_ref || sst_tran_tmp != sst_tran_ref ||
@@ -1565,11 +1439,7 @@ bool librettPlan_t::countCycles(
 #endif
     num_iter = tensorSplit.volMbar;
     // mlp = (float)launchConfig.numRegStorage;
-#ifdef SYCL
-    mlp = (float)(tensorSplit.volMmk) / (float)(launchConfig.numthread[2]);
-#else
-    mlp = (float)(tensorSplit.volMmk) / (float)(launchConfig.numthread.x);
-#endif
+    mlp = (float)(tensorSplit.volMmk) / (float)(launchConfig.numthread_x);
     // Global memory
     gld_tran = 0;
     gst_tran = 0;
@@ -1645,12 +1515,7 @@ bool librettPlan_t::countCycles(
       int gst_req_tmp = 0;
       int cl_full_l2_tmp = 0;
       int cl_part_l2_tmp = 0;
-      countPackedGlTransactions0(
-#ifdef SYCL
-        prop.get_max_sub_group_size(), accWidth, cacheWidth, launchConfig.numthread[2], 
-#else // CUDA
-	prop.warpSize, accWidth, cacheWidth, launchConfig.numthread.x,
-#endif
+      countPackedGlTransactions0(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
 	numPos, posMbarIn, posMbarOut, tensorSplit.volMmk, posMmkIn.data(), posMmkOut.data(), 
 	gld_tran_tmp, gst_tran_tmp, gld_req_tmp, gst_req_tmp, cl_full_l2_tmp,
         cl_part_l2_tmp, cl_full_l1, cl_part_l1);
@@ -1669,12 +1534,7 @@ bool librettPlan_t::countCycles(
       int cl_full_l2_ref = 0;
       int cl_part_l2_ref = 0;
       for (int i=0;i < numPos;i++) {
-        countPackedGlTransactions(
-#ifdef SYCL
-          prop.get_max_sub_group_size(), accWidth, cacheWidth, launchConfig.numthread[2], 
-#else // CUDA
- 	  prop.warpSize, accWidth, cacheWidth, launchConfig.numthread.x,
-#endif
+        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
           posMbarIn[i], posMbarOut[i], tensorSplit.volMmk, posMmkIn, posMmkOut,
           gld_tran_ref, gst_tran_ref, gld_req_ref, gst_req_ref,
           cl_full_l2_ref, cl_part_l2_ref, cl_full_l1, cl_part_l1);
@@ -1709,24 +1569,14 @@ bool librettPlan_t::countCycles(
     sst_tran = 0;
     sld_req = 0;
     sst_req = 0;
-    countPackedShTransactions0(
-#ifdef SYCL
-      prop.get_max_sub_group_size(), prop.get_max_sub_group_size(), launchConfig.numthread[2], 
-#else // CUDA
-      prop.warpSize, prop.warpSize, launchConfig.numthread.x,
-#endif
+    countPackedShTransactions0(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
       tensorSplit.volMmk, hostMsh.data(), tensorSplit.sizeMmk, sld_tran, sst_tran, sld_req, sst_req);
 #ifdef COUNTCYCLE_CHECK
     int sld_tran_ref = 0;
     int sst_tran_ref = 0;
     int sld_req_ref = 0;
     int sst_req_ref = 0;
-    countPackedShTransactionsRef(
-#ifdef SYCL
-      prop.get_max_sub_group_size(), prop.get_max_sub_group_size(), launchConfig.numthread[2], 
-#else // CUDA
-      prop.warpSize, prop.warpSize, launchConfig.numthread.x,
-#endif
+    countPackedShTransactionsRef(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
       tensorSplit.volMmk, hostMsh.data(), tensorSplit.sizeMmk,
       sld_tran_ref, sst_tran_ref, sld_req_ref, sst_req_ref);
     if (sld_tran != sld_tran_ref || sst_tran != sst_tran_ref ||
@@ -1746,11 +1596,7 @@ bool librettPlan_t::countCycles(
   } else if (tensorSplit.method == Trivial) {
     size_t vol = tensorSplit.volMmk*tensorSplit.volMbar;
     // Global memory
-#ifdef SYCL
-    gld_req = (vol - 1) / prop.get_max_sub_group_size() + 1;
-#else
     gld_req = (vol - 1) / prop.warpSize + 1;
-#endif
     gst_req = gld_req;
     gld_tran = (vol - 1)/accWidth + 1;
     gst_tran = gld_tran;
@@ -1768,11 +1614,7 @@ bool librettPlan_t::countCycles(
     return false;
   }
 
-#ifdef SYCL
-  int numthread = launchConfig.numthread[2] * launchConfig.numthread[1] * launchConfig.numthread[0];
-#else // CUDA
-  int numthread = launchConfig.numthread.x*launchConfig.numthread.y*launchConfig.numthread.z;
-#endif
+  int numthread = launchConfig.numthread_x*launchConfig.numthread_y*launchConfig.numthread_z;
   // double cl_val = (double)cl_part/(double)std::max(1, cl_full + cl_part);
 
   if (tensorSplit.method == Packed || tensorSplit.method == PackedSplit) {
@@ -1830,27 +1672,20 @@ void librettPlan_t::nullDevicePointers() {
   Mm = NULL;
 }
 
-#ifdef SYCL
-librettPlan_t::librettPlan_t() try {
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
-  //stream = 0;
-  stream = & dpct::get_default_queue();
-  numActiveBlock = 0;
-  nullDevicePointers();
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#else // CUDA
 librettPlan_t::librettPlan_t() {
+#ifdef SYCL
+  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+  stream = & dpct::get_default_queue();
+#elif HIP
+  hipCheck(hipGetDevice(&deviceID));
+  stream = 0;
+#else // CUDA
   cudaCheck(cudaGetDevice(&deviceID));
   stream = 0;
+#endif
   numActiveBlock = 0;
   nullDevicePointers();
 }
-#endif
 
 librettPlan_t::~librettPlan_t() {
   // Deallocate device buffers
@@ -1861,11 +1696,7 @@ librettPlan_t::~librettPlan_t() {
   if (Mm != NULL) deallocate_device<TensorConv>(&Mm);
 }
 
-#ifdef SYCL
-void librettPlan_t::setStream(sycl::queue *stream_in) 
-#else // CUDA
-void librettPlan_t::setStream(cudaStream_t stream_in) 
-#endif
+void librettPlan_t::setStream(gpuStream_t stream_in) 
 {
   stream = stream_in;
 }

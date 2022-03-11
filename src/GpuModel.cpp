@@ -24,11 +24,14 @@ SOFTWARE.
 *******************************************************************************/
 
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#else
-#include <cuda_runtime.h>
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
+#elif HIP
+  #include <hip/hip_runtime.h>
+#else // CUDA
+ #include <cuda_runtime.h>
 #endif
+#include <iostream>
 #include <algorithm>
 #include <random>
 #include <cstring> // memcpy
@@ -799,13 +802,8 @@ struct GpuModelProp {
   }
 };
 
-void prepmodel5(
-#ifdef SYCL
-  const dpct::device_info &prop, 
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
-  GpuModelProp &gpuModelProp, int nthread, int numActiveBlock, float mlp, 
+void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp, 
+  int nthread, int numActiveBlock, float mlp, 
   int gld_req, int gst_req, int gld_tran, int gst_tran, 
   int sld_req, int sst_req, int sld_tran, int sst_tran, 
   int cl_full, int cl_part, 
@@ -820,7 +818,7 @@ void prepmodel5(
   // GPU clock in GHz
   double freq = (double)prop.get_max_clock_frequency() / 1.0e6;
   int warpSize = prop.get_max_sub_group_size();
-#else // CUDA
+#else // CUDA or SYCL
   double active_SM = prop.multiProcessorCount;
   // Memory bandwidth in GB/s
   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
@@ -828,6 +826,9 @@ void prepmodel5(
   // GPU clock in GHz
   double freq = (double)prop.clockRate/1.0e6;
   int warpSize = prop.warpSize;
+  #if HIP
+    return;  // Dmitry Lyakh
+  #endif
 #endif
 
   int active_warps_per_SM = nthread*numActiveBlock/warpSize;
@@ -860,21 +861,17 @@ void prepmodel5(
   MWP = std::min(MWP*mlp, std::min(MWP_peak_BW, (double)active_warps_per_SM));
 }
 
-double cyclesPacked(const bool isSplit, const size_t sizeofType,
-#ifdef SYCL
-  const dpct::device_info &prop, 
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
+double cyclesPacked(const bool isSplit, const size_t sizeofType, const gpuDeviceProp_t &prop,
   int nthread, int numActiveBlock, float mlp, 
   int gld_req, int gst_req, int gld_tran, int gst_tran, 
   int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part) {
 
-  int warps_per_block = nthread/32;
+  int warpSize = prop.warpSize;           // AMD change
+  int warps_per_block = nthread/warpSize; // AMD change
 
 #ifdef SYCL
   GpuModelProp gpuModelProp(prop.get_major_version());
-#else // CUDA
+#else // CUDA or HIP
   GpuModelProp gpuModelProp(prop.major);
 #endif
 
@@ -890,17 +887,13 @@ double cyclesPacked(const bool isSplit, const size_t sizeofType,
   return cycles;
 }
 
-double cyclesTiled(const bool isCopy, const size_t sizeofType,
-#ifdef SYCL
-  const dpct::device_info &prop, 
-#else // CUDA
-  const cudaDeviceProp &prop,
-#endif
+double cyclesTiled(const bool isCopy, const size_t sizeofType, const gpuDeviceProp_t &prop,
   int nthread, int numActiveBlock, float mlp, 
   int gld_req, int gst_req, int gld_tran, int gst_tran, 
   int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part) {
 
-  int warps_per_block = nthread/32;
+  int warpSize = prop.warpSize;           // AMD change
+  int warps_per_block = nthread/warpSize; // AMD change
 
 #ifdef SYCL
   GpuModelProp gpuModelProp(prop.get_major_version());
@@ -940,6 +933,8 @@ void print_pos(const char* name, const int n, const int* pos) {
 bool testCounters(const int warpSize, const int accWidth, const int cacheWidth) {
 
   if (warpSize != 32) return false;
+
+  std::cout << "In testCounters" << std::endl;  // AMD change
 
   const int numArray = 10;
 

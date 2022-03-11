@@ -32,7 +32,11 @@ SOFTWARE.
 #elif HIP
   #include <hip/hip_runtime.h>
 #else // CUDA
-  #include <cuda.h>
+//  #include <cuda.h>
+#endif
+
+#if !defined(SYCL) && !defined(HIP)
+  #define CUDA 1
 #endif
 
 // Work units
@@ -53,6 +57,18 @@ SOFTWARE.
   #define subgroup      item_ct1.get_sub_group()
   #define maxThreadsPerBlock  get_max_work_group_size()
   #define sharedMemPerBlock   get_local_mem_size()
+  #define numthread_x   numthread[2]
+  #define numthread_y   numthread[1]
+  #define numthread_z   numthread[0]
+  #define numblock_x    numblock[2]
+  #define numblock_y    numblock[1]
+  #define numblock_z    numblock[0]
+  #define gpuMultiProcessorCount   prop.get_max_compute_units()
+  #define gpuMaxGridSize           prop.get_max_nd_range_size()
+  #define clockRate     get_max_clock_frequency()
+  #define tiledVol_x    tiledVol.x()
+  #define tiledVol_y    tiledVol.y()
+  #define __gpu_inline__     __dpct_inline__
 #else // CUDA & HIP
   #define threadIdx_x   threadIdx.x
   #define blockIdx_x    blockIdx.x
@@ -67,6 +83,17 @@ SOFTWARE.
   #define blockDim_z    blockDim.z
   #define gridDim_z     gridDim.z
   #define syncthreads() __syncthreads()
+  #define numthread_x   numthread.x
+  #define numthread_y   numthread.y
+  #define numthread_z   numthread.z
+  #define numblock_x    numblock.x 
+  #define numblock_y    numblock.y 
+  #define numblock_z    numblock.z 
+  #define gpuMultiProcessorCount   prop.multiProcessorCount
+  #define gpuMaxGridSize           prop.maxGridSize
+  #define tiledVol_x    tiledVol.x
+  #define tiledVol_y    tiledVol.y
+  #define __gpu_inline__     __device__ __forceinline__
 #endif
 
 // Data types
@@ -77,18 +104,39 @@ SOFTWARE.
   using float4_t        = sycl::float4;
   using gpuStream_t     = sycl::queue*;
   using gpuDeviceProp_t = dpct::device_info;
+  using gpuError_t      = int;
 #elif HIP
   using int2_t          = int2;
   using int4_t          = int4;
   using float4_t        = float4;
   using gpuStream_t     = hipStream_t;
   using gpuDeviceProp_t = hipDeviceProp_t;
+  using gpuError_t      = hipError_t;
 #else // CUDA
   using int2_t          = int2;
   using int4_t          = int4;
   using float4_t        = float4;
   using gpuStream_t     = cudaStream_t;
   using gpuDeviceProp_t = cudaDeviceProp;
+  using gpuError_t      = cudaError_t;
+#endif
+
+// Functions
+#ifdef SYCL
+  #define gpu_shfl_xor(a,b)  item_ct1.get_sub_group().shuffle_xor(a,b)
+  #define gpu_shuffle(a,b)   item_ct1.get_sub_group().shuffle(a,b)
+  #define gpu_shfl_down(a,b) item_ct1.get_sub_group().shuffle_down(a,b)
+  #define gpu_atomicAdd(a,b) sycl::atomic<int>(sycl::global_ptr<int>(&(a))).fetch_add(b)
+#elif HIP
+  #define gpu_shfl_xor(a,b)  __shfl_xor(a,b)
+  #define gpu_shuffle(a,b)   __shfl(a,b)
+  #define gpu_shfl_down(a,b) __shfl_down(a,b)
+  #define gpu_atomicAdd(a,b) atomicAdd(&(a), b)
+#else // CUDA
+  #define gpu_shfl_xor(a,b)  __shfl_xor_sync(0xffffffff,a,b)
+  #define gpu_shuffle(a,b)   __shfl_sync(0xffffffff,a,b)
+  #define gpu_shfl_down(a,b) __shfl_down_sync(0xffffffff,a,b)
+  #define gpu_atomicAdd(a,b) atomicAdd(&(a), b)
 #endif
 
 // Error checking wrappers

@@ -37,6 +37,7 @@ All rights reserved.
 #include "GpuUtils.h"
 #include "LRUCache.h"
 #include "kernel.h"
+#include <iostream>
 #include "unistd.h"
 
 #define RESTRICT __restrict__
@@ -66,15 +67,13 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
 {
   // Shared memory
 #if SYCL
+  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
 #elif HIP
   __shared__ T shTile[TILEDIM][TILEDIM+1];
 #else // CUDA
   __shared__ T shTile[TILEDIM][TILEDIM+1];
 #endif
 
-#if SYCL
-  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
-#endif
   const int warpLane = threadIdx_x & (warpSize - 1);
 
   TensorConvInOut Mbar;
@@ -98,13 +97,16 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
 #if SYCL
   const unsigned long long int maskIny = ballot(subgroup, (yin + warpLane < tiledVol.y()))[0] * (xin < tiledVol.x());
   const unsigned long long int maskOutx = ballot(subgroup, (xout + warpLane < tiledVol.x()))[0] * (yout < tiledVol.y());
+  const unsigned long long int one = 1;
 #elif HIP
+  // AMD change
   const unsigned long long int maskIny = __ballot((yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned long long int maskOutx = __ballot((xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
   const unsigned long long int one = 1;
 #else
   const unsigned int maskIny = __ballot_sync(0xffffffff,(yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned int maskOutx = __ballot_sync(0xffffffff,(xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
+  const unsigned int one = 1;
 #endif
 
   const int posMinorIn = xin + yin*cuDimMk;
@@ -118,12 +120,14 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
     int posMajorIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
     int posMajorOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=warpSize/2; i >= 1; i/=2) {
+    for (int i=warpSize/2; i >= 1; i/=2) {  // AMD change
       #if SYCL
-        /* DPCT1023:65: The DPC++ sub-group does not support mask options for shuffle_xor.  */
         posMajorIn += subgroup.shuffle_xor(posMajorIn, i);
         posMajorOut += subgroup.shuffle_xor(posMajorOut, i);
-      #else
+      #elif HIP
+	posMajorIn += __shfl_xor(posMajorIn,i);
+        posMajorOut += __shfl_xor(posMajorOut,i);
+      #else // CUDA
         posMajorIn += __shfl_xor_sync(0xffffffff,posMajorIn,i);
         posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
       #endif
@@ -144,7 +148,7 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
     for (int j=0; j < TILEDIM; j += TILEROWS) {
       // int pos = posIn + j*cuDimMk;
       // if (xin < readVol.x && yin + j < readVol.y) {
-      if ((maskIny & (1 << j)) != 0) {
+      if ((maskIny & (one << j)) != 0) {   // AMD change
         shTile[threadIdx_y + j][threadIdx_x] = dataIn[posIn];
       }
       posIn += posInAdd;
@@ -162,7 +166,7 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
     for (int j=0; j < TILEDIM; j += TILEROWS) {
       // int pos = posOut + j*cuDimMm;
       // if (xout + j < readVol.x && yout < readVol.y) {
-      if ((maskOutx & (1 << j)) != 0 ) {
+      if ((maskOutx & (one << j)) != 0 ) {   // AMD change
         dataOut[posOut] = shTile[threadIdx_x][threadIdx_y + j];
       }
       posOut += posOutAdd;
@@ -198,6 +202,8 @@ __global__ void transposePacked(
 #if SYCL
   auto shBuffer_char = (char *)dpct_local;
   const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
+#elif HIP
+  HIP_DYNAMIC_SHARED( char, shBuffer_char)
 #else // CUDA
   extern __shared__ char shBuffer_char[];
 #endif
@@ -242,6 +248,10 @@ __global__ void transposePacked(
                                                                    * subgroup.shuffle(Mmk.ct_out, i);
         posSh[j]     += ((posMmk / subgroup.shuffle(Msh.c, i))     % subgroup.shuffle(Msh.d, i))
                                                                    * subgroup.shuffle(Msh.ct, i);
+      #elif HIP
+	posMmkIn[j]  += ((posMmk / __shfl(Mmk.c_in,i)) % __shfl(Mmk.d_in,i))   * __shfl(Mmk.ct_in,i);
+        posMmkOut[j] += ((posMmk / __shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
+        posSh[j]     += ((posMmk / __shfl(Msh.c,i)) % __shfl(Msh.d,i))         * __shfl(Msh.ct,i);
       #else // CUDA
         posMmkIn[j]  += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_in,i))  % __shfl_sync(0xffffffff,Mmk.d_in,i))
                                                                         * __shfl_sync(0xffffffff,Mmk.ct_in,i);
@@ -268,9 +278,11 @@ __global__ void transposePacked(
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=warpSize/2; i >= 1; i/=2) {
+    for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
       #if SYCL
         posMbarOut += subgroup.shuffle_xor(posMbarOut, i);
+      #elif HIP
+	posMbarOut += __shfl_xor(posMbarOut,i);
       #else // CUDA
         posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
       #endif
@@ -278,9 +290,11 @@ __global__ void transposePacked(
 
     int posMbarIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
 #pragma unroll
-    for (int i=warpSize/2; i >= 1; i/=2) {
+    for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
       #if SYCL
-        posMbarIn += item_ct1.get_sub_group().shuffle_xor(posMbarIn, i);
+        posMbarIn += subgroup.shuffle_xor(posMbarIn, i);
+      #elif HIP
+	posMbarIn += __shfl_xor(posMbarIn,i);
       #else // CUDA
         posMbarIn += __shfl_xor_sync(0xffffffff,posMbarIn,i);
       #endif
@@ -351,6 +365,8 @@ __global__ void transposePackedSplit(
 #if SYCL
   auto shBuffer_char = (char *)dpct_local;
   const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
+#elif HIP
+  HIP_DYNAMIC_SHARED( char, shBuffer_char)
 #else // CUDA
   extern __shared__ char shBuffer_char[];
 #endif
@@ -400,9 +416,9 @@ __global__ void transposePackedSplit(
     posMmkOut[j] = posMmkOut0;
     posSh[j] = 0;
   }
-  for (int i=0;i < sizeMmk;i++) {
+  for (int i=0; i < sizeMmk; i++) {
 #pragma unroll
-    for (int j=0;j < numRegStorage;j++) {
+    for (int j=0; j < numRegStorage; j++) {
       int t = threadIdx_x + j*blockDim_x;
       #if SYCL
         posMmkIn[j] += ((t / subgroup.shuffle(Mmk.c_in, i)) % subgroup.shuffle(Mmk.d_in, i))
@@ -411,6 +427,10 @@ __global__ void transposePackedSplit(
                                                               * subgroup.shuffle(Mmk.ct_out, i);
         posSh[j] += ((t / subgroup.shuffle(Msh.c, i)) % subgroup.shuffle(Msh.d, i))
                                                       * subgroup.shuffle(Msh.ct, i);
+      #elif HIP
+	posMmkIn[j]  += ((t/__shfl(Mmk.c_in,i)) % __shfl(Mmk.d_in,i))   * __shfl(Mmk.ct_in,i);
+        posMmkOut[j] += ((t/__shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
+        posSh[j]     += ((t/__shfl(Msh.c,i)) % __shfl(Msh.d,i))         * __shfl(Msh.ct,i);
       #else
         posMmkIn[j]  += ((t/__shfl_sync(0xffffffff,Mmk.c_in,i)) % __shfl_sync(0xffffffff,Mmk.d_in,i))
                                                                 * __shfl_sync(0xffffffff,Mmk.ct_in,i);
@@ -439,9 +459,11 @@ __global__ void transposePackedSplit(
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=warpSize/2; i >= 1; i/=2) {
+    for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
       #if SYCL
         posMbarOut += subgroup.shuffle_xor(posMbarOut, i);
+      #elif HIP
+	posMbarOut += __shfl_xor(posMbarOut,i);
       #else
         posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
       #endif
@@ -449,9 +471,11 @@ __global__ void transposePackedSplit(
 
     int posMbarIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
 #pragma unroll
-    for (int i=warpSize/2; i >= 1; i/=2) {
+    for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
       #if SYCL
-        posMbarIn += item_ct1.get_sub_group().shuffle_xor(posMbarIn, i);
+        posMbarIn += subgroup.shuffle_xor(posMbarIn, i);
+      #elif HIP
+	posMbarIn += __shfl_xor(posMbarIn,i);
       #else
         posMbarIn += __shfl_xor_sync(0xffffffff,posMbarIn,i);
       #endif
@@ -500,7 +524,7 @@ void transposeTiledCopy(
 __global__ void transposeTiledCopy(
   const int numMm, const int volMbar, const int sizeMbar,
   const int cuDimMk, const int cuDimMm,
-  const int2 tiledVol,
+  const int2_t tiledVol,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const T* RESTRICT dataIn, T* RESTRICT dataOut) 
 #endif
@@ -526,8 +550,13 @@ __global__ void transposeTiledCopy(
 
 #if SYCL
   const unsigned int mask = ballot(subgroup, (y + warpLane < tiledVol.y()))[0] * (x < tiledVol.x());
-#else
+  const unsigned int one = 1;
+#elif HIP // AMD change
+  const unsigned long long int mask = __ballot((y + warpLane < tiledVol.y))*(x < tiledVol.x);
+  const unsigned long long int one = 1;
+#else // CUDA
   const unsigned int mask = __ballot_sync(0xffffffff,(y + warpLane < tiledVol.y))*(x < tiledVol.x);
+  const unsigned int one = 1;
 #endif
 
   const int posMinorIn = x + y*cuDimMk;
@@ -542,11 +571,14 @@ __global__ void transposeTiledCopy(
     int posMajorIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
     int posMajorOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
 #pragma unroll
-    for (int i=warpSize/2; i >= 1; i/=2) {
+    for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
       #if SYCL
         posMajorIn  += subgroup.shuffle_xor(posMajorIn, i);
         posMajorOut += subgroup.shuffle_xor(posMajorOut, i);
-      #else
+      #elif HIP
+	posMajorIn += __shfl_xor(posMajorIn,i);
+        posMajorOut += __shfl_xor(posMajorOut,i);
+      #else // CUDA
         posMajorIn  += __shfl_xor_sync(0xffffffff,posMajorIn,i);
         posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
       #endif
@@ -559,9 +591,9 @@ __global__ void transposeTiledCopy(
 
     // Read global memory
 #pragma unroll
-    for (int j=0;j < TILEDIM;j += TILEROWS) {
+    for (int j=0; j < TILEDIM; j += TILEROWS) {
       // if ((x < tiledVol.x) && (y + j < tiledVol.y)) {
-      if ((mask & (1 << j)) != 0) {
+      if ((mask & (one << j)) != 0) {   // AMD change
         val[j/TILEROWS] = dataIn[posIn];
       }
       posIn += posInAdd;
@@ -569,9 +601,9 @@ __global__ void transposeTiledCopy(
 
     // Write global memory
 #pragma unroll
-    for (int j=0;j < TILEDIM;j += TILEROWS) {
+    for (int j=0; j < TILEDIM; j += TILEROWS) {
       // if ((x < tiledVol.x) && (y + j < tiledVol.y)) {
-      if ((mask & (1 << j)) != 0) {
+      if ((mask & (one << j)) != 0) {   // AMD change
         dataOut[posOut] = val[j/TILEROWS];
       }
       posOut += posOutAdd;
@@ -677,23 +709,23 @@ __global__ void transposeTiledCopy(
 //
 // Sets shared memory bank configuration for all kernels. Needs to be called once per device.
 //
-#ifndef SYCL
 void librettKernelSetSharedMemConfig() {
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
-#include "calls.h"
-#undef CALL
+#if CUDA // CUDA
+  #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
+  #include "calls.h"
+  #undef CALL
 
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<double, NREG>, cudaSharedMemBankSizeEightByte ))
-#include "calls.h"
-#undef CALL
+  #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<double, NREG>, cudaSharedMemBankSizeEightByte ))
+  #include "calls.h"
+  #undef CALL
 
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<float, NREG>, cudaSharedMemBankSizeFourByte ))
-#include "calls.h"
-#undef CALL
+  #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<float, NREG>, cudaSharedMemBankSizeFourByte ))
+  #include "calls.h"
+  #undef CALL
 
-#define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<double, NREG>, cudaSharedMemBankSizeEightByte ))
-#include "calls.h"
-#undef CALL
+  #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePackedSplit<double, NREG>, cudaSharedMemBankSizeEightByte ))
+  #include "calls.h"
+  #undef CALL
 
   cudaCheck(cudaFuncSetSharedMemConfig(transposeTiled<float>, cudaSharedMemBankSizeFourByte));
   cudaCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<float>, cudaSharedMemBankSizeFourByte));
@@ -701,13 +733,17 @@ void librettKernelSetSharedMemConfig() {
   cudaCheck(cudaFuncSetSharedMemConfig(transposeTiled<double>, cudaSharedMemBankSizeEightByte));
   cudaCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<double>, cudaSharedMemBankSizeEightByte));
 
+#endif // CUDA
 }
-#endif // SYCL
 
 // Caches for PackedSplit kernels. One cache for all devices
 // NOTE: Not thread safe
 const int CACHE_SIZE = 100000;
-const int MAX_NUMWARP = (1024/32);
+#if HIP
+  const int MAX_NUMWARP = (1024/64);  // AMD change
+#else // CUDA & SYCL
+  const int MAX_NUMWARP = (1024/32);
+#endif
 const int MAX_NUMTYPE = 2;
 static int numDevices = -1;
 LRUCache<unsigned long long int, int> nabCache(CACHE_SIZE, -1);
@@ -722,11 +758,7 @@ try
 #endif
 {
   int numActiveBlock = 1;
-#if SYCL
-  int numthread = lc.numthread[2] * lc.numthread[1] * lc.numthread[0];
-#else
-  int numthread = lc.numthread.x * lc.numthread.y * lc.numthread.z;
-#endif
+  int numthread = lc.numthread_x * lc.numthread_y * lc.numthread_z;
   switch(method) {
     case Trivial:
     {
@@ -737,17 +769,25 @@ try
 
     case Packed:
     {
-#ifndef SYCL
-  #define CALL0(TYPE, NREG) \
-    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-      transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
-        switch(lc.numRegStorage) {
-          #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); if (sizeofType == 8) CALL0(double, ICASE); break
-          #include "calls.h"
-        }
-  #undef CALL
-  #undef CALL0
-#endif // SYCL
+    #ifndef SYCL
+      #if CUDA
+        #define CALL0(TYPE, NREG) \
+          cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+            transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
+      #endif // CUDA
+      #if HIP
+        #define CALL0(TYPE, NREG) \
+          hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+            transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
+      #endif // HIP
+      switch(lc.numRegStorage) {
+        #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+	                                if (sizeofType == 8) CALL0(double, ICASE); break
+        #include "calls.h"
+      }
+      #undef CALL
+      #undef CALL0
+    #endif // SYCL
     }
     break;
 
@@ -757,6 +797,8 @@ try
       if (numDevices == -1) {
         #if SYCL
           numDevices = dpct::dev_mgr::instance().device_count();
+	#elif HIP
+	  hipCheck(hipGetDeviceCount(&numDevices));
         #else // CUDA
           cudaCheck(cudaGetDeviceCount(&numDevices));
         #endif
@@ -779,17 +821,25 @@ try
       numActiveBlock = nabCache.get(key);
       if (numActiveBlock == -1) {
         // key not found in cache, determine value and add it to cache
-#ifndef SYCL
-  #define CALL0(TYPE, NREG) \
-    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-      transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
-        switch(lc.numRegStorage) {
-  #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); if (sizeofType == 8) CALL0(double, ICASE); break
-  #include "calls.h"
-        }
-  #undef CALL
-  #undef CALL0
-#endif // SYCL
+        #ifndef SYCL
+	  #if CUDA
+            #define CALL0(TYPE, NREG) \
+              cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+                transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
+	  #endif // CUDA
+	  #if HIP
+            #define CALL0(TYPE, NREG) \
+              hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+                transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
+	  #endif // HIP
+          switch(lc.numRegStorage) {
+            #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+		                            if (sizeofType == 8) CALL0(double, ICASE); break
+            #include "calls.h"
+          }
+          #undef CALL
+          #undef CALL0
+        #endif // SYCL
         nabCache.set(key, numActiveBlock);
       }
     }
@@ -797,7 +847,7 @@ try
 
     case Tiled:
     {
-#ifndef SYCL
+#if CUDA
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
@@ -806,17 +856,35 @@ try
           transposeTiled<double>, numthread, lc.shmemsize);
       }
 #endif
+#if HIP
+      if (sizeofType == 4) {
+        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<float>, numthread, lc.shmemsize);
+      } else {
+        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<double>, numthread, lc.shmemsize);
+      }
+#endif
     }
     break;
 
     case TiledCopy:
     {
-#ifndef SYCL
+#if CUDA
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
       } else {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<double>, numthread, lc.shmemsize);
+      }
+#endif
+#if HIP
+      if (sizeofType == 4) {
+        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<float>, numthread, lc.shmemsize);
+      } else {
+        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       }
 #endif
@@ -856,25 +924,14 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
     case Trivial:
     {
       // These values don't matter
-#if SYCL
-      lc.numthread[2] = 1;
-      lc.numthread[1] = 1;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = 1;
-      lc.numblock[1] = 1;
-      lc.numblock[0] = 1;
-      lc.numblock[0] = 1;
-      lc.numblock[0] = 1;
-#else
-      lc.numthread.x = 1;
-      lc.numthread.y = 1;
-      lc.numthread.z = 1;
-      lc.numblock.x = 1;
-      lc.numblock.y = 1;
-      lc.numblock.z = 1;
-      lc.numblock.z = 1;
-      lc.numblock.z = 1;
-#endif
+      lc.numthread_x = 1;
+      lc.numthread_y = 1;
+      lc.numthread_z = 1;
+      lc.numblock_x = 1;
+      lc.numblock_y = 1;
+      lc.numblock_z = 1;
+      lc.numblock_z = 1;
+      lc.numblock_z = 1;
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
     }
@@ -908,29 +965,15 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       int bestNumRegStorage = 0;
       int bestNumActiveBlock = 0;
 
-#if SYCL
-      lc.numthread[1] = 1;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = std::max(1, ts.volMbar);
-      lc.numblock[2] = std::min<unsigned int>(prop.get_max_compute_units() * 18, lc.numblock[2]);
-      lc.numblock[1] = 1;
-      lc.numblock[0] = 1;
-#else
-      lc.numthread.y = 1;
-      lc.numthread.z = 1;
-      lc.numblock.x = max(1, ts.volMbar);
-      lc.numblock.x = min(prop.multiProcessorCount*18, lc.numblock.x);
-      lc.numblock.y = 1;
-      lc.numblock.z = 1;
-#endif
+      lc.numthread_y = 1;
+      lc.numthread_z = 1;
+      lc.numblock_x = std::max(1, ts.volMbar);
+      lc.numblock_x = std::min<unsigned int>(gpuMultiProcessorCount * 18, lc.numblock_x);
+      lc.numblock_y = 1;
+      lc.numblock_z = 1;
 
-      for (lc.numRegStorage=minNumRegStorage;lc.numRegStorage <= maxNumRegStorage;lc.numRegStorage++) {
-#if SYCL
-        lc.numthread[2] = ((ts.volMmk - 1) / (prop.get_max_sub_group_size() * lc.numRegStorage) + 1) *
-                          prop.get_max_sub_group_size();
-#else
-        lc.numthread.x = ((ts.volMmk - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
-#endif
+      for (lc.numRegStorage=minNumRegStorage; lc.numRegStorage <= maxNumRegStorage; lc.numRegStorage++) {
+        lc.numthread_x = ((ts.volMmk - 1) / (prop.warpSize * lc.numRegStorage) + 1) * prop.warpSize;
 
         int numActiveBlock = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop);
         // int val = numActiveBlock*lc.numthread.x;
@@ -945,12 +988,7 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       if (bestNumRegStorage == 0) return 0;
 
       lc.numRegStorage = bestNumRegStorage;
-#if SYCL
-      lc.numthread[2] = ((ts.volMmk - 1) / (prop.get_max_sub_group_size() * lc.numRegStorage) + 1) *
-                        prop.get_max_sub_group_size();
-#else
-      lc.numthread.x = ((ts.volMmk - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
-#endif
+      lc.numthread_x = ((ts.volMmk - 1)/(prop.warpSize * lc.numRegStorage) + 1) * prop.warpSize;
       numActiveBlockReturn = bestNumActiveBlock;
     }
     break;
@@ -985,28 +1023,15 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       int bestNumRegStorage = 0;
       int bestNumActiveBlock = 0;
 
-#if SYCL
-      lc.numthread[1] = 1;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = ts.numSplit;
-      lc.numblock[1] = std::max<unsigned int>(1, std::min<unsigned int>((prop.get_max_compute_units() * 18) /
-                                            lc.numblock[2], ts.volMbar));
-      lc.numblock[0] = 1;
-#else
-      lc.numthread.y = 1;
-      lc.numthread.z = 1;
-      lc.numblock.x = ts.numSplit;
-      lc.numblock.y = max(1, min((prop.multiProcessorCount*18)/lc.numblock.x, ts.volMbar));
-      lc.numblock.z = 1;
-#endif
+      lc.numthread_y = 1;
+      lc.numthread_z = 1;
+      lc.numblock_x = ts.numSplit;
+      lc.numblock_y = std::max<unsigned int>(1, std::min<unsigned int>((gpuMultiProcessorCount*18)/lc.numblock_x, 
+			                                                ts.volMbar));
+      lc.numblock_z = 1;
 
       for (lc.numRegStorage=minNumRegStorage; lc.numRegStorage <= maxNumRegStorage; lc.numRegStorage++) {
-#if SYCL
-        lc.numthread[2] = ((volMmkWithSplit - 1) / (prop.get_max_sub_group_size() * lc.numRegStorage) + 1) *
-            prop.get_max_sub_group_size();
-#else
-        lc.numthread.x = ((volMmkWithSplit - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
-#endif
+        lc.numthread_x = ((volMmkWithSplit - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
 
         int numActiveBlock = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop);
         // int val = numActiveBlock*lc.numthread.x*lc.numRegStorage;
@@ -1021,34 +1046,20 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       if (bestNumRegStorage == 0) return 0;
 
       lc.numRegStorage = bestNumRegStorage;
-#if SYCL
-      lc.numthread[2] = ((volMmkWithSplit - 1) / (prop.get_max_sub_group_size() * lc.numRegStorage) + 1) *
-          prop.get_max_sub_group_size();
-#else
-      lc.numthread.x = ((volMmkWithSplit - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
-#endif
+      lc.numthread_x = ((volMmkWithSplit - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
       numActiveBlockReturn = bestNumActiveBlock;
     }
     break;
 
     case Tiled:
     {
-#if SYCL
-      lc.numthread[2] = TILEDIM;
-      lc.numthread[1] = TILEROWS;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = ((ts.volMm - 1) / TILEDIM + 1) * ((ts.volMk - 1) / TILEDIM + 1);
-      lc.numblock[1] = 1;
-      lc.numblock[0] = std::max<unsigned int>(1, std::min<unsigned int>((prop.get_max_compute_units() * 8) /
-                                            (lc.numblock[2] * lc.numblock[1]), ts.volMbar));
-#else
-      lc.numthread.x = TILEDIM;
-      lc.numthread.y = TILEROWS;
-      lc.numthread.z = 1;
-      lc.numblock.x = ((ts.volMm - 1)/TILEDIM + 1)*((ts.volMk - 1)/TILEDIM + 1);
-      lc.numblock.y = 1;
-      lc.numblock.z = max(1, min((prop.multiProcessorCount*8)/(lc.numblock.x*lc.numblock.y), ts.volMbar));
-#endif
+      lc.numthread_x = TILEDIM;
+      lc.numthread_y = TILEROWS;
+      lc.numthread_z = 1;
+      lc.numblock_x = ((ts.volMm - 1)/TILEDIM + 1)*((ts.volMk - 1)/TILEDIM + 1);
+      lc.numblock_y = 1;
+      lc.numblock_z = std::max<unsigned int>(1, std::min<unsigned int>((gpuMultiProcessorCount*8) /
+			                    (lc.numblock_x*lc.numblock_y), ts.volMbar));
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
     }
@@ -1056,26 +1067,14 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
 
     case TiledCopy:
     {
-#if SYCL
-      lc.numthread[2] = TILEDIM;
-      lc.numthread[1] = TILEROWS;
-      lc.numthread[0] = 1;
-      lc.numblock[2] = ((ts.volMm - 1) / TILEDIM + 1) * ((ts.volMkBar - 1) / TILEDIM + 1);
-      lc.numblock[1] = 1;
-      lc.numblock[0] = ts.volMbar;
-      lc.numblock[0] = std::min<unsigned int>((prop.get_max_compute_units() * 8) /
-                               (lc.numblock[2] * lc.numblock[1]), lc.numblock[0]);
-      lc.numblock[0] = std::max<unsigned int>(1, lc.numblock[0]);
-#else
-      lc.numthread.x = TILEDIM;
-      lc.numthread.y = TILEROWS;
-      lc.numthread.z = 1;
-      lc.numblock.x = ((ts.volMm - 1)/TILEDIM + 1)*((ts.volMkBar - 1)/TILEDIM + 1);
-      lc.numblock.y = 1;
-      lc.numblock.z = ts.volMbar;
-      lc.numblock.z = min((prop.multiProcessorCount*8)/(lc.numblock.x*lc.numblock.y), lc.numblock.z);
-      lc.numblock.z = max(1, lc.numblock.z);
-#endif
+      lc.numthread_x = TILEDIM;
+      lc.numthread_y = TILEROWS;
+      lc.numthread_z = 1;
+      lc.numblock_x = ((ts.volMm - 1)/TILEDIM + 1)*((ts.volMkBar - 1)/TILEDIM + 1);
+      lc.numblock_y = 1;
+      lc.numblock_z = ts.volMbar;
+      lc.numblock_z = std::min<unsigned int>((gpuMultiProcessorCount*8)/(lc.numblock_x*lc.numblock_y), lc.numblock_z);
+      lc.numblock_z = std::max<unsigned int>(1, lc.numblock_z);
       lc.shmemsize = 0;
       lc.numRegStorage = 0;
     }
@@ -1083,15 +1082,9 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
   }
 
   /* DPCT1022:105: There is no exact match between the maxGridSize and the max_nd_range size. */
-#if SYCL
-  if (lc.numblock[2] > prop.get_max_nd_range_size()[0] ||
-      lc.numblock[1] > prop.get_max_nd_range_size()[1] ||
-      lc.numblock[0] > prop.get_max_nd_range_size()[2]) return 0;
-#else
-  if (lc.numblock.x > prop.maxGridSize[0] ||
-    lc.numblock.y > prop.maxGridSize[1] ||
-    lc.numblock.z > prop.maxGridSize[2]) return 0;
-#endif
+  if (lc.numblock_x > gpuMaxGridSize[0] ||
+      lc.numblock_y > gpuMaxGridSize[1] ||
+      lc.numblock_z > gpuMaxGridSize[2]) return 0;
 
   // Return the number of active blocks with these settings
   if (numActiveBlockReturn == -1) {
@@ -1114,7 +1107,10 @@ try
     {
 #if SYCL
       plan.stream->memcpy(dataOut, dataIn, ts.volMmk * ts.volMbar * plan.sizeofType);
-#else
+#elif HIP
+      hipCheck(hipMemcpyAsync(dataOut, dataIn, ts.volMmk*ts.volMbar*plan.sizeofType,
+        hipMemcpyDefault, plan.stream));
+#else // CUDA
       cudaCheck(cudaMemcpyAsync(dataOut, dataIn, ts.volMmk*ts.volMbar*plan.sizeofType,
         cudaMemcpyDefault, plan.stream));
 #endif
@@ -1124,51 +1120,52 @@ try
     case Packed:
     {
       switch(lc.numRegStorage) {
-/*
-DPCT1049:109: The workgroup size passed to the SYCL kernel may exceed the limit.
-To get the device limit, query info::device::max_work_group_size. Adjust the
-workgroup size if needed.
-*/
-#if SYCL
-  #define CALL0(TYPE, NREG)                                                   \
-  {plan.stream->submit([&](sycl::handler &cgh) {                              \
-    sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,                \
-                   sycl::access::target::local>                               \
-        dpct_local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);                \
-                                                                              \
-    auto ts_volMmk_ct0 = ts.volMmk;                                           \
-    auto ts_volMbar_ct1 = ts.volMbar;                                         \
-    auto ts_sizeMmk_ct2 = ts.sizeMmk;                                         \
-    auto ts_sizeMbar_ct3 = ts.sizeMbar;                                       \
-    auto plan_Mmk_ct4 = plan.Mmk;                                             \
-    auto plan_Mbar_ct5 = plan.Mbar;                                           \
-    auto plan_Msh_ct6 = plan.Msh;                                             \
-    auto dataIn_ct7 = (TYPE *)dataIn;                                         \
-    auto dataOut_ct8 = (TYPE *)dataOut;                                       \
-                                                                              \
-    cgh.parallel_for(                                                         \
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),          \
-        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {   \
-          transposePacked<TYPE, NREG>(                                        \
-              ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2, ts_sizeMbar_ct3, \
-              plan_Mmk_ct4, plan_Mbar_ct5, plan_Msh_ct6, dataIn_ct7,          \
-              dataOut_ct8, item_ct1, dpct_local_acc_ct1.get_pointer());       \
-        });                                                                   \
-    }); plan.stream->wait(); \
-  }
-#else
-#define CALL0(TYPE, NREG)                                                                \
-  transposePacked<TYPE, NREG> <<< lc.numblock, lc.numthread, lc.shmemsize, plan.stream >>> \
-      (ts.volMmk, ts.volMbar, ts.sizeMmk, ts.sizeMbar,                                     \
-      plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
-#endif
-#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
-#include "calls.h"
+        /*
+        DPCT1049:109: The workgroup size passed to the SYCL kernel may exceed the limit.
+        To get the device limit, query info::device::max_work_group_size. Adjust the
+        workgroup size if needed.
+        */
+        #if SYCL
+          #define CALL0(TYPE, NREG)                                                   \
+          {plan.stream->submit([&](sycl::handler &cgh) {                              \
+            sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,                \
+                           sycl::access::target::local>                               \
+                dpct_local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);                \
+                                                                                      \
+            auto ts_volMmk_ct0 = ts.volMmk;                                           \
+            auto ts_volMbar_ct1 = ts.volMbar;                                         \
+            auto ts_sizeMmk_ct2 = ts.sizeMmk;                                         \
+            auto ts_sizeMbar_ct3 = ts.sizeMbar;                                       \
+            auto plan_Mmk_ct4 = plan.Mmk;                                             \
+            auto plan_Mbar_ct5 = plan.Mbar;                                           \
+            auto plan_Msh_ct6 = plan.Msh;                                             \
+            auto dataIn_ct7 = (TYPE *)dataIn;                                         \
+            auto dataOut_ct8 = (TYPE *)dataOut;                                       \
+                                                                                      \
+            cgh.parallel_for(                                                         \
+                sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),          \
+                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {   \
+                  transposePacked<TYPE, NREG>(                                        \
+                      ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2, ts_sizeMbar_ct3, \
+                      plan_Mmk_ct4, plan_Mbar_ct5, plan_Msh_ct6, dataIn_ct7,          \
+                      dataOut_ct8, item_ct1, dpct_local_acc_ct1.get_pointer());       \
+                });                                                                   \
+            }); plan.stream->wait();                                                  \
+          }
+        #else // CUDA or HIP
+          #define CALL0(TYPE, NREG)                                                                \
+          transposePacked<TYPE, NREG> <<< lc.numblock, lc.numthread, lc.shmemsize, plan.stream >>> \
+              (ts.volMmk, ts.volMbar, ts.sizeMmk, ts.sizeMbar,                                     \
+              plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
+        #endif // SYCL
+        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break
+        #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
-#undef CALL
-#undef CALL0
+        #undef CALL
+        #undef CALL0
       }
 
     }
@@ -1177,55 +1174,56 @@ workgroup size if needed.
     case PackedSplit:
     {
       switch(lc.numRegStorage) {
-/*
-DPCT1049:110: The workgroup size passed to the SYCL kernel may exceed the limit.
-To get the device limit, query info::device::max_work_group_size. Adjust the
-workgroup size if needed.
-*/
-#if SYCL
-  #define CALL0(TYPE, NREG)                                                 \
-  plan.stream->submit([&](sycl::handler &cgh) {                             \
-    sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,              \
-                   sycl::access::target::local>                             \
-        dpct_local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);              \
-                                                                            \
-    auto ts_splitDim_ct0 = ts.splitDim;                                     \
-    auto ts_volMmkUnsplit_ct1 = ts.volMmkUnsplit;                           \
-    auto ts_volMbar_ct2 = ts.volMbar;                                       \
-    auto ts_sizeMmk_ct3 = ts.sizeMmk;                                       \
-    auto ts_sizeMbar_ct4 = ts.sizeMbar;                                     \
-    auto plan_cuDimMm_ct5 = plan.cuDimMm;                                   \
-    auto plan_cuDimMk_ct6 = plan.cuDimMk;                                   \
-    auto plan_Mmk_ct7 = plan.Mmk;                                           \
-    auto plan_Mbar_ct8 = plan.Mbar;                                         \
-    auto plan_Msh_ct9 = plan.Msh;                                           \
-    auto dataIn_ct10 = (TYPE *)dataIn;                                      \
-    auto dataOut_ct11 = (TYPE *)dataOut;                                    \
-                                                                            \
-    cgh.parallel_for(                                                       \
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
-        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
-          transposePackedSplit<TYPE, NREG>(                                 \
-              ts_splitDim_ct0, ts_volMmkUnsplit_ct1, ts_volMbar_ct2,        \
-              ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,            \
-              plan_cuDimMk_ct6, plan_Mmk_ct7, plan_Mbar_ct8, plan_Msh_ct9,  \
-              dataIn_ct10, dataOut_ct11, item_ct1,                          \
-              dpct_local_acc_ct1.get_pointer());                            \
-        });                                                                 \
-  }); plan.stream->wait();
-#else
-  #define CALL0(TYPE, NREG)                                                                     \
-  transposePackedSplit<TYPE, NREG> <<< lc.numblock, lc.numthread, lc.shmemsize, plan.stream >>> \
-      (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                     \
-      plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
-#endif
-#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
-#include "calls.h"
+        /*
+        DPCT1049:110: The workgroup size passed to the SYCL kernel may exceed the limit.
+        To get the device limit, query info::device::max_work_group_size. Adjust the
+        workgroup size if needed.
+        */
+        #if SYCL
+          #define CALL0(TYPE, NREG)                                                 \
+          plan.stream->submit([&](sycl::handler &cgh) {                             \
+            sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,              \
+                           sycl::access::target::local>                             \
+                dpct_local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);              \
+                                                                                    \
+            auto ts_splitDim_ct0 = ts.splitDim;                                     \
+            auto ts_volMmkUnsplit_ct1 = ts.volMmkUnsplit;                           \
+            auto ts_volMbar_ct2 = ts.volMbar;                                       \
+            auto ts_sizeMmk_ct3 = ts.sizeMmk;                                       \
+            auto ts_sizeMbar_ct4 = ts.sizeMbar;                                     \
+            auto plan_cuDimMm_ct5 = plan.cuDimMm;                                   \
+            auto plan_cuDimMk_ct6 = plan.cuDimMk;                                   \
+            auto plan_Mmk_ct7 = plan.Mmk;                                           \
+            auto plan_Mbar_ct8 = plan.Mbar;                                         \
+            auto plan_Msh_ct9 = plan.Msh;                                           \
+            auto dataIn_ct10 = (TYPE *)dataIn;                                      \
+            auto dataOut_ct11 = (TYPE *)dataOut;                                    \
+                                                                                    \
+            cgh.parallel_for(                                                       \
+                sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
+                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
+                  transposePackedSplit<TYPE, NREG>(                                 \
+                      ts_splitDim_ct0, ts_volMmkUnsplit_ct1, ts_volMbar_ct2,        \
+                      ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,            \
+                      plan_cuDimMk_ct6, plan_Mmk_ct7, plan_Mbar_ct8, plan_Msh_ct9,  \
+                      dataIn_ct10, dataOut_ct11, item_ct1,                          \
+                      dpct_local_acc_ct1.get_pointer());                            \
+                });                                                                 \
+          }); plan.stream->wait();
+        #else // CUDA or HIP
+          #define CALL0(TYPE, NREG)                                                                     \
+          transposePackedSplit<TYPE, NREG> <<< lc.numblock, lc.numthread, lc.shmemsize, plan.stream >>> \
+              (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                     \
+              plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
+        #endif
+        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break
+        #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
         return false;
-#undef CALL
-#undef CALL0
+        #undef CALL
+        #undef CALL0
       }
 
     }
@@ -1233,98 +1231,100 @@ workgroup size if needed.
 
     case Tiled:
     {
-/*
-DPCT1049:111: The workgroup size passed to the SYCL kernel may exceed the limit.
-To get the device limit, query info::device::max_work_group_size. Adjust the
-workgroup size if needed.
-*/
-#if SYCL
-  #define CALL(TYPE)                                                        \
-  plan.stream->submit([&](sycl::handler &cgh) {                             \
-    sycl::range<2> shTile_range_ct1(32 /*TILEDIM*/, 33 /*TILEDIM+1*/);      \
-                                                                            \
-    sycl::accessor<TYPE, 2, sycl::access::mode::read_write,                 \
-                   sycl::access::target::local>                             \
-        shTile_acc_ct1(shTile_range_ct1, cgh);                              \
-                                                                            \
-    auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);             \
-    auto ts_volMbar_ct1 = ts.volMbar;                                       \
-    auto ts_sizeMbar_ct2 = ts.sizeMbar;                                     \
-    auto plan_tiledVol_ct3 = plan.tiledVol;                                 \
-    auto plan_cuDimMk_ct4 = plan.cuDimMk;                                   \
-    auto plan_cuDimMm_ct5 = plan.cuDimMm;                                   \
-    auto plan_Mbar_ct6 = plan.Mbar;                                         \
-    auto dataIn_ct7 = (TYPE *)dataIn;                                       \
-    auto dataOut_ct8 = (TYPE *)dataOut;                                     \
-                                                                            \
-    cgh.parallel_for(                                                       \
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
-        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
-          transposeTiled<TYPE>(                                             \
-              ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,        \
-              plan_tiledVol_ct3, plan_cuDimMk_ct4, plan_cuDimMm_ct5,        \
-              plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item_ct1,             \
-              dpct::accessor<TYPE, dpct::local, 2>(shTile_acc_ct1,          \
-                                                   shTile_range_ct1));      \
-        });                                                                 \
-  }); plan.stream->wait();
-#else
-  #define CALL(TYPE)                                                                                     \
-  transposeTiled<TYPE> <<< lc.numblock, lc.numthread, 0, plan.stream >>>                                 \
-      (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.tiledVol, plan.cuDimMk, plan.cuDimMm, \
-      plan.Mbar, (TYPE *)dataIn, (TYPE *)dataOut)
-#endif
-  if (plan.sizeofType == 4) CALL(float);
-  if (plan.sizeofType == 8) CALL(double);
-#undef CALL
+      /*
+      DPCT1049:111: The workgroup size passed to the SYCL kernel may exceed the limit.
+      To get the device limit, query info::device::max_work_group_size. Adjust the
+      workgroup size if needed.
+      */
+      #if SYCL
+        #define CALL(TYPE)                                                        \
+        plan.stream->submit([&](sycl::handler &cgh) {                             \
+          sycl::range<2> shTile_range_ct1(32 /*TILEDIM*/, 33 /*TILEDIM+1*/);      \
+                                                                                  \
+          sycl::accessor<TYPE, 2, sycl::access::mode::read_write,                 \
+                         sycl::access::target::local>                             \
+              shTile_acc_ct1(shTile_range_ct1, cgh);                              \
+                                                                                  \
+          auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);             \
+          auto ts_volMbar_ct1 = ts.volMbar;                                       \
+          auto ts_sizeMbar_ct2 = ts.sizeMbar;                                     \
+          auto plan_tiledVol_ct3 = plan.tiledVol;                                 \
+          auto plan_cuDimMk_ct4 = plan.cuDimMk;                                   \
+          auto plan_cuDimMm_ct5 = plan.cuDimMm;                                   \
+          auto plan_Mbar_ct6 = plan.Mbar;                                         \
+          auto dataIn_ct7 = (TYPE *)dataIn;                                       \
+          auto dataOut_ct8 = (TYPE *)dataOut;                                     \
+                                                                                  \
+          cgh.parallel_for(                                                       \
+              sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
+              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
+                transposeTiled<TYPE>(                                             \
+                    ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,        \
+                    plan_tiledVol_ct3, plan_cuDimMk_ct4, plan_cuDimMm_ct5,        \
+                    plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item_ct1,             \
+                    dpct::accessor<TYPE, dpct::local, 2>(shTile_acc_ct1,          \
+                                                         shTile_range_ct1));      \
+              });                                                                 \
+        }); plan.stream->wait();
+      #else // CUDA or HIP
+        #define CALL(TYPE)                                                                                     \
+        transposeTiled<TYPE> <<< lc.numblock, lc.numthread, 0, plan.stream >>>                                 \
+            (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.tiledVol, plan.cuDimMk, plan.cuDimMm, \
+            plan.Mbar, (TYPE *)dataIn, (TYPE *)dataOut)
+      #endif
+      if (plan.sizeofType == 4) CALL(float);
+      if (plan.sizeofType == 8) CALL(double);
+      #undef CALL
     }
     break;
 
     case TiledCopy:
     {
-/*
-DPCT1049:112: The workgroup size passed to the SYCL kernel may exceed the limit.
-To get the device limit, query info::device::max_work_group_size. Adjust the
-workgroup size if needed.
-*/
-#if SYCL
-  #define CALL(TYPE)                                                           \
-  plan.stream->submit([&](sycl::handler &cgh) {                                \
-    auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);                \
-    auto ts_volMbar_ct1 = ts.volMbar;                                          \
-    auto ts_sizeMbar_ct2 = ts.sizeMbar;                                        \
-    auto plan_cuDimMk_ct3 = plan.cuDimMk;                                      \
-    auto plan_cuDimMm_ct4 = plan.cuDimMm;                                      \
-    auto plan_tiledVol_ct5 = plan.tiledVol;                                    \
-    auto plan_Mbar_ct6 = plan.Mbar;                                            \
-    auto dataIn_ct7 = (TYPE *)dataIn;                                          \
-    auto dataOut_ct8 = (TYPE *)dataOut;                                        \
-                                                                               \
-    cgh.parallel_for(                                                          \
-        sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
-        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {    \
-          transposeTiledCopy<TYPE>(                                            \
-              ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,           \
-              plan_cuDimMk_ct3, plan_cuDimMm_ct4, plan_tiledVol_ct5,           \
-              plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item_ct1);               \
-        });                                                                    \
-  }); plan.stream->wait();
-#else
-  #define CALL(TYPE)                                                                                     \
-  transposeTiledCopy<TYPE> <<< lc.numblock, lc.numthread, 0, plan.stream >>>                             \
-      (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.cuDimMk, plan.cuDimMm, plan.tiledVol, \
-      plan.Mbar, (TYPE *)dataIn, (TYPE *)dataOut)
-#endif
-  if (plan.sizeofType == 4) CALL(float); 
-  if (plan.sizeofType == 8) CALL(double);
-#undef CALL
+      /*
+      DPCT1049:112: The workgroup size passed to the SYCL kernel may exceed the limit.
+      To get the device limit, query info::device::max_work_group_size. Adjust the
+      workgroup size if needed.
+      */
+      #if SYCL
+        #define CALL(TYPE)                                                           \
+        plan.stream->submit([&](sycl::handler &cgh) {                                \
+          auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);                \
+          auto ts_volMbar_ct1 = ts.volMbar;                                          \
+          auto ts_sizeMbar_ct2 = ts.sizeMbar;                                        \
+          auto plan_cuDimMk_ct3 = plan.cuDimMk;                                      \
+          auto plan_cuDimMm_ct4 = plan.cuDimMm;                                      \
+          auto plan_tiledVol_ct5 = plan.tiledVol;                                    \
+          auto plan_Mbar_ct6 = plan.Mbar;                                            \
+          auto dataIn_ct7 = (TYPE *)dataIn;                                          \
+          auto dataOut_ct8 = (TYPE *)dataOut;                                        \
+                                                                                     \
+          cgh.parallel_for(                                                          \
+              sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
+              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {    \
+                transposeTiledCopy<TYPE>(                                            \
+                    ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,           \
+                    plan_cuDimMk_ct3, plan_cuDimMm_ct4, plan_tiledVol_ct5,           \
+                    plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item_ct1);               \
+              });                                                                    \
+        }); plan.stream->wait();
+      #else // CUDA or HIP
+        #define CALL(TYPE)                                                                                     \
+        transposeTiledCopy<TYPE> <<< lc.numblock, lc.numthread, 0, plan.stream >>>                             \
+            (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.cuDimMk, plan.cuDimMm, plan.tiledVol, \
+            plan.Mbar, (TYPE *)dataIn, (TYPE *)dataOut)
+      #endif
+      if (plan.sizeofType == 4) CALL(float); 
+      if (plan.sizeofType == 8) CALL(double);
+      #undef CALL
     }
     break;
 
   }
 
-#ifndef SYCL
+#if CUDA
   cudaCheck(cudaGetLastError());
+#elif HIP
+  hipCheck(hipGetLastError());
 #endif
   return true;
 }

@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
 #endif
 #include <vector>
 #include <algorithm>
@@ -48,12 +48,12 @@ SOFTWARE.
 //
 // Error checking wrapper for librett
 //
-#define librettCheck(stmt) do {                                 \
-  librettResult err = stmt;                            \
-  if (err != LIBRETT_SUCCESS) {                          \
+#define librettCheck(stmt) do {                                                   \
+  librettResult err = stmt;                                                       \
+  if (err != LIBRETT_SUCCESS) {                                                   \
     fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-    exit(1); \
-  }                                                  \
+    exit(1);                                                                      \
+  }                                                                               \
 } while(0)
 
 char* dataIn  = NULL;
@@ -161,15 +161,22 @@ try
 
 #ifdef SYCL
   if (gpuid >= 0) {
-    cudaCheck((dpct::dev_mgr::instance().select_device(gpuid), 0));
+    dpct::dev_mgr::instance().select_device(gpuid);
   }
 
-  cudaCheck((dpct::get_current_device().reset(), 0));
-  /*
-  DPCT1027:7: The call to cudaDeviceSetSharedMemConfig was replaced with 0,
-  because DPC++ currently does not support configuring shared memory on
-  devices.
-  */
+  dpct::get_current_device().reset();
+  /* DPC++ currently does not support configuring shared memory on devices. */
+#elif HIP
+  if (gpuid >= 0) {
+    hipCheck(hipSetDevice(gpuid));
+  }
+
+  hipCheck(hipDeviceReset());
+  if (elemsize == 4) {
+    hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeFourByte));
+  } else {
+    hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
+  }
 #else // CUDA
   if (gpuid >= 0) {
     cudaCheck(cudaSetDevice(gpuid));
@@ -189,7 +196,11 @@ try
   timer = new librettTimer(elemsize);
 
   //dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
+#if HIP
+  dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
+#else // CUDA or SYCL
   dataSize = (elemsize == 4) ? 420*MILLION : 530*MILLION;
+#endif
 
   // Allocate device data, 100M elements
   allocate_device<char>(&dataIn, dataSize*(size_t)elemsize);
@@ -387,8 +398,11 @@ end:
   delete timer;
 
 #ifdef SYCL
-  cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
-  cudaCheck((dpct::get_current_device().reset(), 0));
+  dpct::get_current_device().queues_wait_and_throw();
+  dpct::get_current_device().reset();
+#elif HIP
+  hipCheck(hipDeviceSynchronize());
+  hipCheck(hipDeviceReset());
 #else // CUDA
   cudaCheck(cudaDeviceSynchronize());
   cudaCheck(cudaDeviceReset());
@@ -843,13 +857,13 @@ sycl::queue q = dpct::get_default_queue();
   if (use_librettPlanMeasure) {
 #ifdef SYCL
     librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q, dataIn, dataOut));
-#else // CUDA
+#else // CUDA or HIP
     librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0, dataIn, dataOut));
 #endif
   } else {
 #ifdef SYCL
     librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
-#else // CUDA
+#else // CUDA or HIP
     librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
 #endif
   }
@@ -861,9 +875,12 @@ sycl::queue q = dpct::get_default_queue();
   }
 
   for (int i=0;i < 4;i++) {
-#ifdef SYCL
+#if SYCL
     set_device_array<T>((T *)dataOut, -1, vol, &q);
-    cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+    dpct::get_current_device().queues_wait_and_throw();
+#elif HIP
+    set_device_array<T>((T *)dataOut, -1, vol);
+    hipCheck(hipDeviceSynchronize());
 #else // CUDA
     set_device_array<T>((T *)dataOut, -1, vol);
     cudaCheck(cudaDeviceSynchronize());
@@ -903,7 +920,7 @@ try
 #endif
 {
 #ifdef SYCL
-  dpct::device_ext &dev_ct1 = dpct::get_current_device();
+  //dpct::device_ext &dev_ct1 = dpct::get_current_device();
   sycl::queue q = dpct::get_default_queue();
 #endif
 
@@ -915,9 +932,14 @@ try
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+      dpct::get_current_device().queues_wait_and_throw();
       timer.start(dim, permutation);
       scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, &q);
+#elif HIP
+      set_device_array<T>((T *)dataOut, -1, numElem);
+      hipCheck(hipDeviceSynchronize());
+      timer.start(dim, permutation);
+      scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
 #else // CUDA
       set_device_array<T>((T *)dataOut, -1, numElem);
       cudaCheck(cudaDeviceSynchronize());
@@ -936,9 +958,14 @@ try
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+      dpct::get_current_device().queues_wait_and_throw();
       timer.start(dim, permutation);
       vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, &q);
+#elif HIP
+      set_device_array<T>((T *)dataOut, -1, numElem);
+      hipCheck(hipDeviceSynchronize());
+      timer.start(dim, permutation);
+      vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
 #else // CUDA
       set_device_array<T>((T *)dataOut, -1, numElem);
       cudaCheck(cudaDeviceSynchronize());
@@ -957,9 +984,14 @@ try
     for (int i=0;i < 4;i++) {
 #ifdef SYCL
       set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+      dpct::get_current_device().queues_wait_and_throw();
       timer.start(dim, permutation);
       memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, &q);
+#elif HIP
+      set_device_array<T>((T *)dataOut, -1, numElem);
+      hipCheck(hipDeviceSynchronize());
+      timer.start(dim, permutation);
+      memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, 0);
 #else // CUDA
       set_device_array<T>((T *)dataOut, -1, numElem);
       cudaCheck(cudaDeviceSynchronize());
@@ -986,14 +1018,10 @@ catch (sycl::exception const &exc) {
 #ifdef SYCL
 void printDeviceInfo() try {
   int deviceID;
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+  deviceID = dpct::dev_mgr::instance().current_device_id();
   dpct::device_info prop;
-  cudaCheck(( dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
+  dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
   int pConfig = 0;
-  /*
-  DPCT1007:12: Migration of this CUDA API is not supported by the Intel(R) DPC++
-  Compatibility Tool.
-  */
   //cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
   int shMemBankSize = 4;
   if (pConfig == 2) shMemBankSize = 8;
@@ -1017,6 +1045,22 @@ catch (sycl::exception const &exc) {
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
+#elif HIP
+void printDeviceInfo() {
+  int deviceID;
+  hipCheck(hipGetDevice(&deviceID));
+  hipDeviceProp_t prop;
+  hipCheck(hipGetDeviceProperties(&prop, deviceID));
+  hipSharedMemConfig pConfig;
+  hipCheck(hipDeviceGetSharedMemConfig(&pConfig));
+  int shMemBankSize = 4;
+  if (pConfig == hipSharedMemBankSizeEightByte) shMemBankSize = 8;
+  double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+  printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
+  printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
+    prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
+  printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
+}
 #else // CUDA
 void printDeviceInfo() {
   int deviceID;
@@ -1032,6 +1076,5 @@ void printDeviceInfo() {
   printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
     prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
   printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
-
 }
 #endif

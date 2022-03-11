@@ -29,15 +29,9 @@ SOFTWARE.
 #if SYCL
   #include <CL/sycl.hpp>
   #include "dpct/dpct.hpp"
-  #include "Types.h"
-  #include "plan.h"
-#elif HIP
-  #include "Types.h"
-  #include "cuttplan.h"
-#else // CUDA
-  #include "Types.h"
-  #include "plan.h"
 #endif
+#include "Types.h"
+#include "plan.h"
 #include "int_vector.h"
 #include "uniapi.h"
 

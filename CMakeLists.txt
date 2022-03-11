@@ -13,14 +13,20 @@ if (NOT CMAKE_CXX_EXTENSIONS)
 endif (NOT CMAKE_CXX_EXTENSIONS)
 
 # select platform
-if(ENABLE_CUDA AND ENABLE_SYCL)
+if(ENABLE_CUDA)
+  set(ENABLE_HIP OFF)
   set(ENABLE_SYCL OFF)
-endif(ENABLE_CUDA AND ENABLE_SYCL)
+endif(ENABLE_CUDA)
 
-if(NOT ENABLE_CUDA AND NOT ENABLE_SYCL)
-  set(ENABLE_CUDA ON)
+if(ENABLE_HIP)
+  set(ENABLE_CUDA OFF)
   set(ENABLE_SYCL OFF)
-endif(NOT ENABLE_CUDA AND NOT ENABLE_SYCL)
+endif(ENABLE_HIP)
+
+if(ENABLE_SYCL)
+  set(ENABLE_CUDA OFF)
+  set(ENABLE_HIP OFF)
+endif(ENABLE_SYCL)
 
 # enable CUDA
 if(ENABLE_CUDA)
@@ -56,6 +62,21 @@ if(ENABLE_CUDA)
 
   message(STATUS "Current CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 endif(ENABLE_CUDA)
+
+#enable HIP
+if(ENABLE_HIP)
+  message(STATUS "Compiling for HIP platform")
+  enable_language(HIP)
+
+  option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
+  option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
+  include(CheckFunctionExists)
+
+  set(CMAKE_CXX_STANDARD 17)
+  # need to check if -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__ is actually required
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP -fPIC -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__")
+  set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -O3 -DHIP -D_FORCE_INLINES")
+endif(ENABLE_HIP)
 
 #enable SYCL
 if(ENABLE_SYCL)

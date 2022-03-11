@@ -25,19 +25,28 @@ set(LIBRETT_SOURCE_FILES
   TensorTester.h
   LRUCache.h)
 
-if(ENABLE_CUDA)
-    set_source_files_properties(TensorTester.cpp   PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
-    set_source_files_properties(GpuModelKernel.cpp PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
-    set_source_files_properties(GpuMemcpy.cpp      PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
-    set_source_files_properties(GpuUtils.cpp       PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
-    set_source_files_properties(kernel.cpp         PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
-endif(ENABLE_CUDA)
+set(DEVICE_SOURCE_FILES
+  GpuModelKernel.cpp
+  TensorTester.cpp
+  GpuMemcpy.cpp
+  GpuUtils.cpp
+  kernel.cpp)
 
 add_library(librett ${LIBRETT_SOURCE_FILES})
+
+if(ENABLE_CUDA)
+  set_source_files_properties(${DEVICE_SOURCE_FILES} PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
+endif(ENABLE_CUDA)
+
+if(ENABLE_HIP)
+  set_source_files_properties(${DEVICE_SOURCE_FILES} PROPERTIES LANGUAGE HIP)
+  set_property(TARGET librett PROPERTY HIP_ARCHITECTURES gfx906 gfx908)
+endif(ENABLE_HIP)
+
 if(ENABLE_UMPIRE)
     target_link_libraries(librett umpire)
     target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
-endif()
+endif(ENABLE_UMPIRE)
 
 # install library and include
 install(TARGETS librett
@@ -47,7 +56,7 @@ install(TARGETS librett
             DESTINATION lib
         )
 install(FILES librett.h
-        DESTINATION include
+            DESTINATION include
         )
 
 add_executable(librett_bench EXCLUDE_FROM_ALL librett_bench.cpp)

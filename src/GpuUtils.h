@@ -40,7 +40,7 @@ SOFTWARE.
 
 #include "uniapi.h"
 
-static int warp_size = 64;
+static int warp_size = 64;  // AMD change
 
 //
 // Error checking wrapper

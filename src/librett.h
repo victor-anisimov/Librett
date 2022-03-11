@@ -26,10 +26,13 @@ SOFTWARE.
 #define LIBRETT_H
 
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#else
-#include <cuda_runtime.h>
+  #include <CL/sycl.hpp>
+#elif HIP
+  #include <hip/hip_runtime.h>
+#else // CUDA
+  #include <cuda_runtime.h>
 #endif
+#include "uniapi.h"
 
 // Handle type that is used to store and access librett plans
 typedef unsigned int librettHandle;
@@ -70,13 +73,8 @@ void librettFinalize();
 // Returns
 // Success/unsuccess code
 //
-#ifdef SYCL
-librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation,
-                    size_t sizeofType, sycl::queue *stream);
-#else
 librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-  cudaStream_t stream);
-#endif
+  gpuStream_t stream);
 
 //
 // Create plan and choose implementation by measuring performance
@@ -94,13 +92,8 @@ librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permut
 // Returns
 // Success/unsuccess code
 //
-#ifdef SYCL
-librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
-  sycl::queue *stream, void *idata, void *odata);
-#else
 librettResult librettPlanMeasure(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-  cudaStream_t stream, void* idata, void* odata);
-#endif
+  gpuStream_t stream, void* idata, void* odata);
 
 //
 // Destroy plan

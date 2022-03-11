@@ -23,10 +23,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #ifdef SYCL
-#include <CL/sycl.hpp>
-#include "dpct/dpct.hpp"
-#else
-#include <cuda.h>
+  #include <CL/sycl.hpp>
+  #include "dpct/dpct.hpp"
+#elif HIP
+  #include <hip/hip_runtime.h>
+#else // CUDA
+  #include <cuda.h>
 #endif
 #include <list>
 #include <unordered_map>
@@ -40,6 +42,7 @@ SOFTWARE.
 #include <mutex>
 #include <cstdlib>
 // #include <chrono>
+#include "uniapi.h"
 
 // global Umpire allocator
 #ifdef LIBRETT_HAS_UMPIRE
@@ -54,44 +57,19 @@ static std::mutex planStorageMutex;
 static std::atomic<librettHandle> curHandle(0);
 
 // Table of devices that have been initialized
-#ifdef SYCL
-static std::unordered_map<int, dpct::device_info> deviceProps;
-#else  // CUDA
-static std::unordered_map<int, cudaDeviceProp> deviceProps;
-#endif
+static std::unordered_map<int, gpuDeviceProp_t> deviceProps;
 static std::mutex devicePropsMutex;
 
 // Checks prepares device if it's not ready yet and returns device properties
 // Also sets shared memory configuration
-#ifdef SYCL
-void getDeviceProp(int &deviceID, dpct::device_info &prop) try {
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
-
-  // need to lock this function	
-  std::lock_guard<std::mutex> lock(devicePropsMutex);
-
-  auto it = deviceProps.find(deviceID);
-  if (it == deviceProps.end()) {
-    // Get device properties and store it for later use
-    /*
-    DPCT1003:1: Migrated API does not return error code. (*, 0) is inserted. You
-    may need to rewrite this code.
-    */
-    cudaCheck( (dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop), 0));
-    //librettKernelSetSharedMemConfig();
-    deviceProps.insert({deviceID, prop});
-  } else {
-    prop = it->second;
-  }
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#else // CUDA
-void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
-  cudaCheck(cudaGetDevice(&deviceID));
+void getDeviceProp(int& deviceID, gpuDeviceProp_t &prop) {
+  #if SYCL
+    deviceID = dpct::dev_mgr::instance().current_device_id();
+  #elif HIP
+    hipCheck(hipGetDevice(&deviceID));
+  #else // CUDA
+    cudaCheck(cudaGetDevice(&deviceID));
+  #endif
 
   // need to lock this function
   std::lock_guard<std::mutex> lock(devicePropsMutex);
@@ -99,14 +77,20 @@ void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
   auto it = deviceProps.find(deviceID);
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
-    cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
-    librettKernelSetSharedMemConfig();
+    #if SYCL
+      dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
+    #elif HIP
+      hipCheck(hipGetDeviceProperties(&prop, deviceID));
+      librettKernelSetSharedMemConfig();
+    #else // CUDA
+      cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
+      librettKernelSetSharedMemConfig();
+    #endif
     deviceProps.insert({deviceID, prop});
   } else {
     prop = it->second;
   }
 }
-#endif
 
 librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeofType) {
   // Check sizeofType
@@ -134,12 +118,7 @@ librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t
 }
 
 librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType, 
-#ifdef SYCL
-  sycl::queue *stream
-#else // CUDA
-  cudaStream_t stream
-#endif
-  ) {
+  gpuStream_t stream) {
 
 #ifdef ENABLE_NVTOOLS
   gpuRangeStart("init");
@@ -161,11 +140,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
 
   // Prepare device
   int deviceID;
-#ifdef SYCL
-  dpct::device_info prop;
-#else // CUDA
-  cudaDeviceProp prop;
-#endif
+  gpuDeviceProp_t prop;
   getDeviceProp(deviceID, prop);
 
   // Reduce ranks
@@ -251,11 +226,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
 }
 
 librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
-#ifdef SYCL
-  sycl::queue *stream, void *idata, void *odata) try 
-#else // CUDA
-  cudaStream_t stream, void* idata, void* odata)
-#endif
+  gpuStream_t stream, void* idata, void* odata)
 {
 
   // Check that input parameters are valid
@@ -276,11 +247,7 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
 
   // Prepare device
   int deviceID;
-#ifdef SYCL
-  dpct::device_info prop;
-#else // CUDA
-  cudaDeviceProp prop;
-#endif
+  gpuDeviceProp_t prop;
   getDeviceProp(deviceID, prop);
 
   // Reduce ranks
@@ -320,9 +287,12 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
     // Activate plan
     it->activate();
     // Clear output data to invalidate caches
-#ifdef SYCL
+#if SYCL
     set_device_array<char>((char *)odata, -1, numBytes, stream);
-    cudaCheck((dpct::get_current_device().queues_wait_and_throw(), 0));
+    dpct::get_current_device().queues_wait_and_throw();
+#elif HIP
+    set_device_array<char>((char *)odata, -1, numBytes);
+    hipCheck(hipDeviceSynchronize());
 #else // CUDA
     set_device_array<char>((char *)odata, -1, numBytes);
     cudaCheck(cudaDeviceSynchronize());
@@ -369,19 +339,9 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
 
   return LIBRETT_SUCCESS;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
-#ifdef SYCL
-void librettDestroy_callback(sycl::queue *stream, int status, 
-#else // CUDA
-void CUDART_CB librettDestroy_callback(cudaStream_t stream, cudaError_t status,
-#endif
+//void CUDART_CB librettDestroy_callback(gpuStream_t stream, gpuError_t status,
+void librettDestroy_callback(gpuStream_t stream, gpuError_t status,
   void *userData) {
   librettPlan_t* plan = (librettPlan_t*) userData;
   delete plan;
@@ -423,8 +383,10 @@ try
   librettPlan_t& plan = *(it->second);
 
   int deviceID;
-#ifdef SYCL
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
+#if SYCL
+  deviceID = dpct::dev_mgr::instance().current_device_id();
+#elif HIP
+  hipCheck(hipGetDevice(&deviceID));
 #else // CUDA
   cudaCheck(cudaGetDevice(&deviceID));
 #endif
@@ -454,12 +416,12 @@ void librettInitialize() {
 void librettFinalize() {
 }
 
-#ifdef SYCL
+#if SYCL
 sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attribute__((convergent)) {
-#ifdef __SYCL_DEVICE_ONLY__
-  return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
-#else
-  throw cl::sycl::runtime_error("Sub-groups are not supported on host device.", PI_INVALID_DEVICE);
-#endif
+  #ifdef __SYCL_DEVICE_ONLY__
+    return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
+  #else
+    throw cl::sycl::runtime_error("Sub-groups are not supported on host device.", PI_INVALID_DEVICE);
+  #endif
 }
 #endif

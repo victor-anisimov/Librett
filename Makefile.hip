@@ -26,11 +26,11 @@
 #################### User Settings ####################
 
 # C++ compiler
-HOST_CC = g++
-GPU_CC = g++
+HOST_CC = hipcc
+GPU_CC = hipcc
 
 # CUDA compiler
-CUDAC = nvcc
+CUDAC = hipcc
 
 # Enable nvvp profiling of CPU code by using "make ENABLE_NVTOOLS=1"
 # If aligned_alloc() is not available, use "make NO_ALIGNED_ALLOC=1"
@@ -39,9 +39,9 @@ CUDAC = nvcc
 GENCODE_SM35  := -gencode arch=compute_35,code=sm_35
 GENCODE_SM50  := -gencode arch=compute_50,code=sm_50
 GENCODE_SM52  := -gencode arch=compute_52,code=sm_52
-GENCODE_SM60  := -gencode arch=compute_60,code=sm_60
+GENCODE_SM61  := -gencode arch=compute_61,code=sm_61
 GENCODE_SM70  := -gencode arch=compute_70,code=sm_70
-GENCODE_FLAGS := $(GENCODE_SM70)
+GENCODE_FLAGS := $(GENCODE_SM50) $(GENCODE_SM52) $(GENCODE_SM61) $(GENCODE_SM70)
 
 #######################################################
 
@@ -91,20 +91,21 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
-CFLAGS = -I${CUDAROOT}/include -std=c++17 $(DEFS) $(OPTLEV) -fPIC
+CFLAGS = -I${CUDAROOT}/include -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DHIP -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
 
-CUDA_CFLAGS = -ccbin $(GPU_CC) -I${CUDAROOT}/include -std=c++17 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(CUDA_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
+CUDA_CFLAGS = --amdgpu-target=gfx906,gfx908 -std=c++17 $(OPTLEV) -DHIP -D_FORCE_INLINES
 
 ifeq ($(OS),osx)
 CUDA_LFLAGS = -L$(CUDAROOT)/lib
 else
-CUDA_LFLAGS = -L$(CUDAROOT)/lib64
+#CUDA_LFLAGS = -L$(CUDAROOT)/lib64
 endif
 
-CUDA_LFLAGS += -fPIC -Llib -lcudart -lrett
+CUDA_LFLAGS += -fPIC -Llib -lrett
+
 ifdef ENABLE_NVTOOLS
 CUDA_LFLAGS += -lnvToolsExt
 endif
@@ -123,15 +124,15 @@ lib/librett.a: $(OBJSLIB)
 
 bin/test : lib/librett.a $(OBJSTEST1)
 	mkdir -p bin
-	$(HOST_CC) -o bin/test $(OBJSTEST1) $(CUDA_LFLAGS)
+	$(HOST_CC) -o bin/test -L/opt/rocm-3.9.0/lib/ -lamdhip64 $(OBJSTEST1) $(CUDA_LFLAGS)
 
 bin/librett_test : lib/librett.a $(OBJSTESTX)
 	mkdir -p bin
-	$(HOST_CC) -o bin/librett_test $(OBJSTESTX) $(CUDA_LFLAGS)
+	$(HOST_CC) -o bin/librett_test -L/opt/rocm-3.9.0/lib/ -lamdhip64 $(OBJSTESTX) $(CUDA_LFLAGS)
 
 bin/librett_bench : lib/librett.a $(OBJSBENCH)
 	mkdir -p bin
-	$(HOST_CC) -o bin/librett_bench $(OBJSBENCH) $(CUDA_LFLAGS)
+	$(HOST_CC) -o bin/librett_bench -L/opt/rocm-3.9.0/lib/ -lamdhip64 $(OBJSBENCH) $(CUDA_LFLAGS)
 
 clean:
 	rm -f $(OBJS)
@@ -145,35 +146,36 @@ clean:
 # Pull in dependencies that already exist
 -include $(OBJS:.o=.d)
 
-build/GpuMemcpy.o : src/GpuMemcpy.cpp
-	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
-	echo -e 'build/\c' > $*.d
-	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+# build/%.o : src/%.cu
+# 	$(CUDAC) -c $(CUDA_CFLAGS) -o build/$*.o $<
+# 	echo -e 'build/\c' > build/$*.d
+# 	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
 
-build/GpuModelKernel.o : src/GpuModelKernel.cpp
-	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+
+build/GpuMemcpy.o : src/GpuMemcpy.cpp
+	$(CUDAC) -c $(CUDA_CFLAGS) -o $*.o $<
 	echo -e 'build/\c' > $*.d
 	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
 
 build/GpuUtils.o : src/GpuUtils.cpp
-	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
-	echo -e 'build/\c' > $*.d
-	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
-
-build/kernel.o : src/kernel.cpp
-	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	$(CUDAC) -c $(CUDA_CFLAGS) -o $*.o $<
 	echo -e 'build/\c' > $*.d
 	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
 
 build/TensorTester.o : src/TensorTester.cpp
-	$(CUDAC) -x cu -c $(CUDA_CFLAGS) -o $*.o $<
+	$(CUDAC) -c $(CUDA_CFLAGS) -o $*.o $<
 	echo -e 'build/\c' > $*.d
 	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
 
-#build/%.o : src/%.cu
-#	$(CUDAC) -c $(CUDA_CFLAGS) -o build/$*.o $<
-#	echo -e 'build/\c' > build/$*.d
-#	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
+build/GpuModelKernel.o : src/GpuModelKernel.cpp
+	$(CUDAC) -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
+
+build/kernel.o : src/kernel.cpp
+	$(CUDAC) -c $(CUDA_CFLAGS) -o $*.o $<
+	echo -e 'build/\c' > $*.d
+	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
 
 build/%.o : src/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
