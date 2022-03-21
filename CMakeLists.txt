@@ -73,8 +73,9 @@ if(ENABLE_HIP)
   include(CheckFunctionExists)
 
   set(CMAKE_CXX_STANDARD 17)
-  # need to check if -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__ is actually required
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP -fPIC -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__")
+  # the options -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__ have no impact on performance
+  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP -fPIC -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP")
   set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -O3 -DHIP -D_FORCE_INLINES")
 endif(ENABLE_HIP)
 

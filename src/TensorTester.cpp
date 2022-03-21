@@ -130,7 +130,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
     syncthreads();
 #if SYCL
     shPos[threadIdx_x] = sycl::min(posval, shPos[threadIdx_x]);
-#else
+#else // CUDA or HIP
     shPos[threadIdx_x] = min(posval, shPos[threadIdx_x]);
 #endif
   /*
@@ -178,8 +178,8 @@ TensorTester::~TensorTester() {
 
 void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata) {
   int numthread = 512;
-  int numblock = std::min<unsigned int>(65535, (ndata - 1) / numthread + 1);
 #if SYCL
+  int numblock = std::min<unsigned int>(65535, (ndata - 1) / numthread + 1);
   /*
   DPCT1049:120: The workgroup size passed to the SYCL kernel may exceed the
   limit. To get the device limit, query info::device::max_work_group_size.
@@ -193,9 +193,11 @@ void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata)
                      });
   });
 #elif HIP
+  int numblock = min(65535, (ndata - 1)/numthread + 1 );
   hipLaunchKernelGGL(setTensorCheckPatternKernel, dim3(numblock), dim3(numthread ), 0, 0, data, ndata);
   hipCheck(hipGetLastError());
 #else // CUDA
+  int numblock = min(65535, (ndata - 1)/numthread + 1 );
   setTensorCheckPatternKernel<<< numblock, numthread >>>(data, ndata);
   cudaCheck(cudaGetLastError());
 #endif

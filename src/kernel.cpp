@@ -59,8 +59,8 @@ void transposeTiled(const int numMm, const int volMbar, const int sizeMbar,
   const sycl::int2 tiledVol, const int cuDimMk, const int cuDimMm,
   const TensorConvInOut *RESTRICT glMbar, const T *RESTRICT dataIn, T *RESTRICT dataOut,
   sycl::nd_item<3> item_ct1, dpct::accessor<T, dpct::local, 2> shTile)
-#else
-__global__ void transposeTiled( const int numMm, const int volMbar, const int sizeMbar,
+#else // CUDA or HIP
+__global__ void transposeTiled(const int numMm, const int volMbar, const int sizeMbar,
   const int2 tiledVol, const int cuDimMk, const int cuDimMm,
   const TensorConvInOut* RESTRICT glMbar, const T* RESTRICT dataIn, T* RESTRICT dataOut)
 #endif
@@ -103,7 +103,7 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
   const unsigned long long int maskIny = __ballot((yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned long long int maskOutx = __ballot((xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
   const unsigned long long int one = 1;
-#else
+#else // CUDA
   const unsigned int maskIny = __ballot_sync(0xffffffff,(yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned int maskOutx = __ballot_sync(0xffffffff,(xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
   const unsigned int one = 1;
@@ -125,7 +125,7 @@ __global__ void transposeTiled( const int numMm, const int volMbar, const int si
         posMajorIn += subgroup.shuffle_xor(posMajorIn, i);
         posMajorOut += subgroup.shuffle_xor(posMajorOut, i);
       #elif HIP
-	posMajorIn += __shfl_xor(posMajorIn,i);
+        posMajorIn += __shfl_xor(posMajorIn,i);
         posMajorOut += __shfl_xor(posMajorOut,i);
       #else // CUDA
         posMajorIn += __shfl_xor_sync(0xffffffff,posMajorIn,i);
@@ -249,7 +249,7 @@ __global__ void transposePacked(
         posSh[j]     += ((posMmk / subgroup.shuffle(Msh.c, i))     % subgroup.shuffle(Msh.d, i))
                                                                    * subgroup.shuffle(Msh.ct, i);
       #elif HIP
-	posMmkIn[j]  += ((posMmk / __shfl(Mmk.c_in,i)) % __shfl(Mmk.d_in,i))   * __shfl(Mmk.ct_in,i);
+        posMmkIn[j]  += ((posMmk / __shfl(Mmk.c_in,i)) % __shfl(Mmk.d_in,i))   * __shfl(Mmk.ct_in,i);
         posMmkOut[j] += ((posMmk / __shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
         posSh[j]     += ((posMmk / __shfl(Msh.c,i)) % __shfl(Msh.d,i))         * __shfl(Msh.ct,i);
       #else // CUDA
@@ -428,7 +428,7 @@ __global__ void transposePackedSplit(
         posSh[j] += ((t / subgroup.shuffle(Msh.c, i)) % subgroup.shuffle(Msh.d, i))
                                                       * subgroup.shuffle(Msh.ct, i);
       #elif HIP
-	posMmkIn[j]  += ((t/__shfl(Mmk.c_in,i)) % __shfl(Mmk.d_in,i))   * __shfl(Mmk.ct_in,i);
+        posMmkIn[j]  += ((t/__shfl(Mmk.c_in,i)) % __shfl(Mmk.d_in,i))   * __shfl(Mmk.ct_in,i);
         posMmkOut[j] += ((t/__shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
         posSh[j]     += ((t/__shfl(Msh.c,i)) % __shfl(Msh.d,i))         * __shfl(Msh.ct,i);
       #else
@@ -520,7 +520,7 @@ void transposeTiledCopy(
   const int2_t tiledVol,
   const TensorConvInOut *RESTRICT gl_Mbar,
   const T *RESTRICT dataIn, T *RESTRICT dataOut, ndItem3_t item_ct1)
-#else
+#else // CUDA or HIP
 __global__ void transposeTiledCopy(
   const int numMm, const int volMbar, const int sizeMbar,
   const int cuDimMk, const int cuDimMm,
@@ -576,7 +576,7 @@ __global__ void transposeTiledCopy(
         posMajorIn  += subgroup.shuffle_xor(posMajorIn, i);
         posMajorOut += subgroup.shuffle_xor(posMajorOut, i);
       #elif HIP
-	posMajorIn += __shfl_xor(posMajorIn,i);
+        posMajorIn += __shfl_xor(posMajorIn,i);
         posMajorOut += __shfl_xor(posMajorOut,i);
       #else // CUDA
         posMajorIn  += __shfl_xor_sync(0xffffffff,posMajorIn,i);
@@ -757,7 +757,8 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
 try
 #endif
 {
-  int numActiveBlock = 1;
+  //int numActiveBlock = 1;
+  int numActiveBlock;
   int numthread = lc.numthread_x * lc.numthread_y * lc.numthread_z;
   switch(method) {
     case Trivial:
@@ -797,8 +798,8 @@ try
       if (numDevices == -1) {
         #if SYCL
           numDevices = dpct::dev_mgr::instance().device_count();
-	#elif HIP
-	  hipCheck(hipGetDeviceCount(&numDevices));
+        #elif HIP
+          hipCheck(hipGetDeviceCount(&numDevices));
         #else // CUDA
           cudaCheck(cudaGetDeviceCount(&numDevices));
         #endif
@@ -953,7 +954,7 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       int minNumthread = ((ts.volMmk - 1)/(prop.warpSize*MAX_REG_STORAGE) + 1)*prop.warpSize;
       int maxNumthread = ((ts.volMmk - 1)/(prop.warpSize) + 1)*prop.warpSize;
       if (minNumthread > prop.maxThreadsPerBlock) return 0;
-      maxNumthread = std::min(prop.maxThreadsPerBlock, maxNumthread);
+      maxNumthread = min(prop.maxThreadsPerBlock, maxNumthread);
       // printf("minNumthread %d maxNumthread %d\n", minNumthread, maxNumthread);
 
       // Min and max number of register storage we can use
@@ -967,7 +968,7 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
 
       lc.numthread_y = 1;
       lc.numthread_z = 1;
-      lc.numblock_x = std::max(1, ts.volMbar);
+      lc.numblock_x = max(1, ts.volMbar);
       lc.numblock_x = std::min<unsigned int>(gpuMultiProcessorCount * 18, lc.numblock_x);
       lc.numblock_y = 1;
       lc.numblock_z = 1;
@@ -1073,7 +1074,7 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
       lc.numblock_x = ((ts.volMm - 1)/TILEDIM + 1)*((ts.volMkBar - 1)/TILEDIM + 1);
       lc.numblock_y = 1;
       lc.numblock_z = ts.volMbar;
-      lc.numblock_z = std::min<unsigned int>((gpuMultiProcessorCount*8)/(lc.numblock_x*lc.numblock_y), lc.numblock_z);
+      lc.numblock_z = min((gpuMultiProcessorCount*8)/(lc.numblock_x*lc.numblock_y), lc.numblock_z);
       lc.numblock_z = std::max<unsigned int>(1, lc.numblock_z);
       lc.shmemsize = 0;
       lc.numRegStorage = 0;

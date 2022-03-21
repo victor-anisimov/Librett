@@ -139,29 +139,4 @@ SOFTWARE.
   #define gpu_atomicAdd(a,b) atomicAdd(&(a), b)
 #endif
 
-// Error checking wrappers
-#ifdef SYCL
-  #define cudaCheck(stmt) do { int err = stmt; } while (0)
-
-#elif HIP
-  #define hipCheck(stmt) do {                                                       \
-    hipError_t err = stmt;                                                          \
-    if (err != hipSuccess) {                                                        \
-      fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-      fprintf(stderr, "Error String: %s\n", hipGetErrorString(err));                \
-      exit(1);                                                                      \
-    }                                                                               \
-  } while(0)
-
-#else // CUDA
-  #define cudaCheck(stmt) do {                                                      \
-    cudaError_t err = stmt;                                                         \
-    if (err != cudaSuccess) {                                                       \
-      fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-      fprintf(stderr, "Error String: %s\n", cudaGetErrorString(err));               \
-      exit(1);                                                                      \
-    }                                                                               \
-  } while(0)
-#endif
-
 #endif // UNIAPI_H

@@ -29,28 +29,47 @@ SOFTWARE.
 
 #if SYCL
   #include <CL/sycl.hpp>
-
 #elif HIP
   #include <hip/hip_runtime.h>
-
 #else // CUDA
   #include <cuda.h>
   #include <cuda_runtime.h>
 #endif
-
 #include "uniapi.h"
 
 static int warp_size = 64;  // AMD change
 
 //
-// Error checking wrapper
+// Error checking wrappers
 //
-#define librettCheck(stmt) do {                                                   \
-  librettResult err = stmt;                                                       \
-  if (err != LIBRETT_SUCCESS) {                                                   \
-    fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-    exit(1);                                                                      \
-  }                                                                               \
+#ifdef SYCL
+  #define cudaCheck(stmt) do { int err = stmt; } while (0)
+#elif HIP
+  #define hipCheck(stmt) do {                                                       \
+    hipError_t err = stmt;                                                          \
+    if(err != hipSuccess) {                                                         \
+      fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
+      fprintf(stderr, "Error String: %s\n", hipGetErrorString(err));                \
+      exit(1);                                                                      \
+    }                                                                               \
+  } while(0)
+#else // CUDA
+  #define cudaCheck(stmt) do {                                                      \
+    cudaError_t err = stmt;                                                         \
+    if(err != cudaSuccess) {                                                        \
+      fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
+      fprintf(stderr, "Error String: %s\n", cudaGetErrorString(err));               \
+      exit(1);                                                                      \
+    }                                                                               \
+  } while(0)
+#endif
+
+#define librettCheck(stmt) do {                                                     \
+  librettResult err = stmt;                                                         \
+  if (err != LIBRETT_SUCCESS) {                                                     \
+    fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__);   \
+    exit(1);                                                                        \
+  }                                                                                 \
 } while(0)
 
 void set_device_array_async_T(void *data, int value, const size_t ndata, gpuStream_t stream, const size_t sizeofT);

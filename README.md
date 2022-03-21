@@ -23,7 +23,7 @@ src/                Source code directory
 
 ## Manual Compilation
 
-`make cuda`    or    `make sycl`
+`make cuda`,   `make hip`    or    `make sycl`
 
 ## The outcome of manual build
 

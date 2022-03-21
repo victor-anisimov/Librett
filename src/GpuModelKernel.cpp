@@ -28,8 +28,9 @@ All rights reserved.
 #if SYCL
   #include <CL/sycl.hpp>
   #include "dpct/dpct.hpp"
-#endif
-#if CUDA
+#elif HIP
+  #include <hip/hip_runtime.h>
+#else // CUDA
   #include <cuda.h>
 #endif
 #include "GpuUtils.h"
@@ -164,7 +165,7 @@ __gpu_inline__ void countCacheLines(const int pos, const int n,
   unsigned int valbit = (((val << cacheWidth) - 1)*val) << warpLane;
   // Perform warpSize-way bitwise or
 #pragma unroll
-  for (int i=warpSize/2; i >= 1; i/=2) {
+  for (int i=warpSize/2; i >= 1; i/=2) {  // AMD change
     valbit |= gpu_shfl_xor(valbit, i);
   }
   // Now: lanes with valbit set are part of a full cache line,
@@ -275,7 +276,7 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
       countCacheLines(pos, n, cacheWidth, warpLane, cl_full, cl_part);
     #endif
 #pragma unroll
-    for (int k = warpSize / 2; k >= 1; k /= 2) {
+    for (int k = warpSize / 2; k >= 1; k /= 2) {  // AMD change
       cl_full += gpu_shfl_xor(cl_full, k);
       cl_part += gpu_shfl_xor(cl_part, k);
     }
@@ -465,16 +466,16 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
 //
 template <int numRegStorage>
 #if SYCL
-void countPacked( const int volMmk, const int volMbar,
+void countPacked(const int volMmk, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const TensorConvInOut* RESTRICT gl_Mmk,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const int accWidth, const int cacheWidth,
   MemStat* RESTRICT glMemStat, sycl::nd_item<3> item_ct1, uint8_t *dpct_local) 
-#else // CUDA
+#else // CUDA or HIP
 __global__ void
 __launch_bounds__(1024, 1)
-countPacked( const int volMmk, const int volMbar,
+countPacked(const int volMmk, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const TensorConvInOut* RESTRICT gl_Mmk,
   const TensorConvInOut* RESTRICT gl_Mbar,
@@ -887,7 +888,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
       #if SYCL
         int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in, item_ct1);
       #else // CUDA or HIP
-	int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in);
+        int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in);
       #endif
       pos0 += x + y*cuDimMk;
 

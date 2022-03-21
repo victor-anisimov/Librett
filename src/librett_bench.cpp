@@ -45,17 +45,6 @@ SOFTWARE.
 #define MILLION 1000000
 #define BILLION 1000000000
 
-//
-// Error checking wrapper for librett
-//
-#define librettCheck(stmt) do {                                                   \
-  librettResult err = stmt;                                                       \
-  if (err != LIBRETT_SUCCESS) {                                                   \
-    fprintf(stderr, "%s in file %s, function %s\n", #stmt,__FILE__,__FUNCTION__); \
-    exit(1);                                                                      \
-  }                                                                               \
-} while(0)
-
 char* dataIn  = NULL;
 char* dataOut = NULL;
 size_t dataSize = 0;

@@ -23,6 +23,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
+#include <iostream>
+#include <algorithm>
+#include <random>
 #ifdef SYCL
   #include <CL/sycl.hpp>
   #include "dpct/dpct.hpp"
@@ -31,9 +34,6 @@ SOFTWARE.
 #else // CUDA
  #include <cuda_runtime.h>
 #endif
-#include <iostream>
-#include <algorithm>
-#include <random>
 #include <cstring> // memcpy
 #include "GpuModel.h"
 #include "GpuModelKernel.h"
