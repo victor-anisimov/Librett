@@ -256,7 +256,7 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
     int pos = posData[i];
     int flag = (pos == -1);
     #if SYCL
-      int ffsval = __builtin_ffs(ballot(subgroup, flag)[0]) - 1;
+      int ffsval = __builtin_ffs((unsigned long long int)ballot(subgroup, flag)[0]) - 1;
       int n = (sycl::ext::oneapi::any_of(subgroup, flag)) ? ffsval : warpSize;
       int tran = countGlTransactions(pos, n, accWidth, warpLane, item_ct1);
     #elif HIP
@@ -932,6 +932,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 	  int n = __popcll((unsigned long long int)__ballot((x < tiledVol.x) && (y + j < tiledVol.y))); // AMD change
           memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gst_req += __any(n > 0);
+          countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2);
 	#else // CUDA
 	  int n = __popc(__ballot_sync(0xffffffff,(x < tiledVol.x) && (y + j < tiledVol.y)));
           memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane);
