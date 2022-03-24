@@ -184,11 +184,11 @@ try
 
   timer = new librettTimer(elemsize);
 
-  //dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
-#if HIP
-  dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
-#else // CUDA or SYCL
   dataSize = (elemsize == 4) ? 420*MILLION : 530*MILLION;
+#if HIP
+//  dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
+#else // CUDA or SYCL
+//  dataSize = (elemsize == 4) ? 420*MILLION : 530*MILLION;
 #endif
 
   // Allocate device data, 100M elements
