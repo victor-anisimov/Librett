@@ -23,7 +23,7 @@ src/                Source code directory
 
 ## Manual Compilation
 
-`make cuda`,   `make hip`    or    `make sycl`
+`make platform [option=-DPERFTEST]` where platform = cuda, hip, or sycl. The option=-DPERFTEST compiles the light version of librett_test suitable for performance analysis. EXAMPLE: `make hip option=-DPERFTEST`
 
 ## The outcome of manual build
 
@@ -41,6 +41,10 @@ Example of HIP compilation: `cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPI
 Example of SYCL compilation: `cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx`
 
 After that: `cd build; make; make librett_test; make librett_bench; make test`
+
+## Testing
+
+Execute `bin/librett_test` without arguments.
 
 ## Description
 
