@@ -78,13 +78,11 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
 GPUROOT = $(GPU_PATH)
 
-CFLAGS = -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL
+CFLAGS = -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL -fsycl-default-sub-group-size=32
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
 CFLAGS += $(option)
-
-GPU_CFLAGS = -allow-unsupported-compiler -ccbin $(GPU_CC) -I${GPUROOT}/include -std=c++11 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(GPU_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
 
 ifeq ($(OS),osx)
 GPU_LFLAGS = -L$(GPUROOT)/lib
