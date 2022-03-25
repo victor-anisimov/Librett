@@ -986,7 +986,8 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
         }
       }
 
-      if (bestNumRegStorage == 0) return 0;
+      //if (bestNumRegStorage == 0) return 0; // cuTT
+      if (bestNumRegStorage < 9) return 0;    // avoid small workgroup size; suggested by Xinmin Tian, Intel
 
       lc.numRegStorage = bestNumRegStorage;
       lc.numthread_x = ((ts.volMmk - 1)/(prop.warpSize * lc.numRegStorage) + 1) * prop.warpSize;
