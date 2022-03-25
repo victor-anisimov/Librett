@@ -78,7 +78,12 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
 GPUROOT = $(GPU_PATH)
 
+# JiT compilation
 CFLAGS = -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL -fsycl-default-sub-group-size=32
+
+# AoT compilation
+CFLAGS += -fsycl-targets=spir64_gen -Xsycl-target-backend "-device xehp"
+
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
@@ -108,15 +113,15 @@ lib/librett.a: $(OBJSLIB)
 
 bin/test : lib/librett.a $(OBJSTEST1)
 	mkdir -p bin
-	$(HOST_CC) -o bin/test $(OBJSTEST1) lib/librett.a
+	$(HOST_CC) -o bin/test $(CFLAGS) $(OBJSTEST1) lib/librett.a
 
 bin/librett_test : lib/librett.a $(OBJSTESTX)
 	mkdir -p bin
-	$(HOST_CC) -o bin/librett_test $(OBJSTESTX) lib/librett.a
+	$(HOST_CC) -o bin/librett_test $(CFLAGS) $(OBJSTESTX) lib/librett.a
 
 bin/librett_bench : lib/librett.a $(OBJSBENCH)
 	mkdir -p bin
-	$(HOST_CC) -o bin/librett_bench $(OBJSBENCH) lib/librett.a
+	$(HOST_CC) -o bin/librett_bench $(CFLAGS) $(OBJSBENCH) lib/librett.a
 
 clean:
 	rm -f $(OBJS)
