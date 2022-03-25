@@ -739,9 +739,11 @@ void librettKernelSetSharedMemConfig() {
 // Caches for PackedSplit kernels. One cache for all devices
 // NOTE: Not thread safe
 const int CACHE_SIZE = 100000;
-#if HIP
+#if SYCL
+  const int MAX_NUMWARP = (1024/16);
+#elif HIP
   const int MAX_NUMWARP = (1024/64);  // AMD change
-#else // CUDA & SYCL
+#else // CUDA
   const int MAX_NUMWARP = (1024/32);
 #endif
 const int MAX_NUMTYPE = 2;
@@ -1146,7 +1148,7 @@ try
                                                                                       \
             cgh.parallel_for(                                                         \
                 sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),          \
-                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {   \
+                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(16)]] {   \
                   transposePacked<TYPE, NREG>(                                        \
                       ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2, ts_sizeMbar_ct3, \
                       plan_Mmk_ct4, plan_Mbar_ct5, plan_Msh_ct6, dataIn_ct7,          \
@@ -1203,7 +1205,7 @@ try
                                                                                     \
             cgh.parallel_for(                                                       \
                 sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
-                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
+                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(16)]] { \
                   transposePackedSplit<TYPE, NREG>(                                 \
                       ts_splitDim_ct0, ts_volMmkUnsplit_ct1, ts_volMbar_ct2,        \
                       ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,            \
@@ -1259,7 +1261,7 @@ try
                                                                                   \
           cgh.parallel_for(                                                       \
               sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
-              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
+              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(16)]] { \
                 transposeTiled<TYPE>(                                             \
                     ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,        \
                     plan_tiledVol_ct3, plan_cuDimMk_ct4, plan_cuDimMm_ct5,        \
@@ -1302,7 +1304,7 @@ try
                                                                                      \
           cgh.parallel_for(                                                          \
               sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
-              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {    \
+              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(16)]] {    \
                 transposeTiledCopy<TYPE>(                                            \
                     ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,           \
                     plan_cuDimMk_ct3, plan_cuDimMm_ct4, plan_tiledVol_ct5,           \

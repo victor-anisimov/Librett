@@ -42,9 +42,11 @@ All rights reserved.
 #include "Types.h"
 #include "uniapi.h"
 
-#if HIP
+#if SYCL
+  const int TILEDIM = 16;
+#elif HIP
   const int TILEDIM = 64;   // AMD change
-#else
+#else // CUDA
   const int TILEDIM = 32;
 #endif
 const int TILEROWS = 8;

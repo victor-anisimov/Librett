@@ -995,7 +995,7 @@ try
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nblock) *
                                        sycl::range<3>(1, 1, nthread),
                                        sycl::range<3>(1, 1, nthread)),
-    [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+    [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(16)]] {
        runCountersKernel(devPosData, numPosData, accWidth,
        cacheWidth, dev_tran, dev_cl_full, dev_cl_part, item_ct1);
     });

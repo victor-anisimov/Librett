@@ -58,8 +58,8 @@ public:
   int get_max_compute_units() const { return _max_compute_units; }
   int get_max_work_group_size() const { return _max_work_group_size; }
   //int get_max_sub_group_size() { return _max_sub_group_size; }
-  int get_max_sub_group_size() const { return 32; }
-  int warpSize = 32;
+  int get_max_sub_group_size() const { return 16; }
+  int warpSize = 16;
   int get_max_work_items_per_compute_unit() {
     return _max_work_items_per_compute_unit;
   }
