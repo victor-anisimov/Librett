@@ -1,6 +1,6 @@
 # LibreTT - Tensor Transpose Library
 
-LibreTT is a free Tensor Transpose Library for nVidia, AMD and Intel GPU accelerators.
+LibreTT is a free Tensor Transpose Library for nVidia, AMD, and Intel GPU accelerators.
 
 ## About
 
