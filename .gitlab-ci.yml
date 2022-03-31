@@ -1,0 +1,56 @@
+# Each gitlab batch runner is tied to a specific environment variable for the scheduler paramaters
+# jlsebatch[1-2] - are generic batch executors and can be used for submitting to any JLSE system. They use JLSE_SCHEDULER_PARAMETERS
+
+# This is a global before script it will be ran as the first part of each job
+before_script:
+  - echo "before script"
+
+stages:
+  - shell
+  - arcticus
+  - v100
+
+# Shell executor will be executed like you are logged in directly to a JLSE login node
+shell_executor:
+  stage: shell
+  needs: []
+  tags:
+    - shell
+  script:
+    - id
+    - hostname
+    - echo "Running on $(hostname) with setuid shell runner"
+
+# Arcticus using Generic batch executor  
+arcticus_batch_executor:
+  variables:
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 10 -q arcticus"
+  stage: arcticus
+  needs: []
+  tags:
+    - batch
+  script:
+    - echo "Job 2 start"
+    - id
+    - hostname
+    - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
+    - echo "Job 2 end"
+
+# V100 nodes using Generic batch executor  
+test_v100_batch_generic:
+  variables:
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 10 -q gpu_v100_smx2_debug"
+  stage: v100
+  needs: []
+  tags:
+    - batch
+  script:
+    - echo "Job 2 start"
+    - id
+    - hostname
+    - echo "Running on $(hostname) with setuid batch runner on v100 with generic batch"
+    - echo "Job 2 end"
+
+# afer script to be executed after each job
+after_script:
+  - echo "after script"
