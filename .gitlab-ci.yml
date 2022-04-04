@@ -37,10 +37,10 @@ arcticus_batch_executor:
     - module load oneapi
     - make clean
     - make sycl option=-DPERFTEST
-    - time bin/librett_test
+    - time bin/test
     - make clean
     - make sycl
-    - time bin/librett_test
+    - time bin/test
     - echo "Job 2 end"
 
 # V100 nodes using Generic batch executor  
