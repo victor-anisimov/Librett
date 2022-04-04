@@ -34,7 +34,7 @@ arcticus_batch_executor:
     - id
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
-    - module load oneapi; make clean; make sycl option=-DPERFTEST; bin/librett_test
+    - module load oneapi; make clean; make sycl option=-DPERFTEST; time bin/librett_test
     - echo "Job 2 end"
 
 # V100 nodes using Generic batch executor  
