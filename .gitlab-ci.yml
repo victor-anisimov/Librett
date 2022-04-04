@@ -49,6 +49,7 @@ test_v100_batch_generic:
     - id
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on v100 with generic batch"
+    - module load oneapi; make clean; make sycl option=-DPERFTEST; bin/librett_test
     - echo "Job 2 end"
 
 # afer script to be executed after each job
