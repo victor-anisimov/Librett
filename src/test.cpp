@@ -143,7 +143,10 @@ try
 #else // CUDA
   cudaCheck(cudaDeviceReset());
 #endif
-  return 0;
+  if(passed)
+    return 0;
+  else
+    return 1;
 }
 #ifdef SYCL
 catch (sycl::exception const &exc) {
@@ -198,7 +201,7 @@ bool test3() {
     if (!test_tensor<int>(dim, permutation)) return false;
   }
 
-  return false;
+  return true;
 }
 
 
