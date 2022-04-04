@@ -201,7 +201,7 @@ bool test3() {
     if (!test_tensor<int>(dim, permutation)) return false;
   }
 
-  return false;
+  return true;
 }
 
 
