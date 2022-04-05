@@ -151,7 +151,11 @@ try
 #else // CUDA
   cudaCheck(cudaDeviceReset());
 #endif
-  return 0;
+
+  if(passed)
+    return 0;
+  else
+    return 1;
 }
 #ifdef SYCL
 catch (sycl::exception const &exc) {

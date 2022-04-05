@@ -80,6 +80,7 @@ try
   int gpuid = -1;
   unsigned seed = unsigned (std::time(0));
   bool arg_ok = true;
+  bool passed = false;
   int benchID = 0;
   use_librettPlanMeasure = false;
   use_plantimer = false;
@@ -373,10 +374,13 @@ try
 
 benchOK:
   printf("bench OK\n");
-
+  passed = true;
   goto end;
+
 fail:
   printf("bench FAIL\n");
+  passed = false;
+
 end:
   deallocate_device<char>(&dataIn);
   deallocate_device<char>(&dataOut);
@@ -397,7 +401,10 @@ end:
   cudaCheck(cudaDeviceReset());
 #endif
 
-  return 0;
+  if(passed)
+    return 0;
+  else
+    return 1;
 }
 #ifdef SYCL
 catch (sycl::exception const &exc) {

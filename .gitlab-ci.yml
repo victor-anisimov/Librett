@@ -24,17 +24,18 @@ shell_executor:
 # Arcticus using Generic batch executor  
 arcticus_batch_executor:
   variables:
-    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 10 -q arcticus"
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 20 -q arcticus"
   stage: arcticus
   needs: []
   tags:
     - batch
   script:
-    - echo "Job 2 start"
+    - echo "SYCL test start"
     - id
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
     - module load oneapi
+<<<<<<< HEAD
     - make clean
     - make sycl option=-DPERFTEST
     - time bin/test
@@ -42,6 +43,27 @@ arcticus_batch_executor:
     - make sycl
     - time bin/test
     - echo "Job 2 end"
+=======
+    - module load cmake
+    - echo "Compilation of performance variant"
+    - make clean
+    - make sycl option=-DPERFTEST
+    - echo "Run performance test"
+    - time bin/librett_test
+    - echo "Compilation of full code"
+    - make clean
+    - make sycl
+    - echo "Run full test"
+    - time bin/librett_test
+    - echo "Compilation by using CMake"
+    - cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx
+    - cd build; make; make librett_test; make librett_bench; make test
+    - echo "Run quick test"
+    - time src/test
+    - echo "Run bench test"
+    - time src/librett_bench -bench 3
+    - echo "SYCL test end"
+>>>>>>> 1c1aa9e (Update CI test)
 
 # V100 nodes using Generic batch executor  
 test_v100_batch_generic:
