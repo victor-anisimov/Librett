@@ -46,11 +46,7 @@ long long int* dataOut = NULL;
 int dataSize  = 200000000;
 TensorTester* tester = NULL;
 
-bool test1();
-bool test2();
 bool test3();
-bool test4();
-bool test5();
 template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& permutation);
 void printVec(std::vector<int>& vec);
 
@@ -143,7 +139,11 @@ try
 #else // CUDA
   cudaCheck(cudaDeviceReset());
 #endif
-  return 0;
+
+  if(passed)
+    return 0;
+  else
+    return 1;
 }
 #ifdef SYCL
 catch (sycl::exception const &exc) {
