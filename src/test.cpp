@@ -46,11 +46,7 @@ long long int* dataOut = NULL;
 int dataSize  = 200000000;
 TensorTester* tester = NULL;
 
-<<<<<<< HEAD
 bool test();
-=======
-bool test3();
->>>>>>> github-origin/master
 template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& permutation);
 void printVec(std::vector<int>& vec);
 
