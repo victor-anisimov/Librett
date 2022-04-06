@@ -24,7 +24,7 @@ shell_executor:
 # Arcticus using Generic batch executor  
 arcticus:
   variables:
-    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 20 -q arcticus"
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q arcticus"
   stage: arcticus
   needs: []
   tags:
@@ -58,7 +58,7 @@ arcticus:
 # V100 nodes using Generic batch executor  
 v100:
   variables:
-    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 10 -q gpu_v100_smx2_debug"
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 20 -q gpu_v100_smx2_debug"
   stage: v100
   needs: ["arcticus"]
   tags:
@@ -68,6 +68,27 @@ v100:
     - id
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on v100 with generic batch"
+    - module load oneapi
+    - module load cmake
+    - module load cuda/11.2.0
+    - export MPIR_CVAR_ENABLE_GPU=0
+    - echo "Compilation of performance variant"
+    - make clean
+    - make cuda option=-DPERFTEST
+    - echo "Run performance test"
+    - time bin/librett_test
+    - echo "Compilation of full code"
+    - make clean
+    - make cuda
+    - echo "Run full test"
+    - time bin/librett_test
+    - echo "Compilation by using CMake"
+    - cmake -H. -Bbuild -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=70
+    - cd build; make; make librett_test; make librett_bench; make test
+    - echo "Run quick test"
+    - time src/test
+    - echo "Run bench test"
+    - time src/librett_bench -bench 3
     - echo "CUDA test end"
 
 # afer script to be executed after each job
