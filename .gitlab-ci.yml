@@ -9,6 +9,7 @@ stages:
   - shell
   - arcticus
   - v100
+  - mi100
 
 # Shell executor will be executed like you are logged in directly to a JLSE login node
 shell_executor:
@@ -90,6 +91,39 @@ v100:
     - echo "Run bench test"
     - time src/librett_bench -bench 3
     - echo "CUDA test end"
+
+# MI100 nodes using Generic batch executor  
+mi100:
+  variables:
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_amd_mi100"
+  stage: mi100
+  needs: ["v100"]
+  tags:
+    - batch
+  script:
+    - echo "HIP test start"
+    - id
+    - hostname
+    - echo "Running on $(hostname) with setuid batch runner on mi100 with generic batch"
+    - export MPIR_CVAR_ENABLE_GPU=0
+    - echo "Compilation of performance variant"
+    - make clean
+    - make hip option=-DPERFTEST
+    - echo "Run performance test"
+    - time bin/librett_test
+    - echo "Compilation of full code"
+    - make clean
+    - make hip
+    - echo "Run full test"
+    - time bin/librett_test
+    - echo "Compilation by using CMake"
+    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc
+    - cd build; make; make librett_test; make librett_bench; make test
+    - echo "Run quick test"
+    - time src/test
+    - echo "Run bench test"
+    - time src/librett_bench -bench 3
+    - echo "HIP test end"
 
 # afer script to be executed after each job
 after_script:
