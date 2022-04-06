@@ -46,7 +46,7 @@ long long int* dataOut = NULL;
 int dataSize  = 200000000;
 TensorTester* tester = NULL;
 
-bool test3();
+bool test();
 template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& permutation);
 void printVec(std::vector<int>& vec);
 
@@ -107,11 +107,7 @@ try
   tester->setTensorCheckPattern((unsigned int *)dataIn, dataSize*2);
 
   bool passed = true;
-  //if(passed){passed = test1(); if(!passed) printf("Test 1 failed\n");}
-  //if(passed){passed = test2(); if(!passed) printf("Test 2 failed\n");}
-  if(passed){passed = test3(); if(!passed) printf("Test 3 failed\n");}
-  //if(passed){passed = test4(); if(!passed) printf("Test 4 failed\n");}
-  //if(passed){passed = test5(); if(!passed) printf("Test 5 failed\n");}
+  if(passed){passed = test(); if(!passed) printf("Test 3 failed\n");}
 
   if(passed){
     std::vector<int> worstDim;
@@ -139,10 +135,7 @@ try
 #else // CUDA
   cudaCheck(cudaDeviceReset());
 #endif
-<<<<<<< HEAD
-=======
 
->>>>>>> 1c1aa9e (Update CI test)
   if(passed)
     return 0;
   else
@@ -157,9 +150,9 @@ catch (sycl::exception const &exc) {
 #endif
 
 //
-// Test 3: hand picked examples
+// Test: hand picked examples
 //
-bool test3() {
+bool test() {
 
   {
     int rank = 3;
@@ -201,7 +194,7 @@ bool test3() {
     if (!test_tensor<int>(dim, permutation)) return false;
   }
 
-  return false;
+  return true;
 }
 
 

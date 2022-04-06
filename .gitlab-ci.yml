@@ -35,15 +35,6 @@ arcticus_batch_executor:
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
     - module load oneapi
-<<<<<<< HEAD
-    - make clean
-    - make sycl option=-DPERFTEST
-    - time bin/test
-    - make clean
-    - make sycl
-    - time bin/test
-    - echo "Job 2 end"
-=======
     - module load cmake
     - echo "Compilation of performance variant"
     - make clean
@@ -63,7 +54,6 @@ arcticus_batch_executor:
     - echo "Run bench test"
     - time src/librett_bench -bench 3
     - echo "SYCL test end"
->>>>>>> 1c1aa9e (Update CI test)
 
 # V100 nodes using Generic batch executor  
 test_v100_batch_generic:
@@ -74,11 +64,11 @@ test_v100_batch_generic:
   tags:
     - batch
   script:
-    - echo "Job 2 start"
+    - echo "CUDA test start"
     - id
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on v100 with generic batch"
-    - echo "Job 2 end"
+    - echo "CUDA test end"
 
 # afer script to be executed after each job
 after_script:
