@@ -22,7 +22,8 @@ shell_executor:
     - echo "Running on $(hostname) with setuid shell runner"
 
 # Arcticus using Generic batch executor  
-arcticus_batch_executor:
+#arcticus_batch_executor:
+arcticus:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 20 -q arcticus"
   stage: arcticus
@@ -56,7 +57,8 @@ arcticus_batch_executor:
     - echo "SYCL test end"
 
 # V100 nodes using Generic batch executor  
-test_v100_batch_generic:
+#test_v100_batch_generic:
+v100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 10 -q gpu_v100_smx2_debug"
   stage: v100
