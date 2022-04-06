@@ -122,7 +122,9 @@ try
   if(passed){passed = test3(); if(!passed) printf("Test 3 failed\n");}
 #ifndef PERFTEST
   if(passed){passed = test4(); if(!passed) printf("Test 4 failed\n");}
+#ifndef HIP
   if(passed){passed = test5(); if(!passed) printf("Test 5 failed\n");}
+#endif
 #endif
 
   if(passed){

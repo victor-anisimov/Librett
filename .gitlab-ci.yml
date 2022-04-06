@@ -48,6 +48,7 @@ arcticus:
     - echo "Run full test"
     - time bin/librett_test
     - echo "Compilation by using CMake"
+    - make clean
     - cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx
     - cd build; make; make librett_test; make librett_bench; make test
     - echo "Run quick test"
@@ -84,6 +85,7 @@ v100:
     - echo "Run full test"
     - time bin/librett_test
     - echo "Compilation by using CMake"
+    - make clean
     - cmake -H. -Bbuild -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=70
     - cd build; make; make librett_test; make librett_bench; make test
     - echo "Run quick test"
@@ -117,6 +119,7 @@ mi100:
     - echo "Run full test"
     - time bin/librett_test
     - echo "Compilation by using CMake"
+    - make clean
     - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc
     - cd build; make; make librett_test; make librett_bench; make test
     - echo "Run quick test"
