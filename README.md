@@ -8,8 +8,9 @@ LibreTT is a portable Tensor Transpose library that incorporates and superseds t
 cuTT library, https://github.com/ap-hynninen/cutt, which is no longer supported due to tragic 
 death of its author, Antti-Pekka Hynninen in a car accident. Enhancements include adding thread 
 safety by Valeyev Lab at Virginia Tech, https://github.com/ValeevGroup/cutt, incorporating 
-AMD GPU support by Dmitry Lyakh, Oak Ridge National Laboratory, and adding SYCL support by 
-Argonne National Laboratory.
+AMD GPU support by Dmitry Lyakh, Oak Ridge National Laboratory, https://github.com/DmitryLyakh/hipTT 
+followed by implementation of warpsize 64 by Alessandro Fanfarillo, Advanced Micro Devices, Inc., 
+and adding SYCL support by Argonne National Laboratory.
 
 ## Directory Structure
 ```
