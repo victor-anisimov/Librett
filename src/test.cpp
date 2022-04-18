@@ -107,7 +107,7 @@ try
   tester->setTensorCheckPattern((unsigned int *)dataIn, dataSize*2);
 
   bool passed = true;
-  if(passed){passed = test(); if(!passed) printf("Test 3 failed\n");}
+  if(passed){passed = test(); if(!passed) printf("Test failed\n");}
 
   if(passed){
     std::vector<int> worstDim;
