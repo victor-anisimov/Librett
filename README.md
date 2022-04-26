@@ -28,6 +28,7 @@ CMakeLists.txt      CMake script
 LICENSE.md          License to use this software
 Makefile            Top-level Makefile
 Makefile.cuda       Makefile for CUDA platform
+Makefile.hip        Makefile for HIP  platform
 Makefile.sycl       Makefile for SYCL platform
 README.md           This file
 src/                Source code directory
