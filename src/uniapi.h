@@ -123,20 +123,23 @@ SOFTWARE.
 
 // Functions
 #ifdef SYCL
-  #define gpu_shfl_xor(a,b)  item_ct1.get_sub_group().shuffle_xor(a,b)
-  #define gpu_shuffle(a,b)   item_ct1.get_sub_group().shuffle(a,b)
-  #define gpu_shfl_down(a,b) item_ct1.get_sub_group().shuffle_down(a,b)
-  #define gpu_atomicAdd(a,b) sycl::atomic<int>(sycl::global_ptr<int>(&(a))).fetch_add(b)
+  #define gpu_shfl_xor(a,b)   item_ct1.get_sub_group().shuffle_xor(a,b)
+  #define gpu_shuffle(a,b)    item_ct1.get_sub_group().shuffle(a,b)
+  #define gpu_shfl_down(a,b)  item_ct1.get_sub_group().shuffle_down(a,b)
+  #define gpu_atomicAdd(a,b)  sycl::atomic<int>(sycl::global_ptr<int>(&(a))).fetch_add(b)
+  #define DeviceSynchronize() dpct::get_current_device().queues_wait_and_throw()
 #elif HIP
-  #define gpu_shfl_xor(a,b)  __shfl_xor(a,b)
-  #define gpu_shuffle(a,b)   __shfl(a,b)
-  #define gpu_shfl_down(a,b) __shfl_down(a,b)
-  #define gpu_atomicAdd(a,b) atomicAdd(&(a), b)
+  #define gpu_shfl_xor(a,b)   __shfl_xor(a,b)
+  #define gpu_shuffle(a,b)    __shfl(a,b)
+  #define gpu_shfl_down(a,b)  __shfl_down(a,b)
+  #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
+  #define DeviceSynchronize() hipCheck(hipDeviceSynchronize())
 #else // CUDA
-  #define gpu_shfl_xor(a,b)  __shfl_xor_sync(0xffffffff,a,b)
-  #define gpu_shuffle(a,b)   __shfl_sync(0xffffffff,a,b)
-  #define gpu_shfl_down(a,b) __shfl_down_sync(0xffffffff,a,b)
-  #define gpu_atomicAdd(a,b) atomicAdd(&(a), b)
+  #define gpu_shfl_xor(a,b)   __shfl_xor_sync(0xffffffff,a,b)
+  #define gpu_shuffle(a,b)    __shfl_sync(0xffffffff,a,b)
+  #define gpu_shfl_down(a,b)  __shfl_down_sync(0xffffffff,a,b)
+  #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
+  #define DeviceSynchronize() cudaCheck(cudaDeviceSynchronize())
 #endif
 
 #endif // UNIAPI_H

@@ -65,6 +65,6 @@ target_link_libraries(librett_bench PUBLIC librett)
 add_executable(librett_test EXCLUDE_FROM_ALL librett_test.cpp)
 target_link_libraries(librett_test PUBLIC librett)
 
-add_executable(test EXCLUDE_FROM_ALL test.cpp)
-target_link_libraries(test PUBLIC librett)
+add_executable(example EXCLUDE_FROM_ALL example.cpp)
+target_link_libraries(example PUBLIC librett)
 

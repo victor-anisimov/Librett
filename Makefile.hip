@@ -84,7 +84,7 @@ DEFS += -DNO_ALIGNED_ALLOC
 endif
 
 OBJSLIB = build/librett.o build/plan.o build/kernel.o build/GpuModel.o build/GpuMem.o build/GpuUtils.o build/Timer.o build/GpuModelKernel.o
-OBJSTEST1 = build/test.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
+OBJSTEST1 = build/example.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
 OBJSTESTX = build/librett_test.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
 OBJSBENCH = build/librett_bench.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o build/GpuMemcpy.o
 OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
@@ -111,7 +111,7 @@ ifdef ENABLE_NVTOOLS
 CUDA_LFLAGS += -lnvToolsExt
 endif
 
-all: create_build lib/librett.a bin/test bin/librett_test bin/librett_bench
+all: create_build lib/librett.a bin/example bin/librett_test bin/librett_bench
 
 create_build:
 	mkdir -p build
@@ -123,9 +123,9 @@ lib/librett.a: $(OBJSLIB)
 	mkdir -p include
 	cp -f src/librett.h include/librett.h
 
-bin/test : lib/librett.a $(OBJSTEST1)
+bin/example : lib/librett.a $(OBJSTEST1)
 	mkdir -p bin
-	$(HOST_CC) -o bin/test -L/opt/rocm-3.9.0/lib/ -lamdhip64 $(OBJSTEST1) $(CUDA_LFLAGS)
+	$(HOST_CC) -o bin/example -L/opt/rocm-3.9.0/lib/ -lamdhip64 $(OBJSTEST1) $(CUDA_LFLAGS)
 
 bin/librett_test : lib/librett.a $(OBJSTESTX)
 	mkdir -p bin
@@ -140,7 +140,7 @@ clean:
 	rm -f build/*.d
 	rm -f *~
 	rm -f lib/librett.a
-	rm -f bin/test
+	rm -f bin/example
 	rm -f bin/librett_test
 	rm -f bin/librett_bench
 

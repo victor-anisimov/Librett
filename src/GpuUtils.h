@@ -135,4 +135,7 @@ void gpuRangeStart(const char *range_name);
 void gpuRangeStop();
 #endif
 
+void DeviceReset();
+void SelectDevice(int);
+
 #endif // LIBRETTUTILS_H

@@ -120,6 +120,11 @@ librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t
 librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType, 
   gpuStream_t stream) {
 
+#if SYCL
+  if(stream == 0 )
+    stream = &dpct::get_default_queue();
+#endif
+
 #ifdef ENABLE_NVTOOLS
   gpuRangeStart("init");
 #endif

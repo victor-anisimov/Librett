@@ -45,7 +45,10 @@ try
 #endif
 {
   #if SYCL
-    stream->memset(data, value, sizeofT * ndata);
+    if(stream == 0)
+      dpct::get_default_queue().memset(data, value, sizeofT * ndata);
+    else
+      stream->memset(data, value, sizeofT * ndata);
   #elif HIP
     hipCheck(hipMemsetAsync(data, value, sizeofT*ndata, stream));
   #else // CUDA
@@ -203,3 +206,25 @@ void gpuRangeStop() {
   nvtxRangePop();
 }
 #endif
+
+void DeviceReset() {
+  #if SYCL
+    dpct::get_current_device().reset();
+  #elif HIP
+    hipCheck(hipDeviceReset());
+  #else // CUDA
+    cudaCheck(cudaDeviceReset());
+  #endif
+}
+
+void SelectDevice(int gpuid){
+  if (gpuid >= 0) {
+    #if SYCL
+      dpct::dev_mgr::instance().select_device(gpuid);
+    #elif HIP
+      hipCheck(hipSetDevice(gpuid));
+    #else // CUDA
+      cudaCheck(cudaSetDevice(gpuid));
+    #endif
+  }
+}

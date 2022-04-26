@@ -12,6 +12,16 @@ AMD GPU support by Dmitry Lyakh, Oak Ridge National Laboratory, https://github.c
 followed by implementation of warpsize 64 by Alessandro Fanfarillo, Advanced Micro Devices, Inc., 
 and adding SYCL support by Argonne National Laboratory.
 
+## Credits
+```
+cuTT     algorithms: Dmitry Lyakh (ORNL), Antti-Pekka Hynninen (ORNL)
+cuTT     original implementation: Antti-Pekka Hynninen (ORNL)
+cuTT     thread safety: Ed Valeev (VT), Dmitry Lyakh (ORNL)
+hipTT    port of cuTT: Luke Roskop (HPE), Dmitry Lyakh (ORNL)
+hipTT    working version: Alessandro Fanfarillo (AMD)
+LibreTT  SYCL port and CUDA,AMD,INTEL platform integration: Victor Anisimov (ANL)
+```
+
 ## Directory Structure
 ```
 CMakeLists.txt      CMake script
@@ -29,7 +39,7 @@ src/                Source code directory
 
 ## The outcome of manual build
 
-* `bin/`     librett_test, librett_bench
+* `bin/`     librett_test, librett_bench, example
 * `build/`   temporary placeholder for object files
 * `include/` librett.h
 * `lib/`     librett.a
@@ -42,7 +52,7 @@ Example of HIP compilation: `cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPI
 
 Example of SYCL compilation: `cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx`
 
-After that: `cd build; make; make librett_test; make librett_bench; make test`
+After that: `cd build; make; make librett_test; make librett_bench; make example`
 
 ## Testing
 

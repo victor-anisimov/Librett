@@ -36,6 +36,7 @@ All rights reserved.
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuModel.h"      // testCounters
+#include "GpuUtils.h"
 
 #ifdef SYCL
 sycl::queue q = dpct::get_default_queue();
@@ -79,31 +80,14 @@ try
   }
 
   if (!arg_ok) {
-    printf("librett_test [options]\n");
-    printf("Options:\n");
-    printf("-device gpuid : use GPU with ID gpuid\n");
+    printf("Usage: librett_test [options]\n");
+    printf("\tOptions:\n");
+    printf("\t-device gpuid : use GPU with ID gpuid\n");
     return 1;
   }
 
-  if (gpuid >= 0) {
-#if SYCL
-    dpct::dev_mgr::instance().select_device(gpuid);
-#elif HIP
-    hipCheck(hipSetDevice(gpuid));
-#else // CUDA
-    cudaCheck(cudaSetDevice(gpuid));
-#endif
-  }
-
-#if SYCL
-  dpct::get_current_device().reset();
-#elif HIP
-  hipCheck(hipDeviceReset());
-  // hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
-#else // CUDA
-  cudaCheck(cudaDeviceReset());
-  // cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
-#endif
+  SelectDevice(gpuid);
+  DeviceReset();
 
   timerFloat = new librettTimer(4);
   timerDouble = new librettTimer(8);
@@ -146,13 +130,7 @@ try
   delete timerFloat;
   delete timerDouble;
 
-#if SYCL
-  dpct::get_current_device().reset();
-#elif HIP
-  hipCheck(hipDeviceReset());
-#else // CUDA
-  cudaCheck(cudaDeviceReset());
-#endif
+  DeviceReset();
 
   if(passed)
     return 0;
