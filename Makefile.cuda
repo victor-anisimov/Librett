@@ -98,7 +98,7 @@ CFLAGS += -march=native
 endif
 CFLAGS += $(option)
 
-CUDA_CFLAGS = -ccbin $(GPU_CC) -I${CUDAROOT}/include -std=c++17 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(CUDA_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
+CUDA_CFLAGS = -ccbin $(GPU_CC) -allow-unsupported-compiler -I${CUDAROOT}/include -std=c++17 $(OPTLEV) -Xptxas -dlcm=ca -lineinfo $(GENCODE_FLAGS) --resource-usage -Xcompiler "$(CUDA_CCFLAGS)" $(DEFS) -Xcompiler -fPIC -D_FORCE_INLINES
 CUDA_CFLAGS += $(option)
 
 ifeq ($(OS),osx)
