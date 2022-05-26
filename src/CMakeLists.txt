@@ -43,6 +43,11 @@ if(ENABLE_HIP)
   set_property(TARGET librett PROPERTY HIP_ARCHITECTURES gfx906 gfx908)
 endif(ENABLE_HIP)
 
+if(ENABLE_SYCL)
+  target_compile_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device xehp")
+  target_link_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device xehp")
+endif(ENABLE_SYCL)
+
 if(ENABLE_UMPIRE)
     target_link_libraries(librett umpire)
     target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
