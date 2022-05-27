@@ -37,6 +37,7 @@ arcticus:
     - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
     - module load oneapi
     - module load cmake
+    - export ZE_AFFINITY_MASK=0.0
     - echo "Compilation of performance variant"
     - make clean
     - make sycl option=-DPERFTEST
