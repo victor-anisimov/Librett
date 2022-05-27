@@ -44,8 +44,8 @@ if(ENABLE_HIP)
 endif(ENABLE_HIP)
 
 if(ENABLE_SYCL)
-  target_compile_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device xehp")
-  target_link_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device xehp")
+  target_compile_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
+  target_link_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
 endif(ENABLE_SYCL)
 
 if(ENABLE_UMPIRE)
