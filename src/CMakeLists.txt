@@ -43,15 +43,24 @@ if(ENABLE_HIP)
   set_property(TARGET librett PROPERTY HIP_ARCHITECTURES gfx906 gfx908)
 endif(ENABLE_HIP)
 
-if(ENABLE_SYCL)
-  target_compile_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
-  target_link_options(librett PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
-endif(ENABLE_SYCL)
-
 if(ENABLE_UMPIRE)
     target_link_libraries(librett umpire)
     target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
 endif(ENABLE_UMPIRE)
+
+# build the following executables
+foreach(_exec librett_test librett_bench example)
+  add_executable(${_exec} EXCLUDE_FROM_ALL "${_exec}.cpp")
+  target_link_libraries(${_exec} PUBLIC librett)
+endforeach()
+
+# add AoT compilation for Intel GPU
+if(ENABLE_SYCL)
+  foreach(_exec librett librett_test librett_bench example)
+    target_compile_options(${_exec} PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
+    target_link_options(${_exec} PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
+  endforeach()
+endif(ENABLE_SYCL)
 
 # install library and include
 install(TARGETS librett
@@ -63,13 +72,3 @@ install(TARGETS librett
 install(FILES librett.h
             DESTINATION include
         )
-
-add_executable(librett_bench EXCLUDE_FROM_ALL librett_bench.cpp)
-target_link_libraries(librett_bench PUBLIC librett)
-
-add_executable(librett_test EXCLUDE_FROM_ALL librett_test.cpp)
-target_link_libraries(librett_test PUBLIC librett)
-
-add_executable(example EXCLUDE_FROM_ALL example.cpp)
-target_link_libraries(example PUBLIC librett)
-

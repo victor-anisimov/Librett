@@ -88,7 +88,7 @@ if(ENABLE_SYCL)
   include(CheckFunctionExists)
 
   set(CMAKE_CXX_STANDARD 17)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-unnamed-lambda -O3 -DSYCL")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fsycl -fPIC -DSYCL -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
 endif(ENABLE_SYCL)
 
 # ENABLE_NO_ALIGNED_ALLOC
