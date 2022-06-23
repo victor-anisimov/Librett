@@ -1,45 +1,55 @@
-cmake_minimum_required(VERSION 3.10)
-project(librett)
+cmake_minimum_required(VERSION 3.20)
+project(librett VERSION 0.1.0 LANGUAGES CXX)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
 set(CMAKE_STATIC_LIBRARY_PREFIX "")
 
-# enable CXX
-enable_language(CXX)
-if (NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 17)
-endif (NOT CMAKE_CXX_STANDARD)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if (NOT CMAKE_CXX_EXTENSIONS)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-endif (NOT CMAKE_CXX_EXTENSIONS)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY ON)
+
+option(ENABLE_CUDA OFF)
+option(ENABLE_HIP  OFF)
+option(ENABLE_SYCL OFF)
+
+if (NOT (ENABLE_CUDA OR ENABLE_HIP OR ENABLE_HIP))
+  message(FATAL_ERROR "Need to set one of ENABLE_CUDA/ENABLE_HIP/ENABLE_HIP")
+endif()
 
 # select platform
 if(ENABLE_CUDA)
   set(ENABLE_HIP OFF)
   set(ENABLE_SYCL OFF)
-endif(ENABLE_CUDA)
+  option(CMAKE_CUDA_ARCHITECTURES 70)
+endif()
 
 if(ENABLE_HIP)
   set(ENABLE_CUDA OFF)
   set(ENABLE_SYCL OFF)
-endif(ENABLE_HIP)
+endif()
 
 if(ENABLE_SYCL)
   set(ENABLE_CUDA OFF)
   set(ENABLE_HIP OFF)
-endif(ENABLE_SYCL)
+endif()
 
 # enable CUDA
 if(ENABLE_CUDA)
   message(STATUS "Compiling for CUDA platform")
   enable_language(CUDA)
 
-  if (NOT CMAKE_CUDA_STANDARD)
-    set(CMAKE_CUDA_STANDARD 17)
-  endif (NOT CMAKE_CUDA_STANDARD)
+  set(CMAKE_CUDA_STANDARD 17)
+  set(CMAKE_CUDA_EXTENSIONS OFF)
   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-  if (NOT CMAKE_CUDA_EXTENSIONS)
-    set(CMAKE_CUDA_EXTENSIONS OFF)
-  endif (NOT CMAKE_CUDA_EXTENSIONS)
+  # set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+  set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
 
   set(CMAKE_CUDA_FLAGS_INIT "-allow-unsupported-compiler" CACHE STRING "Initial CUDA compile flags")
 
@@ -72,7 +82,6 @@ if(ENABLE_HIP)
   option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
   include(CheckFunctionExists)
 
-  set(CMAKE_CXX_STANDARD 17)
   # the options -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__ have no impact on performance
   #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP -fPIC -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP")
@@ -87,7 +96,6 @@ if(ENABLE_SYCL)
   option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
   include(CheckFunctionExists)
 
-  set(CMAKE_CXX_STANDARD 17)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fsycl -fPIC -DSYCL -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
 endif(ENABLE_SYCL)
 
@@ -113,3 +121,64 @@ endif ()
 
 add_subdirectory(src)
 
+add_library(librett::librett ALIAS librett)
+
+set(LIBRETT_HEADERS
+	src/librett.h
+  src/uniapi.h
+)
+
+
+# Install
+
+include(GNUInstallDirs)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/librett)
+
+install(TARGETS librett
+    EXPORT librett-targets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+set_target_properties(librett PROPERTIES EXPORT_NAME librett)
+
+#Install headers
+install(FILES ${LIBRETT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
+install(DIRECTORY src/dpct DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
+
+#Export the targets to a script
+install(EXPORT librett-targets
+    FILE
+        librett-targets.cmake
+    NAMESPACE
+        librett::
+    DESTINATION
+        ${INSTALL_CONFIGDIR}
+)
+
+#Create a ConfigVersion.cmake file
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/librett-config-version.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+# Setup librett-config.cmake
+configure_package_config_file(${CMAKE_CURRENT_LIST_DIR}/cmake/librett-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/librett-config.cmake
+    INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR
+)
+
+#Install the config and configversion files
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/librett-config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/librett-config-version.cmake
+    DESTINATION ${INSTALL_CONFIGDIR}
+)
+
+#Export build tree
+export(EXPORT librett-targets
+    FILE ${CMAKE_CURRENT_BINARY_DIR}/librett-targets.cmake
+    NAMESPACE librett::)

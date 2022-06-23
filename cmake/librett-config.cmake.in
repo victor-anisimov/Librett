@@ -1,0 +1,19 @@
+
+@PACKAGE_INIT@
+
+set(ENABLE_CUDA @ENABLE_CUDA@)
+set(ENABLE_HIP  @ENABLE_HIP@)
+set(ENABLE_SYCL @ENABLE_SYCL@)
+
+if(ENABLE_CUDA)
+  enable_language(CUDA)
+endif()
+
+if(NOT TARGET librett::librett)
+  include("${CMAKE_CURRENT_LIST_DIR}/librett-targets.cmake")
+endif()
+
+set(LIBRETT_FOUND TRUE)
+set(LIBRETT_LIBRARIES librett::librett)
+set(LIBRETT_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+
