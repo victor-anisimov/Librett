@@ -39,6 +39,7 @@ All rights reserved.
 #include "kernel.h"
 #include <iostream>
 #include "unistd.h"
+#include <complex>
 
 #define RESTRICT __restrict__
 
@@ -783,7 +784,9 @@ try
       #endif // HIP
       switch(lc.numRegStorage) {
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (sizeofType == 8) CALL0(double, ICASE); break
+	                                if (sizeofType == 8) CALL0(double, ICASE); \
+                                  if (sizeofType == 16) CALL0(std::complex<double>, ICASE); break
+
         #include "calls.h"
       }
       #undef CALL
@@ -835,7 +838,8 @@ try
 	  #endif // HIP
           switch(lc.numRegStorage) {
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-		                            if (sizeofType == 8) CALL0(double, ICASE); break
+		                            if (sizeofType == 8) CALL0(double, ICASE); \
+                                if (sizeofType == 16) CALL0(std::complex<double>, ICASE); break
             #include "calls.h"
           }
           #undef CALL
@@ -852,18 +856,26 @@ try
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<double>, numthread, lc.shmemsize);
       }
+      else if (sizeofType == 16) {
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<std::complex<double>>, numthread, lc.shmemsize);
+      }      
 #endif
 #if HIP
       if (sizeofType == 4) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<double>, numthread, lc.shmemsize);
+      }
+      else if (sizeofType == 16) {
+        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<std::complex<double>>, numthread, lc.shmemsize);        
       }
 #endif
     }
@@ -875,19 +887,27 @@ try
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
+      } else if (sizeofType == 16) {
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<std::complex<double>>, numthread, lc.shmemsize);
       }
 #endif
 #if HIP
       if (sizeofType == 4) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       }
+      else if (sizeofType == 16) {
+        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<std::complex<double>>, numthread, lc.shmemsize);
+      }
+
 #endif
     }
     break;
@@ -1161,7 +1181,8 @@ try
               plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif // SYCL
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
+                                  if (plan.sizeofType == 16) CALL0(std::complex<double>, ICASE); break
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1219,7 +1240,9 @@ try
               plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
+                                  if (plan.sizeofType == 16) CALL0(std::complex<double>, ICASE); break
+
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1276,6 +1299,7 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
+      if (plan.sizeofType == 16) CALL(std::complex<double>);
       #undef CALL
     }
     break;
@@ -1317,6 +1341,7 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
+      if (plan.sizeofType == 16) CALL(std::complex<double>);
       #undef CALL
     }
     break;

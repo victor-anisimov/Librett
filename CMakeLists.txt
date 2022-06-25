@@ -19,8 +19,8 @@ option(ENABLE_CUDA OFF)
 option(ENABLE_HIP  OFF)
 option(ENABLE_SYCL OFF)
 
-if (NOT (ENABLE_CUDA OR ENABLE_HIP OR ENABLE_HIP))
-  message(FATAL_ERROR "Need to set one of ENABLE_CUDA/ENABLE_HIP/ENABLE_HIP")
+if (NOT (ENABLE_CUDA OR ENABLE_HIP OR ENABLE_SYCL))
+  message(FATAL_ERROR "Need to set one of ENABLE_CUDA/ENABLE_HIP/ENABLE_SYCL")
 endif()
 
 # select platform
