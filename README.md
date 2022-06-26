@@ -49,7 +49,7 @@ src/                Source code directory
 
 Example of CUDA compilation: `cmake -H. -Bbuild -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=70`
 
-Example of HIP compilation: `cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc`
+Example of HIP compilation: `cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc -DCMAKE_HIP_ARCHITECTURES=gfx908`
 
 Example of SYCL compilation: `cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx`
 

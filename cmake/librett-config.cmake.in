@@ -7,6 +7,8 @@ set(ENABLE_SYCL @ENABLE_SYCL@)
 
 if(ENABLE_CUDA)
   enable_language(CUDA)
+elseif(ENABLE_HIP)
+  enable_language(HIP)
 endif()
 
 if(NOT TARGET librett::librett)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.22)
 project(librett VERSION 0.1.0 LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -22,6 +22,10 @@ option(ENABLE_SYCL OFF)
 if (NOT (ENABLE_CUDA OR ENABLE_HIP OR ENABLE_SYCL))
   message(FATAL_ERROR "Need to set one of ENABLE_CUDA/ENABLE_HIP/ENABLE_SYCL")
 endif()
+
+include(CheckFunctionExists)
+option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
+option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
 
 # select platform
 if(ENABLE_CUDA)
@@ -59,9 +63,6 @@ if(ENABLE_CUDA)
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
   option(ENABLE_NVTOOLS "Enable nvvp profiling of CPU code" OFF)
-  option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
-  option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
-  include(CheckFunctionExists)
 
   # ENABLE_NVTOOLS
   if(ENABLE_NVTOOLS)
@@ -78,25 +79,16 @@ if(ENABLE_HIP)
   message(STATUS "Compiling for HIP platform")
   enable_language(HIP)
 
-  option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
-  option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
-  include(CheckFunctionExists)
-
-  # the options -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__ have no impact on performance
-  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP -fPIC -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DHIP")
-  set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -O3 -DHIP -D_FORCE_INLINES")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHIP")
+  set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -DHIP -D_FORCE_INLINES")
 endif(ENABLE_HIP)
 
 #enable SYCL
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
 
-  option(ENABLE_NO_ALIGNED_ALLOC "Enable aligned_alloc() function implemented in libreTT" OFF)
-  option(ENABLE_UMPIRE "Enable umpire for memory management" OFF)
-  include(CheckFunctionExists)
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fsycl -fPIC -DSYCL -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -DSYCL -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
 endif(ENABLE_SYCL)
 
 # ENABLE_NO_ALIGNED_ALLOC
