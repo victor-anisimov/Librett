@@ -27,6 +27,7 @@ SOFTWARE.
 #include <ctime>           // std::time
 #include <cstring>         // strcmp
 #include <cmath>
+#include <complex>
 #include "librett.h"
 #include "GpuUtils.h"
 #include "GpuMem.h"
@@ -35,8 +36,8 @@ SOFTWARE.
 #include "GpuModel.h"      // testCounters
 #include "GpuUtils.h"
 
-long long int* dataIn  = NULL;
-long long int* dataOut = NULL;
+std::complex<double>* dataIn  = NULL;
+std::complex<double>* dataOut = NULL;
 int nData = 200000000;
 
 #define DEBUG_PRINT 0   // set to 1 to print all tensor index values
@@ -84,22 +85,22 @@ int main(int argc, char *argv[])
   permutation[4] = 2;
 
   // Allocate device data, 200M elements
-  allocate_device<long long int>(&dataIn, nData);
-  allocate_device<long long int>(&dataOut, nData);
+  allocate_device<std::complex<double>>(&dataIn, nData);
+  allocate_device<std::complex<double>>(&dataOut, nData);
 
-  printf("\n4-byte test\n");
-  if (!tensor_transpose<int>(dim, permutation)) passed = false;
+  // printf("\n4-byte test\n");
+  // if (!tensor_transpose<int>(dim, permutation)) passed = false;
 
   printf("\n8-byte test\n");
-  if (!tensor_transpose<long long int>(dim, permutation)) passed = false;
+  if (!tensor_transpose<std::complex<double>>(dim, permutation)) passed = false;
 
   if(passed)
     printf("\nTest OK\n");
   else 
     printf("\nTest failed\n");
 
-  deallocate_device<long long int>(&dataIn);
-  deallocate_device<long long int>(&dataOut);
+  deallocate_device<std::complex<double>>(&dataIn);
+  deallocate_device<std::complex<double>>(&dataOut);
 
   DeviceReset();
 
@@ -127,7 +128,9 @@ bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation)
   printVec(permutation);
 
   size_t volmem = vol * sizeof(T);
-  size_t datamem = nData * sizeof(long long int);
+  printf("#sizeof(T) = %llu\n",sizeof(T));
+
+  size_t datamem = nData * sizeof(std::complex<double>);
   if (volmem > datamem) {
     printf("#ERROR(test_tensor): Data size exceeded: %llu %llu\n",volmem,datamem);
     return false;
