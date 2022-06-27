@@ -49,13 +49,20 @@ if(ENABLE_CUDA)
   message(STATUS "Compiling for CUDA platform")
   enable_language(CUDA)
 
+  set(_CUDA_MIN "10.1")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS ${_CUDA_MIN})
+    message(FATAL_ERROR "CUDA version provided \
+    (${CMAKE_CUDA_COMPILER_VERSION}) \
+    is insufficient. Need CUDA >= ${_CUDA_MIN})")
+  endif()
+
   set(CMAKE_CUDA_STANDARD 17)
   set(CMAKE_CUDA_EXTENSIONS OFF)
   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   # set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
   set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
 
-  set(CMAKE_CUDA_FLAGS_INIT "-allow-unsupported-compiler" CACHE STRING "Initial CUDA compile flags")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr -allow-unsupported-compiler")
 
   message(STATUS "CUDA Include Dirs: " ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
   message(STATUS "CUDA Host Compiler: " ${CMAKE_CUDA_HOST_COMPILER})
@@ -69,9 +76,9 @@ if(ENABLE_CUDA)
     add_definitions(-DENABLE_NVTOOLS)
     list(APPEND CUDA_NVCC_FLAGS -lnvToolsExt)
     link_libraries(-lnvToolsExt)
+    message(STATUS "Current CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
   endif()
 
-  message(STATUS "Current CUDA_NVCC_FLAGS: ${CUDA_NVCC_FLAGS}")
 endif(ENABLE_CUDA)
 
 #enable HIP
@@ -86,7 +93,6 @@ endif(ENABLE_HIP)
 #enable SYCL
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
-
 
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -DSYCL -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
 endif(ENABLE_SYCL)
