@@ -40,7 +40,7 @@ endif(ENABLE_CUDA)
 
 if(ENABLE_HIP)
   set_source_files_properties(${DEVICE_SOURCE_FILES} PROPERTIES LANGUAGE HIP)
-  set_property(TARGET librett PROPERTY HIP_ARCHITECTURES gfx906 gfx908)
+  # set_property(TARGET librett PROPERTY HIP_ARCHITECTURES gfx906 gfx908)
 endif(ENABLE_HIP)
 
 if(ENABLE_UMPIRE)
@@ -62,13 +62,3 @@ if(ENABLE_SYCL)
   endforeach()
 endif(ENABLE_SYCL)
 
-# install library and include
-install(TARGETS librett
-        ARCHIVE
-            DESTINATION lib
-        LIBRARY
-            DESTINATION lib
-        )
-install(FILES librett.h
-            DESTINATION include
-        )
