@@ -1253,7 +1253,7 @@ workgroup size if needed.
 #if HIP
   hipCheck(hipGetLastError());
 #endif
-#if CUDA
+#if LIBRETT_USES_CUDA
   cudaCheck(cudaGetLastError());
 #endif
 

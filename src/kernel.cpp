@@ -710,7 +710,7 @@ __global__ void transposeTiledCopy(
 // Sets shared memory bank configuration for all kernels. Needs to be called once per device.
 //
 void librettKernelSetSharedMemConfig() {
-#if CUDA // CUDA
+#if LIBRETT_USES_CUDA // CUDA
   #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
   #include "calls.h"
   #undef CALL
@@ -771,7 +771,7 @@ try
     case Packed:
     {
     #ifndef SYCL
-      #if CUDA
+      #if LIBRETT_USES_CUDA
         #define CALL0(TYPE, NREG) \
           cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
             transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
@@ -823,7 +823,7 @@ try
       if (numActiveBlock == -1) {
         // key not found in cache, determine value and add it to cache
         #ifndef SYCL
-	  #if CUDA
+	  #if LIBRETT_USES_CUDA
             #define CALL0(TYPE, NREG) \
               cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
                 transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
@@ -848,7 +848,7 @@ try
 
     case Tiled:
     {
-#if CUDA
+#if LIBRETT_USES_CUDA
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
@@ -871,7 +871,7 @@ try
 
     case TiledCopy:
     {
-#if CUDA
+#if LIBRETT_USES_CUDA
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
@@ -1323,7 +1323,7 @@ try
 
   }
 
-#if CUDA
+#if LIBRETT_USES_CUDA
   cudaCheck(cudaGetLastError());
 #elif HIP
   hipCheck(hipGetLastError());
