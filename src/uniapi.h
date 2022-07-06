@@ -36,7 +36,7 @@ SOFTWARE.
 #endif
 
 #if !defined(SYCL) && !defined(HIP)
-  #define CUDA 1
+  #define LIBRETT_USES_CUDA 1
 #endif
 
 // Work units
