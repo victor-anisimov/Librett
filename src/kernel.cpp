@@ -774,10 +774,14 @@ try
             transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
       #endif // HIP
       switch(lc.numRegStorage) {
+        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (sizeofType == 8) CALL0(double, ICASE); \
-                                  if (sizeofType == 16) CALL0(complex, ICASE); break;
-
+                                  if (sizeofType == 16) CALL0(librett_complex, ICASE); break;
+        #else
+        #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+	                                      if (sizeofType == 8) CALL0(double, ICASE); break;
+        #endif
         #include "calls.h"
       }
       #undef CALL
@@ -828,9 +832,14 @@ try
                 transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
 	  #endif // HIP
           switch(lc.numRegStorage) {
+            #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 		                            if (sizeofType == 8) CALL0(double, ICASE); \
-                                if (sizeofType == 16) CALL0(complex, ICASE); break;
+                                if (sizeofType == 16) CALL0(librett_complex,ICASE); break;
+            #else
+            #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+                                            if (sizeofType == 8) CALL0(double, ICASE); break;
+            #endif
             #include "calls.h"
           }
           #undef CALL
@@ -853,7 +862,7 @@ try
       }
       else if (sizeofType == 16) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<complex>, numthread, lc.shmemsize);
+          transposeTiled<librett_complex>, numthread, lc.shmemsize);
       }      
 #endif
 #if HIP
@@ -867,7 +876,7 @@ try
       else if (sizeofType == 16) {
         // FIXME: Disabled for now due to LDS size compilation error
         // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-        //   transposeTiled<complex>, numthread, lc.shmemsize);        
+        //   transposeTiled<librett_complex>, numthread, lc.shmemsize);        
       }
 #endif
     }
@@ -884,7 +893,7 @@ try
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       } else if (sizeofType == 16) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<complex>, numthread, lc.shmemsize);
+          transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
       }
 #endif
 #if HIP
@@ -898,7 +907,7 @@ try
       else if (sizeofType == 16) {
         // FIXME: Disabled for now due to LDS size compilation error
         // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-        //   transposeTiledCopy<complex>, numthread, lc.shmemsize);
+        //   transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
       }
 
 #endif
@@ -1173,9 +1182,15 @@ try
               (ts.volMmk, ts.volMbar, ts.sizeMmk, ts.sizeMbar,                                     \
               plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif // SYCL
+        
+        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
-                                  if (plan.sizeofType == 16) CALL0(complex, ICASE); break;
+                                  if (plan.sizeofType == 16) CALL0(librett_complex,ICASE); break;
+        #else
+        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break;
+        #endif
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1232,10 +1247,14 @@ try
               (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                     \
               plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif
+        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
-                                  if (plan.sizeofType == 16) CALL0(complex, ICASE); break;
-
+                                  if (plan.sizeofType == 16) CALL0(librett_complex, ICASE); break;
+        #else
+        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	                                      if (plan.sizeofType == 8) CALL0(double, ICASE); break;
+        #endif
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1292,7 +1311,9 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
-      if (plan.sizeofType == 16) CALL(complex);
+      #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+      if (plan.sizeofType == 16) CALL(librett_complex);
+      #endif
       #undef CALL
     }
     break;
@@ -1334,7 +1355,9 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
-      if (plan.sizeofType == 16) CALL(complex);
+      #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+      if (plan.sizeofType == 16) CALL(librett_complex);
+      #endif
       #undef CALL
     }
     break;

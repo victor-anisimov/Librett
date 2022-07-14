@@ -30,15 +30,15 @@ SOFTWARE.
   #include <CL/sycl.hpp>
   #include "dpct/dpct.hpp"
   #include <complex>
-  typedef std::complex<double> complex;  
+  typedef std::complex<double> librett_complex;  
 #elif HIP
   #include <hip/hip_runtime.h>
   #include <hip/hip_complex.h>
-  typedef hipDoubleComplex complex;  
+  typedef hipDoubleComplex librett_complex;  
 #else // CUDA
   #include <cuda.h>
   #include <cuComplex.h>
-  typedef cuDoubleComplex complex;
+  typedef cuDoubleComplex librett_complex;
 #endif
 
 #if !defined(SYCL) && !defined(HIP)
