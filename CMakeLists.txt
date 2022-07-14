@@ -32,16 +32,19 @@ if(ENABLE_CUDA)
   set(ENABLE_HIP OFF)
   set(ENABLE_SYCL OFF)
   option(CMAKE_CUDA_ARCHITECTURES 70)
+  set(LIBRETT_COMPILE_DEFS LIBRETT_USES_CUDA)
 endif()
 
 if(ENABLE_HIP)
   set(ENABLE_CUDA OFF)
   set(ENABLE_SYCL OFF)
+  set(LIBRETT_COMPILE_DEFS HIP)
 endif()
 
 if(ENABLE_SYCL)
   set(ENABLE_CUDA OFF)
   set(ENABLE_HIP OFF)
+  set(LIBRETT_COMPILE_DEFS SYCL)
 endif()
 
 # enable CUDA
@@ -62,7 +65,7 @@ if(ENABLE_CUDA)
   # set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
   set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
 
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr -allow-unsupported-compiler")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -allow-unsupported-compiler")
 
   message(STATUS "CUDA Include Dirs: " ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
   message(STATUS "CUDA Host Compiler: " ${CMAKE_CUDA_HOST_COMPILER})
@@ -86,15 +89,15 @@ if(ENABLE_HIP)
   message(STATUS "Compiling for HIP platform")
   enable_language(HIP)
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHIP")
-  set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -DHIP -D_FORCE_INLINES")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -D_FORCE_INLINES")
 endif(ENABLE_HIP)
 
 #enable SYCL
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -DSYCL -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
 endif(ENABLE_SYCL)
 
 # ENABLE_NO_ALIGNED_ALLOC
@@ -120,10 +123,10 @@ endif ()
 add_subdirectory(src)
 
 add_library(librett::librett ALIAS librett)
+target_compile_definitions(librett PUBLIC ${LIBRETT_COMPILE_DEFS})
 
 set(LIBRETT_HEADERS
 	src/librett.h
-  src/uniapi.h
 )
 
 
@@ -142,7 +145,6 @@ set_target_properties(librett PROPERTIES EXPORT_NAME librett)
 
 #Install headers
 install(FILES ${LIBRETT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
-install(DIRECTORY src/dpct DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
 
 #Export the targets to a script
 install(EXPORT librett-targets

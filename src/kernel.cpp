@@ -25,14 +25,6 @@ SOFTWARE.
 Modifications Copyright (c) 2022 Advanced Micro Devices, Inc.
 All rights reserved.
 *******************************************************************************/
-#if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
-  #include <cuda.h>
-#endif
 
 #include "GpuUtils.h"
 #include "LRUCache.h"
@@ -782,8 +774,14 @@ try
             transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
       #endif // HIP
       switch(lc.numRegStorage) {
+        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (sizeofType == 8) CALL0(double, ICASE); break
+	                                if (sizeofType == 8) CALL0(double, ICASE); \
+                                  if (sizeofType == 16) CALL0(librett_complex, ICASE); break;
+        #else
+        #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+	                                      if (sizeofType == 8) CALL0(double, ICASE); break;
+        #endif
         #include "calls.h"
       }
       #undef CALL
@@ -834,8 +832,14 @@ try
                 transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
 	  #endif // HIP
           switch(lc.numRegStorage) {
+            #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-		                            if (sizeofType == 8) CALL0(double, ICASE); break
+		                            if (sizeofType == 8) CALL0(double, ICASE); \
+                                if (sizeofType == 16) CALL0(librett_complex,ICASE); break;
+            #else
+            #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+                                            if (sizeofType == 8) CALL0(double, ICASE); break;
+            #endif
             #include "calls.h"
           }
           #undef CALL
@@ -852,18 +856,27 @@ try
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<double>, numthread, lc.shmemsize);
       }
+      else if (sizeofType == 16) {
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<librett_complex>, numthread, lc.shmemsize);
+      }      
 #endif
 #if HIP
       if (sizeofType == 4) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<double>, numthread, lc.shmemsize);
+      }
+      else if (sizeofType == 16) {
+        // FIXME: Disabled for now due to LDS size compilation error
+        // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        //   transposeTiled<librett_complex>, numthread, lc.shmemsize);        
       }
 #endif
     }
@@ -875,19 +888,28 @@ try
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
+      } else if (sizeofType == 16) {
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
       }
 #endif
 #if HIP
       if (sizeofType == 4) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       }
+      else if (sizeofType == 16) {
+        // FIXME: Disabled for now due to LDS size compilation error
+        // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        //   transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
+      }
+
 #endif
     }
     break;
@@ -1160,8 +1182,15 @@ try
               (ts.volMmk, ts.volMbar, ts.sizeMmk, ts.sizeMbar,                                     \
               plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif // SYCL
+        
+        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
+                                  if (plan.sizeofType == 16) CALL0(librett_complex,ICASE); break;
+        #else
+        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break;
+        #endif
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1218,8 +1247,14 @@ try
               (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                     \
               plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif
+        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break
+	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
+                                  if (plan.sizeofType == 16) CALL0(librett_complex, ICASE); break;
+        #else
+        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	                                      if (plan.sizeofType == 8) CALL0(double, ICASE); break;
+        #endif
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1276,6 +1311,9 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
+      #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+      if (plan.sizeofType == 16) CALL(librett_complex);
+      #endif
       #undef CALL
     }
     break;
@@ -1317,6 +1355,9 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
+      #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+      if (plan.sizeofType == 16) CALL(librett_complex);
+      #endif
       #undef CALL
     }
     break;

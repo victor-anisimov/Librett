@@ -94,12 +94,12 @@ void getDeviceProp(int& deviceID, gpuDeviceProp_t &prop) {
 
 librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeofType) {
   // Check sizeofType
-  if (sizeofType != 4 && sizeofType != 8) return LIBRETT_INVALID_PARAMETER;
+  if (sizeofType != 4 && sizeofType != 8 && sizeofType != 16) return LIBRETT_INVALID_PARAMETER;
   // Check rank
-  if (rank <= 1) return LIBRETT_INVALID_PARAMETER;
+  if (rank < 1) return LIBRETT_INVALID_PARAMETER;
   // Check dim[]
   for (int i=0;i < rank;i++) {
-    if (dim[i] <= 1) return LIBRETT_INVALID_PARAMETER;
+    if (dim[i] < 1) return LIBRETT_INVALID_PARAMETER;
   }
   // Check permutation
   bool permutation_fail = false;
