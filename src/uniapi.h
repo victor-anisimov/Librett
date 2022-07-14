@@ -29,10 +29,16 @@ SOFTWARE.
 #ifdef SYCL
   #include <CL/sycl.hpp>
   #include "dpct/dpct.hpp"
+  #include <complex>
+  typedef std::complex<double> complex;  
 #elif HIP
   #include <hip/hip_runtime.h>
+  #include <hip/hip_complex.h>
+  typedef hipDoubleComplex complex;  
 #else // CUDA
-//  #include <cuda.h>
+  #include <cuda.h>
+  #include <cuComplex.h>
+  typedef cuDoubleComplex complex;
 #endif
 
 #if !defined(SYCL) && !defined(HIP)

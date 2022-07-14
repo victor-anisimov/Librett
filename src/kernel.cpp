@@ -25,23 +25,6 @@ SOFTWARE.
 Modifications Copyright (c) 2022 Advanced Micro Devices, Inc.
 All rights reserved.
 *******************************************************************************/
-#if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-  #include <complex>
-  typedef std::complex<float> librettComplex4;
-  typedef std::complex<double> librettComplex8;
-#elif HIP
-  #include <hip/hip_runtime.h>
-  #include <hip/hip_complex.h>
-  typedef hipFloatComplex librettComplex4;
-  typedef hipDoubleComplex librettComplex8;
-#else // CUDA
-  #include <cuda.h>
-  #include <cuComplex.h>
-  typedef cuFloatComplex librettComplex4;
-  typedef cuDoubleComplex librettComplex8;
-#endif
 
 #include "GpuUtils.h"
 #include "LRUCache.h"
@@ -793,7 +776,7 @@ try
       switch(lc.numRegStorage) {
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (sizeofType == 8) CALL0(double, ICASE); \
-                                  if (sizeofType == 16) CALL0(librettComplex8, ICASE); break;
+                                  if (sizeofType == 16) CALL0(complex, ICASE); break;
 
         #include "calls.h"
       }
@@ -847,7 +830,7 @@ try
           switch(lc.numRegStorage) {
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 		                            if (sizeofType == 8) CALL0(double, ICASE); \
-                                if (sizeofType == 16) CALL0(librettComplex8, ICASE); break;
+                                if (sizeofType == 16) CALL0(complex, ICASE); break;
             #include "calls.h"
           }
           #undef CALL
@@ -870,7 +853,7 @@ try
       }
       else if (sizeofType == 16) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<librettComplex8>, numthread, lc.shmemsize);
+          transposeTiled<complex>, numthread, lc.shmemsize);
       }      
 #endif
 #if HIP
@@ -882,8 +865,9 @@ try
           transposeTiled<double>, numthread, lc.shmemsize);
       }
       else if (sizeofType == 16) {
-        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<librettComplex8>, numthread, lc.shmemsize);        
+        // FIXME: Disabled for now due to LDS size compilation error
+        // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        //   transposeTiled<complex>, numthread, lc.shmemsize);        
       }
 #endif
     }
@@ -900,7 +884,7 @@ try
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       } else if (sizeofType == 16) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<librettComplex8>, numthread, lc.shmemsize);
+          transposeTiledCopy<complex>, numthread, lc.shmemsize);
       }
 #endif
 #if HIP
@@ -912,8 +896,9 @@ try
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       }
       else if (sizeofType == 16) {
-        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<librettComplex8>, numthread, lc.shmemsize);
+        // FIXME: Disabled for now due to LDS size compilation error
+        // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        //   transposeTiledCopy<complex>, numthread, lc.shmemsize);
       }
 
 #endif
@@ -1190,7 +1175,7 @@ try
         #endif // SYCL
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
-                                  if (plan.sizeofType == 16) CALL0(librettComplex8, ICASE); break;
+                                  if (plan.sizeofType == 16) CALL0(complex, ICASE); break;
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1249,7 +1234,7 @@ try
         #endif
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
-                                  if (plan.sizeofType == 16) CALL0(librettComplex8, ICASE); break;
+                                  if (plan.sizeofType == 16) CALL0(complex, ICASE); break;
 
         #include "calls.h"
         default:
@@ -1307,7 +1292,7 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
-      if (plan.sizeofType == 16) CALL(librettComplex8);
+      if (plan.sizeofType == 16) CALL(complex);
       #undef CALL
     }
     break;
@@ -1349,7 +1334,7 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
-      if (plan.sizeofType == 16) CALL(librettComplex8);
+      if (plan.sizeofType == 16) CALL(complex);
       #undef CALL
     }
     break;
