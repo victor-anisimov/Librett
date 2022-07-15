@@ -38,24 +38,24 @@ arcticus:
     - module load oneapi
     - module load cmake
     - export ZE_AFFINITY_MASK=0.0
-    - echo "Compilation of performance variant"
+    - echo "Compiling the performance testing variant"
     - make clean
     - make sycl option=-DPERFTEST
-    - echo "Run performance test"
+    - echo "Running the performance test"
     - time bin/librett_test
-    - echo "Compilation of full code"
+    - echo "Compiling the full code"
     - make clean
     - make sycl
-    - echo "Run full test"
+    - echo "Running the full test"
     - time bin/librett_test
-    - echo "Compilation by using CMake"
+    - echo "Compiling by using CMake"
     - make clean
     - cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx
-    - cd build; make; make librett_test; make librett_bench; make example
-    - echo "Run quick test"
-    - time src/example
-    - echo "Run bench test"
-    - time src/librett_bench -bench 3
+    - cd build; make
+    - echo "Running CMake tests"
+    - ctest
+    - echo "Running the bench test"
+    - time tests/librett_bench -bench 3
     - echo "SYCL test end"
 
 # V100 nodes using Generic batch executor  
@@ -75,24 +75,24 @@ v100:
     - module load cmake
     - module load cuda/11.2.0
     - export MPIR_CVAR_ENABLE_GPU=0
-    - echo "Compilation of performance variant"
+    - echo "Compiling the performance testing variant"
     - make clean
     - make cuda option=-DPERFTEST
-    - echo "Run performance test"
+    - echo "Running the performance test"
     - time bin/librett_test
-    - echo "Compilation of full code"
+    - echo "Compiling the full code"
     - make clean
     - make cuda
-    - echo "Run full test"
+    - echo "Running the full test"
     - time bin/librett_test
-    - echo "Compilation by using CMake"
+    - echo "Compiling by using CMake"
     - make clean
     - cmake -H. -Bbuild -DENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=70
-    - cd build; make; make librett_test; make librett_bench; make example
-    - echo "Run quick test"
-    - time src/example
-    - echo "Run bench test"
-    - time src/librett_bench -bench 3
+    - cd build; make
+    - echo "Running CMake tests"
+    - ctest
+    - echo "Running the bench test"
+    - time tests/librett_bench -bench 3
     - echo "CUDA test end"
 
 # MI100 nodes using Generic batch executor  
@@ -109,24 +109,24 @@ mi100:
     - hostname
     - echo "Running on $(hostname) with setuid batch runner on mi100 with generic batch"
     - export MPIR_CVAR_ENABLE_GPU=0
-    - echo "Compilation of performance variant"
+    - echo "Compiling the performance testing variant"
     - make clean
     - make hip option=-DPERFTEST
-    - echo "Run performance test"
+    - echo "Running the performance test"
     - time bin/librett_test
-    - echo "Compilation of full code"
+    - echo "Compiling the full code"
     - make clean
     - make hip
-    - echo "Run full test"
+    - echo "Running the full test"
     - time bin/librett_test
-    - echo "Compilation by using CMake"
+    - echo "Compiling by using CMake"
     - make clean
     - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc
-    - cd build; make; make librett_test; make librett_bench; make example
-    - echo "Run quick test"
-    - time src/example
-    - echo "Run bench test"
-    - time src/librett_bench -bench 3
+    - cd build; make
+    - echo "Running CMake tests"
+    - ctest
+    - echo "Running the bench test"
+    - time tests/librett_bench -bench 3
     - echo "HIP test end"
 
 # afer script to be executed after each job
