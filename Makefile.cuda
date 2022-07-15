@@ -92,7 +92,7 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
-CFLAGS = -I${CUDAROOT}/include -std=c++17 $(DEFS) $(OPTLEV) -fPIC
+CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
@@ -179,6 +179,11 @@ build/TensorTester.o : src/TensorTester.cpp
 #	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
 
 build/%.o : src/%.cpp
+	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
+	echo -e 'build/\c' > build/$*.d
+	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d
+
+build/%.o : tests/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
 	echo -e 'build/\c' > build/$*.d
 	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d

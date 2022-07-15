@@ -53,11 +53,12 @@ Example of HIP compilation: `cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPI
 
 Example of SYCL compilation: `cmake -H. -Bbuild -DENABLE_SYCL=ON -DCMAKE_CXX_COMPILER=icpx`
 
-After that: `cd build; make; make librett_test; make librett_bench; make example`
+Testing options: `-DENABLE_TESTS=ON` (default)
 
 ## Testing
 
-Execute `bin/librett_test` without arguments.
+`Manual build`: Execute `bin/librett_test` without arguments.  
+`CMake build`: Execute `ctest`
 
 ## Description
 

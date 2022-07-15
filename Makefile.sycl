@@ -79,7 +79,7 @@ GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
 GPUROOT = $(GPU_PATH)
 
 # JiT compilation
-CFLAGS = -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL -fsycl-default-sub-group-size=32
+CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL -fsycl-default-sub-group-size=32
 
 # AoT compilation
 CFLAGS += -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0"
@@ -137,3 +137,8 @@ build/%.o : src/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
 #	$(HOST_CC) -E $(CFLAGS) $< > build/$*.i
 #	$(HOST_CC) -M $(CFLAGS) $< > build/$*.d
+
+build/%.o : tests/%.cpp
+	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
+	echo -e 'build/\c' > build/$*.d
+	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d

@@ -91,7 +91,7 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
-CFLAGS = -I${CUDAROOT}/include -std=c++11 $(DEFS) $(OPTLEV) -fPIC -DHIP -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
+CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++11 $(DEFS) $(OPTLEV) -fPIC -DHIP -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
@@ -179,6 +179,11 @@ build/kernel.o : src/kernel.cpp
 	$(CUDAC) -M $(CUDA_CFLAGS) $< >> $*.d
 
 build/%.o : src/%.cpp
+	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
+	echo -e 'build/\c' > build/$*.d
+	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d
+
+build/%.o : tests/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
 	echo -e 'build/\c' > build/$*.d
 	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d

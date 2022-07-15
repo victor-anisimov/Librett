@@ -44,21 +44,9 @@ if(ENABLE_HIP)
 endif(ENABLE_HIP)
 
 if(ENABLE_UMPIRE)
-    target_link_libraries(librett umpire)
-    target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
+  target_link_libraries(librett umpire)
+  target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
 endif(ENABLE_UMPIRE)
 
-# build the following executables
-foreach(_exec librett_test librett_bench example)
-  add_executable(${_exec} EXCLUDE_FROM_ALL "${_exec}.cpp")
-  target_link_libraries(${_exec} PUBLIC librett)
-endforeach()
 
-# add AoT compilation for Intel GPU
-if(ENABLE_SYCL)
-  foreach(_exec librett librett_test librett_bench example)
-    target_compile_options(${_exec} PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
-    target_link_options(${_exec} PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
-  endforeach()
-endif(ENABLE_SYCL)
 

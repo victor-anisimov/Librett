@@ -15,9 +15,10 @@ set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY ON)
 
-option(ENABLE_CUDA OFF)
-option(ENABLE_HIP  OFF)
-option(ENABLE_SYCL OFF)
+option(ENABLE_CUDA  OFF)
+option(ENABLE_HIP   OFF)
+option(ENABLE_SYCL  OFF)
+option(ENABLE_TESTS "Enable tests" ON)
 
 if (NOT (ENABLE_CUDA OR ENABLE_HIP OR ENABLE_SYCL))
   message(FATAL_ERROR "Need to set one of ENABLE_CUDA/ENABLE_HIP/ENABLE_SYCL")
@@ -182,3 +183,10 @@ install(FILES
 export(EXPORT librett-targets
     FILE ${CMAKE_CURRENT_BINARY_DIR}/librett-targets.cmake
     NAMESPACE librett::)
+
+# Add tests
+if (ENABLE_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
+
