@@ -13,6 +13,9 @@ cuda:
 hip:
 	$(MAKE) -f Makefile.hip  option=$(option)
 
+complex:
+	$(MAKE) -f Makefile.complex  option=$(option)
+
 sycl:
 	$(MAKE) -f Makefile.sycl option=$(option)
 

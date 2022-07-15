@@ -774,7 +774,8 @@ try
             transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
       #endif // HIP
       switch(lc.numRegStorage) {
-        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
+        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+        #if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (sizeofType == 8) CALL0(double, ICASE); \
                                   if (sizeofType == 16) CALL0(librett_complex, ICASE); break;
@@ -832,7 +833,8 @@ try
                 transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
 	  #endif // HIP
           switch(lc.numRegStorage) {
-            #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
+            //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+            #if !defined(HIP) || defined(COMPLEX_DOUBLE)
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 		                            if (sizeofType == 8) CALL0(double, ICASE); \
                                 if (sizeofType == 16) CALL0(librett_complex,ICASE); break;
@@ -874,9 +876,12 @@ try
           transposeTiled<double>, numthread, lc.shmemsize);
       }
       else if (sizeofType == 16) {
-        // FIXME: Disabled for now due to LDS size compilation error
-        // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-        //   transposeTiled<librett_complex>, numthread, lc.shmemsize);        
+        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+        #if defined(COMPLEX_DOUBLE)
+          // FIXME: HIP throws LDS size compilation error
+          hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+            transposeTiled<librett_complex>, numthread, lc.shmemsize);        
+        #endif
       }
 #endif
     }
@@ -905,9 +910,12 @@ try
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       }
       else if (sizeofType == 16) {
-        // FIXME: Disabled for now due to LDS size compilation error
-        // hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-        //   transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
+        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+        #if defined(COMPLEX_DOUBLE)
+          // FIXME: HIP throws LDS size compilation error
+          hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+            transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);        
+        #endif
       }
 
 #endif
@@ -1183,7 +1191,8 @@ try
               plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif // SYCL
         
-        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP 
+        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+        #if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
                                   if (plan.sizeofType == 16) CALL0(librett_complex,ICASE); break;
@@ -1247,7 +1256,8 @@ try
               (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                     \
               plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif
-        #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+        #if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
                                   if (plan.sizeofType == 16) CALL0(librett_complex, ICASE); break;
@@ -1311,7 +1321,8 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
-      #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+      //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+      #if !defined(HIP) || defined(COMPLEX_DOUBLE)
       if (plan.sizeofType == 16) CALL(librett_complex);
       #endif
       #undef CALL
@@ -1355,7 +1366,8 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
-      #if !defined(HIP) //FIXME: temporarily disable complex support for HIP
+      //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
+      #if !defined(HIP) || defined(COMPLEX_DOUBLE)
       if (plan.sizeofType == 16) CALL(librett_complex);
       #endif
       #undef CALL
