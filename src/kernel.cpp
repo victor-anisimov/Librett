@@ -61,7 +61,7 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
 #if SYCL
   const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
 #elif HIP
-  __shared__ T shTile[TILEDIM][TILEDIM+1];
+  __shared__ T shTile[TILEDIM][TILEDIM];
 #else // CUDA
   __shared__ T shTile[TILEDIM][TILEDIM+1];
 #endif
@@ -775,14 +775,14 @@ try
       #endif // HIP
       switch(lc.numRegStorage) {
         //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        #if !defined(HIP) || defined(COMPLEX_DOUBLE)
+        //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (sizeofType == 8) CALL0(double, ICASE); \
                                   if (sizeofType == 16) CALL0(librett_complex, ICASE); break;
-        #else
-        #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-	                                      if (sizeofType == 8) CALL0(double, ICASE); break;
-        #endif
+        //#else
+        //#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+	//                                      if (sizeofType == 8) CALL0(double, ICASE); break;
+        //#endif
         #include "calls.h"
       }
       #undef CALL
@@ -834,14 +834,14 @@ try
 	  #endif // HIP
           switch(lc.numRegStorage) {
             //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-            #if !defined(HIP) || defined(COMPLEX_DOUBLE)
+            //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 		                            if (sizeofType == 8) CALL0(double, ICASE); \
                                 if (sizeofType == 16) CALL0(librett_complex,ICASE); break;
-            #else
-            #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-                                            if (sizeofType == 8) CALL0(double, ICASE); break;
-            #endif
+            //#else
+            //#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
+            //                                if (sizeofType == 8) CALL0(double, ICASE); break;
+            //#endif
             #include "calls.h"
           }
           #undef CALL
@@ -877,11 +877,11 @@ try
       }
       else if (sizeofType == 16) {
         //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        #if defined(COMPLEX_DOUBLE)
+        //#if defined(COMPLEX_DOUBLE)
           // FIXME: HIP throws LDS size compilation error
           hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
             transposeTiled<librett_complex>, numthread, lc.shmemsize);        
-        #endif
+        //#endif
       }
 #endif
     }
@@ -911,11 +911,11 @@ try
       }
       else if (sizeofType == 16) {
         //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        #if defined(COMPLEX_DOUBLE)
+        //#if defined(COMPLEX_DOUBLE)
           // FIXME: HIP throws LDS size compilation error
           hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
             transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);        
-        #endif
+        //#endif
       }
 
 #endif
@@ -1192,14 +1192,14 @@ try
         #endif // SYCL
         
         //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        #if !defined(HIP) || defined(COMPLEX_DOUBLE)
+        //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
                                   if (plan.sizeofType == 16) CALL0(librett_complex,ICASE); break;
-        #else
-        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	                                if (plan.sizeofType == 8) CALL0(double, ICASE); break;
-        #endif
+        //#else
+        //#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	//                                if (plan.sizeofType == 8) CALL0(double, ICASE); break;
+        //#endif
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1257,14 +1257,14 @@ try
               plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif
         //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        #if !defined(HIP) || defined(COMPLEX_DOUBLE)
+        //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
                                   if (plan.sizeofType == 16) CALL0(librett_complex, ICASE); break;
-        #else
-        #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	                                      if (plan.sizeofType == 8) CALL0(double, ICASE); break;
-        #endif
+        //#else
+        //#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
+	//                                      if (plan.sizeofType == 8) CALL0(double, ICASE); break;
+        //#endif
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1322,9 +1322,9 @@ try
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
       //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-      #if !defined(HIP) || defined(COMPLEX_DOUBLE)
+      //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
       if (plan.sizeofType == 16) CALL(librett_complex);
-      #endif
+      //#endif
       #undef CALL
     }
     break;
@@ -1367,9 +1367,9 @@ try
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
       //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-      #if !defined(HIP) || defined(COMPLEX_DOUBLE)
+      //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
       if (plan.sizeofType == 16) CALL(librett_complex);
-      #endif
+      //#endif
       #undef CALL
     }
     break;

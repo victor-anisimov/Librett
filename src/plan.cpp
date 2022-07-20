@@ -465,7 +465,11 @@ size_t TensorSplit::shmemAlloc(int sizeofType) const {
 
     case Tiled:
     {
+#ifdef HIP
+      vol = TILEDIM*TILEDIM*sizeofType;
+#else // CUDA and SYCL
       vol = (TILEDIM+1)*TILEDIM*sizeofType;
+#endif
     }
     break;
 
