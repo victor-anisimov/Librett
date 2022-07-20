@@ -90,6 +90,13 @@ if(ENABLE_HIP)
   message(STATUS "Compiling for HIP platform")
   enable_language(HIP)
 
+  if(DEFINED ENV{ROCM_PATH})
+    set(ROCM_PATH "$ENV{ROCM_PATH}")
+  endif()
+
+  list (APPEND CMAKE_PREFIX_PATH ${ROCM_PATH} ${ROCM_PATH}/hip)
+  find_package(hip REQUIRED)
+
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -D_FORCE_INLINES")
 endif(ENABLE_HIP)
@@ -125,6 +132,9 @@ add_subdirectory(src)
 
 add_library(librett::librett ALIAS librett)
 target_compile_definitions(librett PUBLIC ${LIBRETT_COMPILE_DEFS})
+if(ENABLE_HIP)
+  target_link_libraries(librett PUBLIC hip::device)
+endif()
 
 set(LIBRETT_HEADERS
 	src/librett.h
