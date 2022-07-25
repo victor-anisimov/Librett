@@ -20,5 +20,5 @@ sycl:
 	$(MAKE) -f Makefile.sycl option=$(option)
 
 clean:
-	@rm -rf bin build include lib
+	@rm -rf bin build include lib *.d
 

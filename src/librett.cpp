@@ -426,7 +426,7 @@ sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attri
   #ifdef __SYCL_DEVICE_ONLY__
     return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
   #else
-    throw cl::sycl::runtime_error("Sub-groups are not supported on host device.", PI_INVALID_DEVICE);
+    throw cl::sycl::runtime_error("Sub-groups are not supported on host device.", PI_ERROR_INVALID_DEVICE);
   #endif
 }
 #endif
