@@ -763,31 +763,18 @@ try
     case Packed:
     {
     #ifndef SYCL
-      #if LIBRETT_USES_CUDA
-        #define CALL0(TYPE, NREG) \
-          cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-            transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
-      #endif // CUDA
-      #if HIP
-        #define CALL0(TYPE, NREG) \
-          hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-            transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
-      #endif // HIP
+      #define CALL0(TYPE, NREG) \
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+          transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
       switch(lc.numRegStorage) {
-        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (sizeofType == 8) CALL0(double, ICASE); \
-                                  if (sizeofType == 16) CALL0(librett_complex, ICASE); break;
-        //#else
-        //#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-	//                                      if (sizeofType == 8) CALL0(double, ICASE); break;
-        //#endif
+                                        if (sizeofType == 16) CALL0(librett_complex, ICASE); break;
         #include "calls.h"
       }
       #undef CALL
       #undef CALL0
-    #endif // SYCL
+    #endif // CUDA or HIP
     }
     break;
 
@@ -822,31 +809,18 @@ try
       if (numActiveBlock == -1) {
         // key not found in cache, determine value and add it to cache
         #ifndef SYCL
-	  #if LIBRETT_USES_CUDA
-            #define CALL0(TYPE, NREG) \
-              cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-                transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
-	  #endif // CUDA
-	  #if HIP
-            #define CALL0(TYPE, NREG) \
-              hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-                transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
-	  #endif // HIP
+          #define CALL0(TYPE, NREG) \
+            gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+              transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
           switch(lc.numRegStorage) {
-            //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-            //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 		                            if (sizeofType == 8) CALL0(double, ICASE); \
-                                if (sizeofType == 16) CALL0(librett_complex,ICASE); break;
-            //#else
-            //#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
-            //                                if (sizeofType == 8) CALL0(double, ICASE); break;
-            //#endif
+                                            if (sizeofType == 16) CALL0(librett_complex,ICASE); break;
             #include "calls.h"
           }
           #undef CALL
           #undef CALL0
-        #endif // SYCL
+        #endif // CUDA or HIP
         nabCache.set(key, numActiveBlock);
       }
     }
@@ -854,71 +828,32 @@ try
 
     case Tiled:
     {
-#if LIBRETT_USES_CUDA
       if (sizeofType == 4) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
       } else if (sizeofType == 8) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<double>, numthread, lc.shmemsize);
       }
       else if (sizeofType == 16) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<librett_complex>, numthread, lc.shmemsize);
       }      
-#endif
-#if HIP
-      if (sizeofType == 4) {
-        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<float>, numthread, lc.shmemsize);
-      } else if (sizeofType == 8) {
-        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<double>, numthread, lc.shmemsize);
-      }
-      else if (sizeofType == 16) {
-        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        //#if defined(COMPLEX_DOUBLE)
-          // FIXME: HIP throws LDS size compilation error
-          hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-            transposeTiled<librett_complex>, numthread, lc.shmemsize);        
-        //#endif
-      }
-#endif
     }
     break;
 
     case TiledCopy:
     {
-#if LIBRETT_USES_CUDA
       if (sizeofType == 4) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
       } else if (sizeofType == 8) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
       } else if (sizeofType == 16) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
       }
-#endif
-#if HIP
-      if (sizeofType == 4) {
-        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<float>, numthread, lc.shmemsize);
-      } else if (sizeofType == 8) {
-        hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<double>, numthread, lc.shmemsize);
-      }
-      else if (sizeofType == 16) {
-        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        //#if defined(COMPLEX_DOUBLE)
-          // FIXME: HIP throws LDS size compilation error
-          hipOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-            transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);        
-        //#endif
-      }
-
-#endif
     }
     break;
   }
@@ -1191,15 +1126,9 @@ try
               plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif // SYCL
         
-        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
-                                  if (plan.sizeofType == 16) CALL0(librett_complex,ICASE); break;
-        //#else
-        //#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	//                                if (plan.sizeofType == 8) CALL0(double, ICASE); break;
-        //#endif
+                                        if (plan.sizeofType == 16) CALL0(librett_complex,ICASE); break;
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1256,15 +1185,9 @@ try
               (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar,                     \
               plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
         #endif
-        //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-        //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
         #define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (plan.sizeofType == 8) CALL0(double, ICASE); \
-                                  if (plan.sizeofType == 16) CALL0(librett_complex, ICASE); break;
-        //#else
-        //#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); \
-	//                                      if (plan.sizeofType == 8) CALL0(double, ICASE); break;
-        //#endif
+                                        if (plan.sizeofType == 16) CALL0(librett_complex, ICASE); break;
         #include "calls.h"
         default:
         printf("librettKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -1321,10 +1244,7 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
-      //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-      //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
       if (plan.sizeofType == 16) CALL(librett_complex);
-      //#endif
       #undef CALL
     }
     break;
@@ -1366,10 +1286,7 @@ try
       #endif
       if (plan.sizeofType == 4) CALL(float); 
       if (plan.sizeofType == 8) CALL(double);
-      //FIXME: HIP doesn't compile for complex double; compile with -DCOMPLEX_DOUBLE to see the error 
-      //#if !defined(HIP) || defined(COMPLEX_DOUBLE)
       if (plan.sizeofType == 16) CALL(librett_complex);
-      //#endif
       #undef CALL
     }
     break;

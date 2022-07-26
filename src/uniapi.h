@@ -140,12 +140,14 @@ SOFTWARE.
   #define gpu_shfl_down(a,b)  __shfl_down(a,b)
   #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
   #define DeviceSynchronize() hipCheck(hipDeviceSynchronize())
+  #define gpuOccupancyMaxActiveBlocksPerMultiprocessor hipOccupancyMaxActiveBlocksPerMultiprocessor
 #else // CUDA
   #define gpu_shfl_xor(a,b)   __shfl_xor_sync(0xffffffff,a,b)
   #define gpu_shuffle(a,b)    __shfl_sync(0xffffffff,a,b)
   #define gpu_shfl_down(a,b)  __shfl_down_sync(0xffffffff,a,b)
   #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
   #define DeviceSynchronize() cudaCheck(cudaDeviceSynchronize())
+  #define gpuOccupancyMaxActiveBlocksPerMultiprocessor cudaOccupancyMaxActiveBlocksPerMultiprocessor
 #endif
 
 #endif // UNIAPI_H
