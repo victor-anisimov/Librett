@@ -828,6 +828,7 @@ try
 
     case Tiled:
     {
+    #ifndef SYCL
       if (sizeofType == 4) {
         gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
@@ -838,12 +839,14 @@ try
       else if (sizeofType == 16) {
         gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<librett_complex>, numthread, lc.shmemsize);
-      }      
+      }
+    #endif // CUDA or HIP
     }
     break;
 
     case TiledCopy:
     {
+    #ifndef SYCL
       if (sizeofType == 4) {
         gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
@@ -854,6 +857,7 @@ try
         gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
       }
+    #endif // CUDA or HIP
     }
     break;
   }
