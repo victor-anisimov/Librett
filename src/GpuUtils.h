@@ -28,7 +28,7 @@ SOFTWARE.
 #include <stdio.h>
 
 #if SYCL
-  #include <CL/sycl.hpp>
+  #include <sycl/sycl.hpp>
 #elif HIP
   #include <hip/hip_runtime.h>
 #else // CUDA

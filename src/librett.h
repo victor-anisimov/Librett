@@ -26,7 +26,7 @@ SOFTWARE.
 #define LIBRETT_H
 
 #ifdef SYCL
-  #include <CL/sycl.hpp>
+  #include <sycl/sycl.hpp>
   using librett_gpuStream_t     = sycl::queue*;
 #elif HIP
   #include <hip/hip_runtime.h>

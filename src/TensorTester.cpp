@@ -27,9 +27,8 @@ SOFTWARE.
 // Testing utilities
 //
 #if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-  #define warpSize      item_ct1.get_sub_group().get_local_range().get(0)
+  #include <sycl/sycl.hpp>
+  #define warpSize      item.get_sub_group().get_local_range().get(0)
 #elif HIP
   #include <hip/hip_runtime.h>
 #else // CUDA
@@ -41,7 +40,7 @@ SOFTWARE.
 #include "uniapi.h"
 
 #if SYCL
-void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata, sycl::nd_item<3> item_ct1) 
+void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata, sycl::nd_item<3> item) 
 #else
 __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata) 
 #endif
@@ -54,7 +53,7 @@ __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int nda
 template<typename T>
 #if SYCL
 void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
-  TensorError_t* glError, int* glFail, sycl::nd_item<3> item_ct1, uint8_t *dpct_local) 
+  TensorError_t* glError, int* glFail, sycl::nd_item<3> item, uint8_t *dpct_local) 
 #else
 __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
   TensorError_t* glError, int* glFail)
@@ -87,9 +86,9 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
     for (int j=0; j < rank; j++) {
 #if SYCL
       /* DPCT1023:117: The DPC++ sub-group does not support mask options for shuffle.  */
-      refVal += ((i / item_ct1.get_sub_group().shuffle(tc.c, j)) %
-                 item_ct1.get_sub_group().shuffle(tc.d, j)) *
-                item_ct1.get_sub_group().shuffle(tc.ct, j);
+      refVal += ((i / item.get_sub_group().shuffle(tc.c, j)) %
+                 item.get_sub_group().shuffle(tc.d, j)) *
+                item.get_sub_group().shuffle(tc.ct, j);
 #elif HIP
       refVal += ((i/__shfl(tc.c,j)) % __shfl(tc.d,j))*__shfl(tc.ct,j);
 #else // CUDA
@@ -188,8 +187,8 @@ void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata)
   dpct::get_default_queue().submit([&](sycl::handler &cgh) {
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                      sycl::range<3>(1, 1, numthread), sycl::range<3>(1, 1, numthread)),
-                     [=](sycl::nd_item<3> item_ct1) {
-                       setTensorCheckPatternKernel(data, ndata, item_ct1);
+                     [=](sycl::nd_item<3> item) {
+                       setTensorCheckPatternKernel(data, ndata, item);
                      });
   });
 #elif HIP
@@ -299,9 +298,9 @@ try
 
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
             sycl::range<3>(1, 1, numthread), sycl::range<3>(1, 1, numthread)),
-            [=](sycl::nd_item<3> item_ct1) {
+            [=](sycl::nd_item<3> item) {
                checkTransposeKernel(data, ndata, rank, d_tensorConv_ct3,
-               d_error_ct4, d_fail_ct5, item_ct1, dpct_local_acc_ct1.get_pointer());
+               d_error_ct4, d_fail_ct5, item, dpct_local_acc_ct1.get_pointer());
             });
   });
   q.wait();

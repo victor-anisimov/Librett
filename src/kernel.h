@@ -26,8 +26,7 @@ SOFTWARE.
 #define LIBRETTKERNEL_H
 
 #ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
 #endif
 #include "plan.h"
 #include "uniapi.h"

@@ -23,8 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
 #endif
 #include <algorithm>
 #include <queue>

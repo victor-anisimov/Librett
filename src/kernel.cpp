@@ -50,7 +50,7 @@ template <typename T>
 void transposeTiled(const int numMm, const int volMbar, const int sizeMbar,
   const sycl::int2 tiledVol, const int cuDimMk, const int cuDimMm,
   const TensorConvInOut *RESTRICT glMbar, const T *RESTRICT dataIn, T *RESTRICT dataOut,
-  sycl::nd_item<3> item_ct1, dpct::accessor<T, dpct::local, 2> shTile)
+  sycl::nd_item<3> item, dpct::accessor<T, dpct::local, 2> shTile)
 #else // CUDA or HIP
 __global__ void transposeTiled(const int numMm, const int volMbar, const int sizeMbar,
   const int2 tiledVol, const int cuDimMk, const int cuDimMm,
@@ -59,7 +59,7 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
 {
   // Shared memory
 #if SYCL
-  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
+  const int warpSize = item.get_sub_group().get_local_range().get(0);
 #elif HIP
   __shared__ T shTile[TILEDIM][TILEDIM];
 #else // CUDA
@@ -179,7 +179,7 @@ void transposePacked(
   const TensorConvInOut* RESTRICT gl_Mmk,
   const TensorConvInOut* RESTRICT gl_Mbar,
   const TensorConv* RESTRICT gl_Msh,
-  const T* RESTRICT dataIn, T* RESTRICT dataOut, ndItem3_t item_ct1, uint8_t *dpct_local)
+  const T* RESTRICT dataIn, T* RESTRICT dataOut, ndItem3_t item, uint8_t *dpct_local)
 #else
 __global__ void transposePacked(
   const int volMmk, const int volMbar,
@@ -193,7 +193,7 @@ __global__ void transposePacked(
   // Shared memory. volMmk elements
 #if SYCL
   auto shBuffer_char = (char *)dpct_local;
-  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
+  const int warpSize = item.get_sub_group().get_local_range().get(0);
 #elif HIP
   HIP_DYNAMIC_SHARED( char, shBuffer_char)
 #else // CUDA
@@ -341,7 +341,7 @@ void transposePackedSplit(
   const TensorConvInOut* RESTRICT glMmk,
   const TensorConvInOut* RESTRICT glMbar,
   const TensorConv* RESTRICT glMsh,
-  const T* RESTRICT dataIn, T* RESTRICT dataOut, ndItem3_t item_ct1, uint8_t *dpct_local)
+  const T* RESTRICT dataIn, T* RESTRICT dataOut, ndItem3_t item, uint8_t *dpct_local)
 #else
 __global__ void transposePackedSplit(
   const int splitDim, const int volMmkUnsplit, const int volMbar,
@@ -356,7 +356,7 @@ __global__ void transposePackedSplit(
   // Shared memory. max(volSplit)*volMmkUnsplit T elements
 #if SYCL
   auto shBuffer_char = (char *)dpct_local;
-  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
+  const int warpSize = item.get_sub_group().get_local_range().get(0);
 #elif HIP
   HIP_DYNAMIC_SHARED( char, shBuffer_char)
 #else // CUDA
@@ -511,7 +511,7 @@ void transposeTiledCopy(
   const int cuDimMk, const int cuDimMm,
   const int2_t tiledVol,
   const TensorConvInOut *RESTRICT gl_Mbar,
-  const T *RESTRICT dataIn, T *RESTRICT dataOut, ndItem3_t item_ct1)
+  const T *RESTRICT dataIn, T *RESTRICT dataOut, ndItem3_t item)
 #else // CUDA or HIP
 __global__ void transposeTiledCopy(
   const int numMm, const int volMbar, const int sizeMbar,
@@ -522,7 +522,7 @@ __global__ void transposeTiledCopy(
 #endif
 {
 #if SYCL
-  const int warpSize = item_ct1.get_sub_group().get_local_range().get(0);
+  const int warpSize = item.get_sub_group().get_local_range().get(0);
 #endif
   const int warpLane = threadIdx_x & (warpSize - 1);
   TensorConvInOut Mbar;
@@ -1115,11 +1115,11 @@ try
                                                                                       \
             cgh.parallel_for(                                                         \
                 sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),          \
-                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {   \
+                [=](sycl::nd_item<3> item) [[intel::reqd_sub_group_size(32)]] {   \
                   transposePacked<TYPE, NREG>(                                        \
                       ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2, ts_sizeMbar_ct3, \
                       plan_Mmk_ct4, plan_Mbar_ct5, plan_Msh_ct6, dataIn_ct7,          \
-                      dataOut_ct8, item_ct1, dpct_local_acc_ct1.get_pointer());       \
+                      dataOut_ct8, item, dpct_local_acc_ct1.get_pointer());       \
                 });                                                                   \
             }); plan.stream->wait();                                                  \
           }
@@ -1174,12 +1174,12 @@ try
                                                                                     \
             cgh.parallel_for(                                                       \
                 sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
-                [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
+                [=](sycl::nd_item<3> item) [[intel::reqd_sub_group_size(32)]] { \
                   transposePackedSplit<TYPE, NREG>(                                 \
                       ts_splitDim_ct0, ts_volMmkUnsplit_ct1, ts_volMbar_ct2,        \
                       ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,            \
                       plan_cuDimMk_ct6, plan_Mmk_ct7, plan_Mbar_ct8, plan_Msh_ct9,  \
-                      dataIn_ct10, dataOut_ct11, item_ct1,                          \
+                      dataIn_ct10, dataOut_ct11, item,                          \
                       dpct_local_acc_ct1.get_pointer());                            \
                 });                                                                 \
           }); plan.stream->wait();
@@ -1231,11 +1231,11 @@ try
                                                                                   \
           cgh.parallel_for(                                                       \
               sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),        \
-              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] { \
+              [=](sycl::nd_item<3> item) [[intel::reqd_sub_group_size(32)]] { \
                 transposeTiled<TYPE>(                                             \
                     ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,        \
                     plan_tiledVol_ct3, plan_cuDimMk_ct4, plan_cuDimMm_ct5,        \
-                    plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item_ct1,             \
+                    plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item,             \
                     dpct::accessor<TYPE, dpct::local, 2>(shTile_acc_ct1,          \
                                                          shTile_range_ct1));      \
               });                                                                 \
@@ -1275,11 +1275,11 @@ try
                                                                                      \
           cgh.parallel_for(                                                          \
               sycl::nd_range<3>(lc.numblock * lc.numthread, lc.numthread),           \
-              [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {    \
+              [=](sycl::nd_item<3> item) [[intel::reqd_sub_group_size(32)]] {    \
                 transposeTiledCopy<TYPE>(                                            \
                     ts_volMm_TILEDIM_ct0, ts_volMbar_ct1, ts_sizeMbar_ct2,           \
                     plan_cuDimMk_ct3, plan_cuDimMm_ct4, plan_tiledVol_ct5,           \
-                    plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item_ct1);               \
+                    plan_Mbar_ct6, dataIn_ct7, dataOut_ct8, item);               \
               });                                                                    \
         }); plan.stream->wait();
       #else // CUDA or HIP

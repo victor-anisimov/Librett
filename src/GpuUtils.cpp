@@ -24,8 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 
 #if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
 #endif
 
 #include <stdio.h>

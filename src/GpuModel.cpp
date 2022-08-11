@@ -27,8 +27,7 @@ SOFTWARE.
 #include <algorithm>
 #include <random>
 #ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
 #elif HIP
   #include <hip/hip_runtime.h>
 #else // CUDA

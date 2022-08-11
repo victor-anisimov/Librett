@@ -27,8 +27,7 @@ SOFTWARE.
 #define UNIAPI_H
 
 #ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
   #include <complex>
   typedef std::complex<double> librett_complex;  
 #elif HIP
@@ -47,20 +46,20 @@ SOFTWARE.
 
 // Work units
 #ifdef SYCL
-  #define threadIdx_x   item_ct1.get_local_id(2)
-  #define blockIdx_x    item_ct1.get_group(2)
-  #define blockDim_x    item_ct1.get_local_range().get(2)
-  #define gridDim_x     item_ct1.get_group_range(2)
-  #define threadIdx_y   item_ct1.get_local_id(1)
-  #define blockIdx_y    item_ct1.get_group(1)
-  #define blockDim_y    item_ct1.get_local_range().get(1)
-  #define gridDim_y     item_ct1.get_group_range(1)
-  #define threadIdx_z   item_ct1.get_local_id(0)
-  #define blockIdx_z    item_ct1.get_group(0)
-  #define blockDim_z    item_ct1.get_local_range().get(0)
-  #define gridDim_z     item_ct1.get_group_range(0)
-  #define syncthreads() item_ct1.barrier()
-  #define subgroup      item_ct1.get_sub_group()
+  #define threadIdx_x   item.get_local_id(2)
+  #define blockIdx_x    item.get_group(2)
+  #define blockDim_x    item.get_local_range().get(2)
+  #define gridDim_x     item.get_group_range(2)
+  #define threadIdx_y   item.get_local_id(1)
+  #define blockIdx_y    item.get_group(1)
+  #define blockDim_y    item.get_local_range().get(1)
+  #define gridDim_y     item.get_group_range(1)
+  #define threadIdx_z   item.get_local_id(0)
+  #define blockIdx_z    item.get_group(0)
+  #define blockDim_z    item.get_local_range().get(0)
+  #define gridDim_z     item.get_group_range(0)
+  #define syncthreads() item.barrier()
+  #define subgroup      item.get_sub_group()
   #define maxThreadsPerBlock  get_max_work_group_size()
   #define sharedMemPerBlock   get_local_mem_size()
   #define numthread_x   numthread[2]
@@ -129,9 +128,9 @@ SOFTWARE.
 
 // Functions
 #ifdef SYCL
-  #define gpu_shfl_xor(a,b)   item_ct1.get_sub_group().shuffle_xor(a,b)
-  #define gpu_shuffle(a,b)    item_ct1.get_sub_group().shuffle(a,b)
-  #define gpu_shfl_down(a,b)  item_ct1.get_sub_group().shuffle_down(a,b)
+  #define gpu_shfl_xor(a,b)   item.get_sub_group().shuffle_xor(a,b)
+  #define gpu_shuffle(a,b)    item.get_sub_group().shuffle(a,b)
+  #define gpu_shfl_down(a,b)  item.get_sub_group().shuffle_down(a,b)
   #define gpu_atomicAdd(a,b)  sycl::atomic<int>(sycl::global_ptr<int>(&(a))).fetch_add(b)
   #define DeviceSynchronize() dpct::get_current_device().queues_wait_and_throw()
 #elif HIP

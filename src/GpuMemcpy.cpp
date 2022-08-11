@@ -23,8 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
 #elif HIP
   #include <hip/hip_runtime.h>
 #else // CUDA
@@ -49,7 +48,7 @@ const int numthread = 64;
 //
 template <typename T>
 #if SYCL
-void scalarCopyKernel(const int n, const T* data_in, T* data_out, ndItem3_t item_ct1) 
+void scalarCopyKernel(const int n, const T* data_in, T* data_out, ndItem3_t item) 
 #else
 __global__ void scalarCopyKernel(const int n, const T* data_in, T* data_out) 
 #endif
@@ -71,7 +70,7 @@ void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t stream) 
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                                        sycl::range<3>(1, 1, numthread),
                                        sycl::range<3>(1, 1, numthread)),
-    [=](ndItem3_t item_ct1) { scalarCopyKernel<T>(n, data_in, data_out, item_ct1); });
+    [=](ndItem3_t item) { scalarCopyKernel<T>(n, data_in, data_out, item); });
   });
 #elif HIP
   hipLaunchKernelGGL(HIP_KERNEL_NAME(scalarCopyKernel<T>), dim3(numblock), dim3(numthread), 
@@ -92,7 +91,7 @@ void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t stream) 
 //
 template <typename T>
 #if SYCL
-void vectorCopyKernel(const int n, T* data_in, T* data_out, ndItem3_t item_ct1) 
+void vectorCopyKernel(const int n, T* data_in, T* data_out, ndItem3_t item) 
 #else
 __global__ void vectorCopyKernel(const int n, T* data_in, T* data_out)
 #endif
@@ -127,7 +126,7 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t stream) {
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                                        sycl::range<3>(1, 1, numthread),
                                        sycl::range<3>(1, 1, numthread)),
-    [=](ndItem3_t item_ct1) { vectorCopyKernel<T>(n, data_in, data_out, item_ct1); });
+    [=](ndItem3_t item) { vectorCopyKernel<T>(n, data_in, data_out, item); });
   });
 #elif HIP
   hipLaunchKernelGGL(HIP_KERNEL_NAME(vectorCopyKernel<T>), dim3(numblock), dim3(numthread), 
@@ -148,7 +147,7 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t stream) {
 //
 template <int numElem>
 #if SYCL
-void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out, ndItem3_t item_ct1) 
+void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out, ndItem3_t item) 
 #else
 __global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out) 
 #endif
@@ -167,7 +166,7 @@ __global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data
 
 template <int numElem>
 #if SYCL
-void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out, ndItem3_t item_ct1) 
+void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out, ndItem3_t item) 
 #else
 __global__ void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out)
 #endif
@@ -196,8 +195,8 @@ void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t strea
     cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                                        sycl::range<3>(1, 1, numthread),
                                        sycl::range<3>(1, 1, numthread)),
-    [=](ndItem3_t item_ct1) {
-       memcpyFloatKernel<NUM_ELEM>( n/4, (float4_t *)data_in, (float4_t *)data_out, item_ct1);
+    [=](ndItem3_t item) {
+       memcpyFloatKernel<NUM_ELEM>( n/4, (float4_t *)data_in, (float4_t *)data_out, item);
     });
   });
 #elif HIP

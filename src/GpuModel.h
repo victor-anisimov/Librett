@@ -27,8 +27,7 @@ SOFTWARE.
 
 #include <vector>
 #if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include <sycl/sycl.hpp>
 #endif
 #include "Types.h"
 #include "plan.h"
