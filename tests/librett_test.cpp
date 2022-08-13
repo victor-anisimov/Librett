@@ -32,14 +32,23 @@ All rights reserved.
 #include <cmath>
 #include "librett.h"
 #include "GpuUtils.h"
-#include "GpuMem.h"
+#include "GpuMem.hpp"
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuModel.h"      // testCounters
 #include "GpuUtils.h"
 
 #ifdef SYCL
-sycl::queue q = dpct::get_default_queue();
+auto sycl_asynchandler = [] (sycl::exception_list exceptions) {
+  for (std::exception_ptr const& e : exceptions) {
+    try {
+      std::rethrow_exception(e);
+    } catch (sycl::exception const& ex) {
+      std::cout << "Caught asynchronous SYCL exception:" << std::endl
+                << ex.what() << ", SYCL code: " << ex.code() << std::endl;
+    }
+  }
+};
 #endif
 
 librettTimer* timerFloat;
@@ -54,18 +63,47 @@ long long int* dataOut = NULL;
 #endif
 TensorTester* tester = NULL;
 
-bool test1();
-bool test2();
-bool test3();
+bool test1(gpuStream_t&);
+bool test2(gpuStream_t&);
+bool test3(gpuStream_t&);
 bool test4();
-bool test5();
-template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& permutation);
+bool test5(gpuStream_t&);
+template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& permutation, gpuStream_t& stream);
 void printVec(std::vector<int>& vec);
 
-int main(int argc, char *argv[]) 
-#ifdef SYCL
-try 
-#endif
+void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
+  #if SYCL
+  master_gpustream->wait_and_throw();
+  #elif HIP
+  hipCheck(hipDeviceSynchronize());
+  #elif CUDA
+  cudaCheck(cudaDeviceSynchronize());
+  #endif
+}
+
+void CreateGpuStream(gpuStream_t& master_gpustream) {
+  #if SYCL
+  sycl::device dev(sycl::gpu_selector{});
+  sycl::context ctxt(dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  master_gpustream = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  #elif HIP
+  hipCheck(hipStreamCreate(&master_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamCreate(&master_gpustream));
+  #endif
+}
+
+void DestroyGpuStream(gpuStream_t& master_gpustream) {
+  #if SYCL
+  delete master_gpustream;
+  #elif HIP
+  hipCheck(hipStreamDestroy(master_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamDestroy(master_gpustream));
+  #endif
+}
+
+int main(int argc, char *argv[])
 {
   int gpuid = -1;
   bool arg_ok = true;
@@ -88,26 +126,30 @@ try
 
   SelectDevice(gpuid);
   DeviceReset();
+  // create a master gpu stream
+  gpuStream_t gpumasterstream;
+  CreateGpuStream(gpumasterstream);
+
 
   timerFloat = new librettTimer(4);
   timerDouble = new librettTimer(8);
 
   // Allocate device data, 100M elements
-  allocate_device<long long int>(&dataIn, dataSize);
-  allocate_device<long long int>(&dataOut, dataSize);
+  allocate_device<long long int>(&dataIn, dataSize, gpumasterstream);
+  allocate_device<long long int>(&dataOut, dataSize, gpumasterstream);
 
   // Create tester
   tester = new TensorTester();
   tester->setTensorCheckPattern((unsigned int *)dataIn, dataSize*2);
 
   bool passed = true;
-  if(passed){passed = test1(); if(!passed) printf("Test 1 failed\n");}
-  if(passed){passed = test2(); if(!passed) printf("Test 2 failed\n");}
-  if(passed){passed = test3(); if(!passed) printf("Test 3 failed\n");}
+  if(passed){passed = test1(gpumasterstream); if(!passed) printf("Test 1 failed\n");}
+  if(passed){passed = test2(gpumasterstream); if(!passed) printf("Test 2 failed\n");}
+  if(passed){passed = test3(gpumasterstream); if(!passed) printf("Test 3 failed\n");}
 #ifndef PERFTEST
   if(passed){passed = test4(); if(!passed) printf("Test 4 failed\n");}
 #ifndef HIP
-  if(passed){passed = test5(); if(!passed) printf("Test 5 failed\n");}
+  if(passed){passed = test5(gpumasterstream); if(!passed) printf("Test 5 failed\n");}
 #endif
 #endif
 
@@ -123,32 +165,26 @@ try
     printf("test OK\n");
   }
 
-  deallocate_device<long long int>(&dataIn);
-  deallocate_device<long long int>(&dataOut);
+  deallocate_device<long long int>(&dataIn, gpumasterstream);
+  deallocate_device<long long int>(&dataOut, gpumasterstream);
   delete tester;
 
   delete timerFloat;
   delete timerDouble;
 
   DeviceReset();
+  DestroyGpuStream(gpumasterstream);
 
   if(passed)
     return 0;
   else
     return 1;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //
 // Test 1: Test all permutations up to rank 7 on smallish tensors
 //
-bool test1() {
+bool test1(gpuStream_t& master_gpustream) {
   const int minDim = 2;
   const int maxDim = 16;
   for (int rank = 2;rank <= 7;rank++) {
@@ -161,8 +197,8 @@ bool test1() {
     }
 
     do {
-      if (!test_tensor<long long int>(dim, permutation)) return false;
-      if (!test_tensor<int>(dim, permutation)) return false;
+      if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+      if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
     } while (std::next_permutation(permutation.begin(), permutation.begin() + rank));
 
   }
@@ -174,7 +210,7 @@ bool test1() {
 // Test 2: Test ranks 2-15, random volume, random permutation, random dimensions
 //         100 samples each rank
 //
-bool test2() {
+bool test2(gpuStream_t& master_gpustream) {
   double minDim = 2.0;
 
   std::srand(unsigned (std::time(0)));
@@ -243,8 +279,8 @@ bool test2() {
 
       std::random_shuffle(permutation.begin(), permutation.end());
 
-      if (!test_tensor<long long int>(dim, permutation)) return false;
-      if (!test_tensor<int>(dim, permutation)) return false;
+      if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+      if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
     }
 
   }
@@ -255,7 +291,7 @@ bool test2() {
 //
 // Test 3: hand picked examples
 //
-bool test3() {
+bool test3(gpuStream_t& master_gpustream) {
 
   {
     int rank = 2;
@@ -265,14 +301,14 @@ bool test3() {
     dim[1] = 67;
     permutation[0] = 1;
     permutation[1] = 0;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
     dim[0] = 65536*32;
     dim[1] = 2;
     permutation[0] = 1;
     permutation[1] = 0;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   {
@@ -291,8 +327,8 @@ bool test3() {
     permutation[0] = 0;
     permutation[1] = 2;
     permutation[2] = 1;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   {
@@ -313,8 +349,8 @@ bool test3() {
     permutation[1] = 0;
     permutation[2] = 2;
     permutation[3] = 3;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   {
@@ -329,8 +365,8 @@ bool test3() {
     permutation[1] = 1;
     permutation[2] = 2;
     permutation[3] = 3;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   {
@@ -349,8 +385,8 @@ bool test3() {
     permutation[3] = 3;
     permutation[4] = 4;
     permutation[5] = 5;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   {
@@ -373,8 +409,8 @@ bool test3() {
     permutation[2] = 5 - 1;
     permutation[3] = 3 - 1;
     permutation[4] = 1 - 1;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   {
@@ -390,8 +426,8 @@ bool test3() {
     permutation[2] = 3;
     permutation[3] = 2;
     permutation[4] = 4;
-    if (!test_tensor<long long int>(dim, permutation)) return false;
-    if (!test_tensor<int>(dim, permutation)) return false;
+    if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
+    if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;
   }
 
   return true;
@@ -400,34 +436,28 @@ bool test3() {
 //
 // Test 4: streaming
 //
-bool test4() 
-#ifdef SYCL
-try 
-#endif
+bool test4()
 {
   std::vector<int> dim = {24, 32, 16, 36, 43, 9};
   std::vector<int> permutation = {5, 1, 4, 2, 3, 0};
 
   const int numStream = 10;
+  gpuStream_t streams[numStream];
 
 #if SYCL
-  sycl::queue *streams[numStream];
+  sycl::device dev(sycl::gpu_selector{});
+  sycl::context ctxt(dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   for (int i=0;i < numStream;i++) {
-    streams[i] = dpct::get_current_device().create_queue();
+    streams[i] = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   }
-  dpct::get_current_device().queues_wait_and_throw();
 #elif HIP
-  hipStream_t streams[numStream];
   for (int i=0;i < numStream;i++) {
     hipCheck(hipStreamCreate(&streams[i]));
   }
-  hipCheck(hipDeviceSynchronize());
 #else // CUDA
-  cudaStream_t streams[numStream];
   for (int i=0;i < numStream;i++) {
     cudaCheck(cudaStreamCreate(&streams[i]));
   }
-  cudaCheck(cudaDeviceSynchronize());
 #endif
 
   librettHandle plans[numStream];
@@ -438,7 +468,9 @@ try
   }
 
 #if SYCL
-  dpct::get_current_device().queues_wait_and_throw();
+  for (int i=0;i < numStream;i++) {
+    streams[i]->wait_and_throw();
+  }
 #elif HIP
   hipCheck(hipDeviceSynchronize());
 #else // CUDA
@@ -447,8 +479,10 @@ try
 
   bool run_ok = tester->checkTranspose(dim.size(), dim.data(), permutation.data(), (long long int *)dataOut);
 
-#ifdef SYCL
-  dpct::get_current_device().queues_wait_and_throw();
+#if SYCL
+  for (int i=0;i < numStream;i++) {
+    streams[i]->wait_and_throw();
+  }
 #elif HIP
   hipCheck(hipDeviceSynchronize());
 #else // CUDA
@@ -456,27 +490,19 @@ try
 #endif
 
   for (int i=0;i < numStream;i++) {
+    librettCheck(librettDestroy(plans[i]));
+
 #if SYCL
-    librettCheck(librettDestroy(plans[i]));
-    dpct::get_current_device().destroy_queue(streams[i]);
+    delete streams[i];
 #elif HIP
-    librettCheck(librettDestroy(plans[i]));
     hipCheck(hipStreamDestroy(streams[i]));
 #else // CUDA
-    librettCheck(librettDestroy(plans[i]));
     cudaCheck(cudaStreamDestroy(streams[i]));
 #endif
   }
 
   return run_ok;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //
 // Test 5: Transaction and cache line counters
@@ -505,10 +531,7 @@ bool test5() {
 }
 
 template <typename T>
-bool test_tensor(std::vector<int> &dim, std::vector<int> &permutation) 
-#ifdef SYCL
-try 
-#endif
+bool test_tensor(std::vector<int> &dim, std::vector<int> &permutation, gpuStream_t& gpustream)
 {
   int rank = dim.size();
 
@@ -538,18 +561,14 @@ try
   }
 
   librettHandle plan;
+  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), gpustream));
+  set_device_array<T>((T *)dataOut, -1, vol, gpustream);
+
 #if SYCL
-  sycl::queue q = dpct::get_default_queue();
-  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
-  set_device_array<T>((T *)dataOut, -1, vol, &q);
-  dpct::get_current_device().queues_wait_and_throw();
+  gpustream->wait_and_throw();
 #elif HIP
-  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
-  set_device_array<T>((T *)dataOut, -1, vol);
   hipCheck(hipDeviceSynchronize());
 #else // CUDA
-  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
-  set_device_array<T>((T *)dataOut, -1, vol);
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
@@ -562,13 +581,6 @@ try
 
   return tester->checkTranspose<T>(rank, dim.data(), permutation.data(), (T *)dataOut);
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 void printVec(std::vector<int>& vec) {
   for (int i=0;i < vec.size();i++) {
@@ -576,4 +588,3 @@ void printVec(std::vector<int>& vec) {
   }
   printf("\n");
 }
-

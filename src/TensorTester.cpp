@@ -26,23 +26,12 @@ SOFTWARE.
 //
 // Testing utilities
 //
-#if SYCL
-  #include <sycl/sycl.hpp>
-  #define warpSize      item.get_sub_group().get_local_range().get(0)
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
-  #include <cuda.h>
-#endif
-#include "GpuUtils.h"
-#include "GpuMem.h"
 #include "TensorTester.h"
-#include "uniapi.h"
 
 #if SYCL
-void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata, sycl::nd_item<3> item) 
+void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata, sycl::nd_item<3>& item)
 #else
-__global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata) 
+__global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata)
 #endif
 {
   for (unsigned int i = threadIdx_x + blockIdx_x*blockDim_x; i < ndata; i += blockDim_x*gridDim_x) {
@@ -53,7 +42,7 @@ __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int nda
 template<typename T>
 #if SYCL
 void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
-  TensorError_t* glError, int* glFail, sycl::nd_item<3> item, uint8_t *dpct_local) 
+  TensorError_t* glError, int* glFail, sycl::nd_item<3>& item, uint8_t *dpct_local)
 #else
 __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
   TensorError_t* glError, int* glFail)
@@ -61,6 +50,9 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
 {
 
 #if SYCL
+  sycl::group wrk_grp = item.get_group();
+  sycl::sub_group sg = item.get_sub_group();
+  int warpSize = sg.get_local_range().get(0);
   auto shPos = (unsigned int *)dpct_local;
 #elif HIP
   HIP_DYNAMIC_SHARED( unsigned int, shPos)
@@ -85,10 +77,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
     int refVal = 0;
     for (int j=0; j < rank; j++) {
 #if SYCL
-      /* DPCT1023:117: The DPC++ sub-group does not support mask options for shuffle.  */
-      refVal += ((i / item.get_sub_group().shuffle(tc.c, j)) %
-                 item.get_sub_group().shuffle(tc.d, j)) *
-                item.get_sub_group().shuffle(tc.ct, j);
+      refVal += ((i / sg.shuffle(tc.c, j)) % sg.shuffle(tc.d, j)) * sg.shuffle(tc.ct, j);
 #elif HIP
       refVal += ((i/__shfl(tc.c,j)) % __shfl(tc.d,j))*__shfl(tc.ct,j);
 #else // CUDA
@@ -112,32 +101,25 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
   }
 
   shPos[threadIdx_x] = error.pos;
-  /*
-  DPCT1065:116: Consider replacing sycl::nd_item::barrier() with
-  sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
-  performance, if there is no access to global memory.
-  */
+  #if SYCL
+  sycl::group_barrier( wrk_grp );
+  #else
   syncthreads();
+  #endif
+
   for (int d = 1; d < blockDim_x; d *= 2) {
     int t = threadIdx_x + d;
     unsigned int posval = (t < blockDim_x) ? shPos[t] : 0xffffffff;
-    /*
-    DPCT1065:118: Consider replacing sycl::nd_item::barrier() with
-    sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
-    performance, if there is no access to global memory.
-    */
-    syncthreads();
 #if SYCL
+    sycl::group_barrier( wrk_grp );
     shPos[threadIdx_x] = sycl::min(posval, shPos[threadIdx_x]);
+    sycl::group_barrier( wrk_grp );
 #else // CUDA or HIP
+    syncthreads();
     shPos[threadIdx_x] = min(posval, shPos[threadIdx_x]);
+    syncthreads();
 #endif
-  /*
-  DPCT1065:119: Consider replacing sycl::nd_item::barrier() with
-  sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
-  performance, if there is no access to global memory.
-  */
-  syncthreads();
+
   }
   // Minimum error.pos is in shPos[0] (or 0xffffffff in case of no error)
 
@@ -159,9 +141,20 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
 TensorTester::TensorTester() : maxRank(32), maxNumblock(256) {
   h_tensorConv = new TensorConv[maxRank];
   h_error      = new TensorError_t[maxNumblock];
-  allocate_device<TensorConv>(&d_tensorConv, maxRank);
-  allocate_device<TensorError_t>(&d_error, maxNumblock);
-  allocate_device<int>(&d_fail, 1);
+
+  #if SYCL
+  sycl::device dev(sycl::gpu_selector{});
+  sycl::context ctxt(dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  tt_gpustream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  #elif HIP
+  hipCheck(hipStreamCreate(&tt_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamCreate(&tt_gpustream));
+  #endif
+
+  allocate_device<TensorConv>(&d_tensorConv, maxRank, tt_gpustream);
+  allocate_device<TensorError_t>(&d_error, maxNumblock, tt_gpustream);
+  allocate_device<int>(&d_fail, 1, tt_gpustream);
 }
 
 //
@@ -170,34 +163,39 @@ TensorTester::TensorTester() : maxRank(32), maxNumblock(256) {
 TensorTester::~TensorTester() {
   delete [] h_tensorConv;
   delete [] h_error;
-  deallocate_device<TensorConv>(&d_tensorConv);
-  deallocate_device<TensorError_t>(&d_error);
-  deallocate_device<int>(&d_fail);
+  deallocate_device<TensorConv>(&d_tensorConv, tt_gpustream);
+  deallocate_device<TensorError_t>(&d_error, tt_gpustream);
+  deallocate_device<int>(&d_fail, tt_gpustream);
+
+  #if SYCL
+  delete tt_gpustream;
+  #elif HIP
+  hipCheck(hipStreamDestroy(tt_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamDestroy(tt_gpustream));
+  #endif
+
 }
 
 void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata) {
   int numthread = 512;
 #if SYCL
   int numblock = std::min<unsigned int>(65535, (ndata - 1) / numthread + 1);
-  /*
-  DPCT1049:120: The workgroup size passed to the SYCL kernel may exceed the
-  limit. To get the device limit, query info::device::max_work_group_size.
-  Adjust the workgroup size if needed.
-  */
-  dpct::get_default_queue().submit([&](sycl::handler &cgh) {
-    cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
-                     sycl::range<3>(1, 1, numthread), sycl::range<3>(1, 1, numthread)),
+  this->tt_gpustream->submit([&](sycl::handler &cgh) {
+    cgh.parallel_for(sycl::nd_range<3>(
+                       sycl::range<3>(1, 1, numblock) *
+                       sycl::range<3>(1, 1, numthread), sycl::range<3>(1, 1, numthread)),
                      [=](sycl::nd_item<3> item) {
                        setTensorCheckPatternKernel(data, ndata, item);
                      });
   });
 #elif HIP
   int numblock = min(65535, (ndata - 1)/numthread + 1 );
-  hipLaunchKernelGGL(setTensorCheckPatternKernel, dim3(numblock), dim3(numthread ), 0, 0, data, ndata);
+  hipLaunchKernelGGL(setTensorCheckPatternKernel, dim3(numblock), dim3(numthread ), 0, this->tt_gpustream, data, ndata);
   hipCheck(hipGetLastError());
 #else // CUDA
   int numblock = min(65535, (ndata - 1)/numthread + 1 );
-  setTensorCheckPatternKernel<<< numblock, numthread >>>(data, ndata);
+  setTensorCheckPatternKernel<<< numblock, numthread, 0, this->tt_gpustream >>>(data, ndata);
   cudaCheck(cudaGetLastError());
 #endif
 }
@@ -244,50 +242,28 @@ int TensorTester::calcTensorConv(const int rank, const int* dim, const int* perm
 }
 
 template <typename T>
-bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data) 
-#if SYCL
-try 
-#endif
+bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data)
 {
   if (rank > 32) {
     return false;
   }
 
   int ndata = calcTensorConv(rank, dim, permutation, h_tensorConv);
-#if SYCL
-  sycl::queue q = dpct::get_default_queue();
-  copy_HtoD<TensorConv>(h_tensorConv, d_tensorConv, rank, &q);
-  q.wait();
-#else
-  copy_HtoD<TensorConv>(h_tensorConv, d_tensorConv, rank);
-#endif
+  copy_HtoD<TensorConv>(h_tensorConv, d_tensorConv, rank, this->tt_gpustream);
 
   // printf("tensorConv\n");
   // for (int i=0;i < rank;i++) {
   //   printf("%d %d %d\n", h_tensorConv[i].c, h_tensorConv[i].d, h_tensorConv[i].ct);
   // }
 
-#if SYCL
-  set_device_array<TensorError_t>(d_error, 0, maxNumblock, &q);
-  q.wait();
-  set_device_array<int>(d_fail, 0, 1, &q);
-#else
-  set_device_array<TensorError_t>(d_error, 0, maxNumblock);
-  set_device_array<int>(d_fail, 0, 1);
-#endif
+  set_device_array<TensorError_t>(d_error, 0, maxNumblock, this->tt_gpustream);
+  set_device_array<int>(d_fail, 0, 1, this->tt_gpustream);
 
   int numthread = 512;
   int numblock = std::min(maxNumblock, (ndata - 1) / numthread + 1);
   int shmemsize = numthread*sizeof(unsigned int);
-  /*
-  DPCT1049:122: The workgroup size passed to the SYCL kernel may exceed the
-  limit. To get the device limit, query info::device::max_work_group_size.
-  Adjust the workgroup size if needed.
-  */
 #if SYCL
-  q.wait();
-  q.submit([&](sycl::handler &cgh) {
-  //dpct::get_default_queue().submit([&](sycl::handler &cgh) {
+  this->tt_gpustream->submit([&](sycl::handler &cgh) {
     sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,
                    sycl::access::target::local>
         dpct_local_acc_ct1(sycl::range<1>(shmemsize), cgh);
@@ -303,30 +279,30 @@ try
                d_error_ct4, d_fail_ct5, item, dpct_local_acc_ct1.get_pointer());
             });
   });
-  q.wait();
 
   int h_fail;
-  copy_DtoH<int>(d_fail, &h_fail, 1, &q);
-  dpct::get_current_device().queues_wait_and_throw();
+  copy_DtoH<int>(d_fail, &h_fail, 1, this->tt_gpustream);
+  this->tt_gpustream->wait_and_throw();
 #elif HIP
-  hipLaunchKernelGGL(checkTransposeKernel, dim3(numblock), dim3(numthread), shmemsize, 
-		     0, data, ndata, rank, d_tensorConv, d_error, d_fail);
+  hipLaunchKernelGGL(checkTransposeKernel, dim3(numblock), dim3(numthread), shmemsize,
+		     this->tt_gpustream, data, ndata, rank, d_tensorConv, d_error, d_fail);
   hipCheck(hipGetLastError());
 
   int h_fail;
-  copy_DtoH<int>(d_fail, &h_fail, 1);
+  copy_DtoH<int>(d_fail, &h_fail, 1, this->tt_gpustream);
   hipCheck(hipDeviceSynchronize());
 #else
-  checkTransposeKernel<<< numblock, numthread, shmemsize >>>(data, ndata, rank, d_tensorConv, d_error, d_fail);
+  checkTransposeKernel<<< numblock, numthread, shmemsize, this->tt_gpustream >>>(data, ndata, rank, d_tensorConv, d_error, d_fail);
   cudaCheck(cudaGetLastError());
 
   int h_fail;
-  copy_DtoH<int>(d_fail, &h_fail, 1);
+  copy_DtoH<int>(d_fail, &h_fail, 1, this->tt_gpustream);
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
+
   if (h_fail) {
-    copy_DtoH_sync<TensorError_t>(d_error, h_error, maxNumblock);
+    copy_DtoH_sync<TensorError_t>(d_error, h_error, maxNumblock, this->tt_gpustream);
     TensorError_t error;
     error.pos = 0x0fffffff;
     for (int i=0; i < numblock; i++) {
@@ -341,13 +317,6 @@ try
 
   return true;
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 // Explicit instances
 template bool TensorTester::checkTranspose<int>(int rank, int* dim, int* permutation, int* data);

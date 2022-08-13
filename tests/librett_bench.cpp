@@ -22,10 +22,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#endif
 #include <vector>
 #include <algorithm>
 #include <cstring>         // strcmp
@@ -36,7 +32,7 @@ SOFTWARE.
 #include <random>
 #include "librett.h"
 #include "GpuUtils.h"
-#include "GpuMem.h"
+#include "GpuMem.hpp"
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuMemcpy.h"
@@ -69,12 +65,9 @@ bool isTrivial(std::vector<int>& permutation);
 void getRandomDim(double vol, std::vector<int>& dim);
 template <typename T> bool bench_tensor(std::vector<int>& dim, std::vector<int>& permutation);
 void printVec(std::vector<int>& vec);
-void printDeviceInfo();
+//void printDeviceInfo();
 
-int main(int argc, char *argv[]) 
-#ifdef SYCL
-try 
-#endif
+int main(int argc, char *argv[])
 {
 
   int gpuid = -1;
@@ -149,30 +142,22 @@ try
     return 1;
   }
 
-#ifdef SYCL
   if (gpuid >= 0) {
-    dpct::dev_mgr::instance().select_device(gpuid);
+    SelectDevice(gpuid);
+    DeviceReset();
   }
 
-  dpct::get_current_device().reset();
+#ifdef SYCL
+  /* DPC++ cant current reset the device through SYCL APIs */
+
   /* DPC++ currently does not support configuring shared memory on devices. */
 #elif HIP
-  if (gpuid >= 0) {
-    hipCheck(hipSetDevice(gpuid));
-  }
-
-  hipCheck(hipDeviceReset());
   if (elemsize == 4) {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeFourByte));
   } else {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
   }
 #else // CUDA
-  if (gpuid >= 0) {
-    cudaCheck(cudaSetDevice(gpuid));
-  }
-
-  cudaCheck(cudaDeviceReset());
   if (elemsize == 4) {
     cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte));
   } else {
@@ -180,7 +165,7 @@ try
   }
 #endif
 
-  printDeviceInfo();
+  //printDeviceInfo();
   printf("CPU using vector type %s of length %d\n", INT_VECTOR_TYPE, INT_VECTOR_LEN);
 
   timer = new librettTimer(elemsize);
@@ -406,13 +391,6 @@ end:
   else
     return 1;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //
 // Benchmark 1: ranks 2-8,15 in inverse permutation. 32 start and end dimension
@@ -509,7 +487,7 @@ bool bench_input(std::vector<int>& dim, std::vector<int>& permutation) {
   printf("permutation\n");
   printVec(permutation);
   printf("bandwidth %4.2lf GB/s\n", timer->GBs());
-  return true;  
+  return true;
 }
 
 //
@@ -810,10 +788,7 @@ void getRandomDim(double vol, std::vector<int>& dim) {
 }
 
 template <typename T>
-bool bench_tensor(std::vector<int> &dim, std::vector<int> &permutation) 
-#ifdef SYCL
-try 
-#endif
+bool bench_tensor(std::vector<int> &dim, std::vector<int> &permutation)
 {
 #ifdef SYCL
 sycl::queue q = dpct::get_default_queue();
@@ -892,13 +867,6 @@ sycl::queue q = dpct::get_default_queue();
   librettCheck(librettDestroy(plan));
   return tester->checkTranspose<T>(rank, dim.data(), permutation.data(), (T *)dataOut);
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 void printVec(std::vector<int>& vec) {
   for (int i=0;i < vec.size();i++) {
@@ -910,10 +878,7 @@ void printVec(std::vector<int>& vec) {
 //
 // Benchmarks memory copy. Returns bandwidth in GB/s
 //
-template <typename T> bool bench_memcpy(int numElem) 
-#ifdef SYCL
-try 
-#endif
+template <typename T> bool bench_memcpy(int numElem)
 {
 #ifdef SYCL
   //dpct::device_ext &dev_ct1 = dpct::get_current_device();
@@ -1003,74 +968,62 @@ try
 
   return true;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
-#ifdef SYCL
-void printDeviceInfo() try {
-  int deviceID;
-  deviceID = dpct::dev_mgr::instance().current_device_id();
-  dpct::device_info prop;
-  dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
-  int pConfig = 0;
-  //cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
-  int shMemBankSize = 4;
-  if (pConfig == 2) shMemBankSize = 8;
-  //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
-  double mem_BW = 0.0;
-  /*
-  DPCT1005:13: The device version is different. You need to rewrite this code.
-  */
-  printf("Using %s SM version %d.%d\n", prop.get_name(),
-         prop.get_major_version(), prop.get_minor_version());
-  int ECCEnabled = 0;
-  double l2CacheSize = 0.0;
-  printf(
-      "Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n",
-      (double)prop.get_max_clock_frequency() / 1e6,
-      prop.get_max_compute_units(), ECCEnabled, mem_BW, shMemBankSize);
-  printf("L2 %1.2lfMB\n", (double)l2CacheSize/(double)(1024*1024));
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#elif HIP
-void printDeviceInfo() {
-  int deviceID;
-  hipCheck(hipGetDevice(&deviceID));
-  hipDeviceProp_t prop;
-  hipCheck(hipGetDeviceProperties(&prop, deviceID));
-  hipSharedMemConfig pConfig;
-  hipCheck(hipDeviceGetSharedMemConfig(&pConfig));
-  int shMemBankSize = 4;
-  if (pConfig == hipSharedMemBankSizeEightByte) shMemBankSize = 8;
-  double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
-  printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
-  printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
-    prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
-  printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
-}
-#else // CUDA
-void printDeviceInfo() {
-  int deviceID;
-  cudaCheck(cudaGetDevice(&deviceID));
-  cudaDeviceProp prop;
-  cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
-  cudaSharedMemConfig pConfig;
-  cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
-  int shMemBankSize = 4;
-  if (pConfig == cudaSharedMemBankSizeEightByte) shMemBankSize = 8;
-  double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
-  printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
-  printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
-    prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
-  printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
-}
-#endif
+// #ifdef SYCL
+// void printDeviceInfo() {
+//   int deviceID;
+//   deviceID = dpct::dev_mgr::instance().current_device_id();
+//   dpct::device_info prop;
+//   dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
+//   int pConfig = 0;
+//   //cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
+//   int shMemBankSize = 4;
+//   if (pConfig == 2) shMemBankSize = 8;
+//   //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+//   double mem_BW = 0.0;
+//   /*
+//   DPCT1005:13: The device version is different. You need to rewrite this code.
+//   */
+//   printf("Using %s SM version %d.%d\n", prop.get_name(),
+//          prop.get_major_version(), prop.get_minor_version());
+//   int ECCEnabled = 0;
+//   double l2CacheSize = 0.0;
+//   printf(
+//       "Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n",
+//       (double)prop.get_max_clock_frequency() / 1e6,
+//       prop.get_max_compute_units(), ECCEnabled, mem_BW, shMemBankSize);
+//   printf("L2 %1.2lfMB\n", (double)l2CacheSize/(double)(1024*1024));
+// }
+// #elif HIP
+// void printDeviceInfo() {
+//   int deviceID;
+//   hipCheck(hipGetDevice(&deviceID));
+//   hipDeviceProp_t prop;
+//   hipCheck(hipGetDeviceProperties(&prop, deviceID));
+//   hipSharedMemConfig pConfig;
+//   hipCheck(hipDeviceGetSharedMemConfig(&pConfig));
+//   int shMemBankSize = 4;
+//   if (pConfig == hipSharedMemBankSizeEightByte) shMemBankSize = 8;
+//   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+//   printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
+//   printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
+//     prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
+//   printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
+// }
+// #else // CUDA
+// void printDeviceInfo() {
+//   int deviceID;
+//   cudaCheck(cudaGetDevice(&deviceID));
+//   cudaDeviceProp prop;
+//   cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
+//   cudaSharedMemConfig pConfig;
+//   cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
+//   int shMemBankSize = 4;
+//   if (pConfig == cudaSharedMemBankSizeEightByte) shMemBankSize = 8;
+//   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+//   printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
+//   printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
+//     prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
+//   printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
+// }
+// #endif

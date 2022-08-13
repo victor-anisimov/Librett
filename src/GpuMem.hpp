@@ -22,8 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
-#ifndef LIBRETTMEM_H
-#define LIBRETTMEM_H
+#ifndef LIBRETTMEM_HPP
+#define LIBRETTMEM_HPP
 
 #include "GpuUtils.h"
 
@@ -34,7 +34,6 @@ SOFTWARE.
 extern umpire::Allocator librett_umpire_allocator;
 #endif
 
-void allocate_device_T(void **pp, const size_t len, const size_t sizeofT);
 //----------------------------------------------------------------------------------------
 //
 // Allocate gpu memory
@@ -42,20 +41,46 @@ void allocate_device_T(void **pp, const size_t len, const size_t sizeofT);
 // len = length of the array
 //
 template <class T>
-void allocate_device(T **pp, const size_t len) {
-  allocate_device_T((void **)pp, len, sizeof(T));
+void allocate_device(T **pp, const size_t len, gpuStream_t& gpuStream) {
+
+#ifdef LIBRETT_HAS_UMPIRE
+  *pp = librett_umpire_allocator.allocate(sizeof(T)*len);
+#else  // LIBRETT_HAS_UMPIRE
+  #if SYCL
+  *((void **)pp) = (void *)sycl::malloc_device( sizeof(T)*len, *gpuStream);
+  #elif HIP
+  hipCheck(hipMalloc((void **)pp, sizeof(T)*len));
+  #else // CUDA
+  cudaCheck(cudaMalloc((void **)pp, sizeof(T)*len));
+  #endif
+#endif // LIBRETT_HAS_UMPIRE
+
 }
 
-void deallocate_device_T(void **pp);
 //----------------------------------------------------------------------------------------
 //
 // Deallocate gpu memory
 // pp = memory pointer
 //
 template <class T>
-void deallocate_device(T **pp) {
-  deallocate_device_T((void **)pp);
+void deallocate_device(T **pp, gpuStream_t& gpuStream) {
+
+#ifdef LIBRETT_HAS_UMPIRE
+  librett_umpire_allocator.deallocate((void *) (*pp) );
+#else
+  if (*pp != NULL) {
+    #if SYCL
+      sycl::free( (void *)(*pp), *gpuStream );
+    #elif HIP
+      hipCheck(hipFree((void *)(*pp)));
+    #else // CUDA
+      cudaCheck(cudaFree((void *)(*pp)));
+    #endif
+    *pp = NULL;
+  }
+#endif // LIBRETT_HAS_UMPIRE
+
 }
 
 
-#endif //LIBRETTMEM_H
+#endif //LIBRETTMEM_HPP

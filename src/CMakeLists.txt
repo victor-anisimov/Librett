@@ -1,18 +1,17 @@
 
 set(LIBRETT_SOURCE_FILES
   calls.h
-  GpuMem.cpp
-  GpuMem.h
+  GpuMem.hpp
   GpuMemcpy.cpp
   GpuMemcpy.h
   GpuUtils.cpp
   GpuUtils.h
   librett.cpp
   librett.h
-  GpuModel.cpp
-  GpuModel.h
-  GpuModelKernel.cpp
-  GpuModelKernel.h
+  # GpuModel.cpp
+  # GpuModel.h
+  # GpuModelKernel.cpp
+  # GpuModelKernel.h
   kernel.cpp
   kernel.h
   plan.cpp

@@ -22,16 +22,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifdef SYCL
-  #include <sycl/sycl.hpp>
-#endif
 #include <algorithm>
 #include <queue>
 #include <unordered_set>
 #include <cmath>
 #include <random>
 #include "GpuUtils.h"
-#include "GpuMem.h"
+#include "GpuMem.hpp"
 #include "plan.h"
 #include "kernel.h"
 #include "GpuModel.h"
@@ -499,7 +496,7 @@ bool librettPlan_t::createTrivialPlans(const int rank, const int *dim, const int
   if (rank == 1) {
     TensorSplit ts;
     ts.method = Trivial;
-    ts.update(1, 1, rank, dim, permutation);    
+    ts.update(1, 1, rank, dim, permutation);
     LaunchConfig lc;
     int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
@@ -518,7 +515,7 @@ bool librettPlan_t::createTiledPlans(const int rank, const int *dim, const int *
   if (permutation[0] != 0 && rank > 1) {
     TensorSplit ts;
     ts.method = Tiled;
-    ts.update(1, 1, rank, dim, permutation);    
+    ts.update(1, 1, rank, dim, permutation);
     LaunchConfig lc;
     int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
@@ -544,9 +541,9 @@ bool librettPlan_t::createTiledCopyPlans(const int rank, const int *dim, const i
     TensorSplit ts;
     ts.method = TiledCopy;
     if (numMmMkSame < rank) {
-      ts.update(numMmMkSame, numMmMkSame + 1, rank, dim, permutation);      
+      ts.update(numMmMkSame, numMmMkSame + 1, rank, dim, permutation);
     } else {
-      ts.update(numMmMkSame - 1, numMmMkSame, rank, dim, permutation);      
+      ts.update(numMmMkSame - 1, numMmMkSame, rank, dim, permutation);
     }
     LaunchConfig lc;
     int numActiveBlock = librettKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
@@ -595,7 +592,7 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
       // Amount of shared memory required
       size_t shmemsize = ts.shmemAlloc(sizeofType);
       /* DPCT1019:0: local_mem_size in SYCL is not a complete equivalent of sharedMemPerBlock in CUDA. */
-      if (shmemsize > prop.sharedMemPerBlock)
+      if (shmemsize > gpuSharedMemPerBlock)
       {
         // Does not fit into shared memory, need to split
         ts.method = PackedSplit;
@@ -619,7 +616,7 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
         //
         ts.update(numMm, numMk, rank, dim, permutation);
         /* DPCT1019:1: local_mem_size in SYCL is not a complete equivalent of sharedMemPerBlock in CUDA. */
-	int minNumSplit = (ts.splitDim*ts.volMmkUnsplit*sizeofType - 1)/prop.sharedMemPerBlock + 1;
+	int minNumSplit = (ts.splitDim*ts.volMmkUnsplit*sizeofType - 1)/gpuSharedMemPerBlock + 1;
         int maxNumSplit = std::max(minNumSplit, std::min(ts.splitDim/splitDimMin, minNumSplit + 60));
 
         // Sanity check: do not split too much
@@ -702,7 +699,7 @@ bool librettPlan_t::createPackedSplitPlans(const int rank, const int *dim, const
 //
 // Create all possible plans
 //
-bool librettPlan_t::createPlans(const int rank, const int *dim, const int *permutation, 
+bool librettPlan_t::createPlans(const int rank, const int *dim, const int *permutation,
   const int rankRed, const int *dimRed, const int *permutationRed,
   const size_t sizeofType, const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans) {
 
@@ -756,10 +753,10 @@ bool operator>(const librettPlan_t& lhs, const librettPlan_t& rhs) {
   //     } else {
   //       return (rhs.cl_part_l1 != 0);
   //     }
-  //   } else { 
+  //   } else {
   //     //else if (lts.method == PackedSplit && rts.method == PackedSplit) {
   //     if (lhs.cl_part_l1 == rhs.cl_part_l1) {
-  //       return (lts.volMmkOutCont > rts.volMmkOutCont);        
+  //       return (lts.volMmkOutCont > rts.volMmkOutCont);
   //     } else {
   //       return (lhs.cl_part_l1 < rhs.cl_part_l1);
   //     }
@@ -795,8 +792,8 @@ void printMatlab( const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans, 
   static int count = 0;
   count++;
   int i = 0;
-  // Conversion factor from wallclok time to total number of cycles = (GPU clock in Hz) x #SM
-  double freq_SM = (double)(prop.clockRate*1000)*(double)gpuMultiProcessorCount;
+  // Conversion factor from wallclock time to total number of cycles = (GPU clock in Hz) x #SM
+  double freq_SM = (double)(gpuClockRate*1.0e6)*(double)gpuMultiProcessorCount;
   for (auto it=plans.begin();it != plans.end();it++,i++) {
     TensorSplit& ts = it->tensorSplit;
     LaunchConfig& lc = it->launchConfig;
@@ -806,7 +803,7 @@ void printMatlab( const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans, 
       int numthread = lc.numthread_x*lc.numthread_y*lc.numthread_z;
       printf("MATLAB %d %d %d %d %1.3f %d %d %d %d %d %d %d %d %d %d %d %d %d %e %e\n", count, ts.method,
         it->num_iter, numthread, it->mlp, it->numActiveBlock,
-        it->gld_req, it->gst_req, it->gld_tran, it->gst_tran, 
+        it->gld_req, it->gst_req, it->gld_tran, it->gst_tran,
         it->sld_req, it->sst_req, it->sld_tran, it->sst_tran,
         it->cl_full_l2, it->cl_part_l2, it->cl_full_l1, it->cl_part_l1, times[i]*freq_SM, it->cycles);
     }
@@ -840,7 +837,7 @@ void librettPlan_t::print() {
 bool librettPlan_t::setup(const int rank_in, const int* dim, const int* permutation,
   const size_t sizeofType_in, const TensorSplit& tensorSplit_in,
   const LaunchConfig& launchConfig_in, const int numActiveBlock_in) {
-  
+
   rank = rank_in;
   sizeofType = sizeofType_in;
   tensorSplit = tensorSplit_in;
@@ -1225,7 +1222,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       if (isplit < num1) {
         pos[indRoundUp++] = posTmp[ipos];
       } else {
-        pos[indRoundDown++] = posTmp[ipos];        
+        pos[indRoundDown++] = posTmp[ipos];
       }
     }
     if (indRoundUp != numRoundUp || indRoundDown != num_ipos) {
@@ -1260,7 +1257,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int cl_full_l2_tmp = 0;
       int cl_part_l2_tmp = 0;
       countPackedGlTransactions0(
-        prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
+        gpuWarpSize, accWidth, cacheWidth, launchConfig.numthread_x,
 	numPos, posMbarIn, posMbarOut, volMmk1,
         posMmkIn1.data(), posMmkOut1.data(), gld_tran_tmp, gst_tran_tmp,
         gld_req_tmp, gst_req_tmp, cl_full_l2_tmp, cl_part_l2_tmp, cl_full_l1, cl_part_l1);
@@ -1279,7 +1276,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int cl_full_l2_ref = 0;
       int cl_part_l2_ref = 0;
       for (int i=0;i < numPos;i++) {
-        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
+        countPackedGlTransactions(gpuWarpSize, accWidth, cacheWidth, launchConfig.numthread_x,
           posMbarIn[i], posMbarOut[i], volMmk1, posMmkIn1, posMmkOut1,
           gld_tran_ref, gst_tran_ref, gld_req_ref, gst_req_ref,
           cl_full_l2_ref, cl_part_l2_ref, cl_full_l1, cl_part_l1);
@@ -1324,7 +1321,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int gst_req_tmp = 0;
       int cl_full_l2_tmp = 0;
       int cl_part_l2_tmp = 0;
-      countPackedGlTransactions0( prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
+      countPackedGlTransactions0( gpuWarpSize, accWidth, cacheWidth, launchConfig.numthread_x,
         numPos, posMbarIn, posMbarOut, volMmk0,
         posMmkIn0.data(), posMmkOut0.data(), gld_tran_tmp, gst_tran_tmp,
         gld_req_tmp, gst_req_tmp, cl_full_l2_tmp, cl_part_l2_tmp, cl_full_l1, cl_part_l1);
@@ -1343,7 +1340,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int cl_full_l2_ref = 0;
       int cl_part_l2_ref = 0;
       for (int i=0;i < numPos;i++) {
-        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
+        countPackedGlTransactions(gpuWarpSize, accWidth, cacheWidth, launchConfig.numthread_x,
           posMbarIn[i], posMbarOut[i], volMmk0, posMmkIn0, posMmkOut0,
           gld_tran_ref, gst_tran_ref, gld_req_ref, gst_req_ref,
           cl_full_l2_ref, cl_part_l2_ref, cl_full_l1, cl_part_l1);
@@ -1375,7 +1372,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
     sld_req = 0;
     sst_req = 0;
     // Round down splits
-    countPackedShTransactions0(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
+    countPackedShTransactions0(gpuWarpSize, gpuWarpSize, launchConfig.numthread_x,
       volMmk0, hostMsh.data(), tensorSplit.sizeMmk, sld_tran, sst_tran, sld_req, sst_req);
 #ifdef COUNTCYCLE_CHECK
     {
@@ -1383,7 +1380,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int sst_tran_ref = 0;
       int sld_req_ref = 0;
       int sst_req_ref = 0;
-      countPackedShTransactionsRef(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
+      countPackedShTransactionsRef(gpuWarpSize, gpuWarpSize, launchConfig.numthread_x,
         volMmk0, hostMsh.data(), tensorSplit.sizeMmk,
         sld_tran_ref, sst_tran_ref, sld_req_ref, sst_req_ref);
       if (sld_tran != sld_tran_ref || sst_tran != sst_tran_ref ||
@@ -1406,7 +1403,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int sst_tran_tmp = 0;
       int sld_req_tmp = 0;
       int sst_req_tmp = 0;
-      countPackedShTransactions0(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
+      countPackedShTransactions0(gpuWarpSize, gpuWarpSize, launchConfig.numthread_x,
 	volMmk1, hostMsh.data() + tensorSplit.sizeMmk, tensorSplit.sizeMmk,
         sld_tran_tmp, sst_tran_tmp, sld_req_tmp, sst_req_tmp);
 #ifdef COUNTCYCLE_CHECK
@@ -1415,7 +1412,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
         int sst_tran_ref = 0;
         int sld_req_ref = 0;
         int sst_req_ref = 0;
-        countPackedShTransactionsRef(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
+        countPackedShTransactionsRef(gpuWarpSize, gpuWarpSize, launchConfig.numthread_x,
           volMmk1, hostMsh.data() + tensorSplit.sizeMmk, tensorSplit.sizeMmk,
           sld_tran_ref, sst_tran_ref, sld_req_ref, sst_req_ref);
         if (sld_tran_tmp != sld_tran_ref || sst_tran_tmp != sst_tran_ref ||
@@ -1518,8 +1515,8 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int gst_req_tmp = 0;
       int cl_full_l2_tmp = 0;
       int cl_part_l2_tmp = 0;
-      countPackedGlTransactions0(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
-	numPos, posMbarIn, posMbarOut, tensorSplit.volMmk, posMmkIn.data(), posMmkOut.data(), 
+      countPackedGlTransactions0(gpuWarpSize, accWidth, cacheWidth, launchConfig.numthread_x,
+	numPos, posMbarIn, posMbarOut, tensorSplit.volMmk, posMmkIn.data(), posMmkOut.data(),
 	gld_tran_tmp, gst_tran_tmp, gld_req_tmp, gst_req_tmp, cl_full_l2_tmp,
         cl_part_l2_tmp, cl_full_l1, cl_part_l1);
       gld_tran += gld_tran_tmp;
@@ -1537,7 +1534,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       int cl_full_l2_ref = 0;
       int cl_part_l2_ref = 0;
       for (int i=0;i < numPos;i++) {
-        countPackedGlTransactions(prop.warpSize, accWidth, cacheWidth, launchConfig.numthread_x,
+        countPackedGlTransactions(gpuWarpSize, accWidth, cacheWidth, launchConfig.numthread_x,
           posMbarIn[i], posMbarOut[i], tensorSplit.volMmk, posMmkIn, posMmkOut,
           gld_tran_ref, gst_tran_ref, gld_req_ref, gst_req_ref,
           cl_full_l2_ref, cl_part_l2_ref, cl_full_l1, cl_part_l1);
@@ -1572,14 +1569,14 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
     sst_tran = 0;
     sld_req = 0;
     sst_req = 0;
-    countPackedShTransactions0(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
+    countPackedShTransactions0(gpuWarpSize, gpuWarpSize, launchConfig.numthread_x,
       tensorSplit.volMmk, hostMsh.data(), tensorSplit.sizeMmk, sld_tran, sst_tran, sld_req, sst_req);
 #ifdef COUNTCYCLE_CHECK
     int sld_tran_ref = 0;
     int sst_tran_ref = 0;
     int sld_req_ref = 0;
     int sst_req_ref = 0;
-    countPackedShTransactionsRef(prop.warpSize, prop.warpSize, launchConfig.numthread_x,
+    countPackedShTransactionsRef(gpuWarpSize, gpuWarpSize, launchConfig.numthread_x,
       tensorSplit.volMmk, hostMsh.data(), tensorSplit.sizeMmk,
       sld_tran_ref, sst_tran_ref, sld_req_ref, sst_req_ref);
     if (sld_tran != sld_tran_ref || sst_tran != sst_tran_ref ||
@@ -1590,7 +1587,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
       return false;
     }
 #endif
-    // countPackedShTransactions(prop.warpSize, prop.warpSize, launchConfig.numthread.x, 
+    // countPackedShTransactions(gpuWarpSize, gpuWarpSize, launchConfig.numthread.x,
     //   tensorSplit.volMmk, hostMsh.data(), tensorSplit.sizeMmk,
     //   sld_tran, sst_tran, sld_req, sst_req);
 #ifdef ENABLE_NVTOOLS
@@ -1599,7 +1596,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
   } else if (tensorSplit.method == Trivial) {
     size_t vol = tensorSplit.volMmk*tensorSplit.volMbar;
     // Global memory
-    gld_req = (vol - 1) / prop.warpSize + 1;
+    gld_req = (vol - 1) / gpuWarpSize + 1;
     gst_req = gld_req;
     gld_tran = (vol - 1)/accWidth + 1;
     gst_tran = gld_tran;
@@ -1622,7 +1619,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
 
   if (tensorSplit.method == Packed || tensorSplit.method == PackedSplit) {
     cycles = cyclesPacked(tensorSplit.method == PackedSplit, sizeofType, prop, numthread,
-      numActiveBlock, launchConfig.numRegStorage, 
+      numActiveBlock, launchConfig.numRegStorage,
       gld_req, gst_req, gld_tran, gst_tran, sld_req, sst_req, sld_tran, sst_tran,
       num_iter, cl_full_l2, cl_part_l2);
   } else if (tensorSplit.method == Tiled || tensorSplit.method == TiledCopy) {
@@ -1641,65 +1638,64 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
 void librettPlan_t::activate() {
 
   if (tensorSplit.sizeMbar > 0) {
-    if (Mbar == NULL) {
-      allocate_device<TensorConvInOut>(&Mbar, tensorSplit.sizeMbar);
-      copy_HtoD<TensorConvInOut>(hostMbar.data(), Mbar, tensorSplit.sizeMbar, stream);
+    if (Mbar == nullptr) {
+      allocate_device<TensorConvInOut>(&Mbar, tensorSplit.sizeMbar, this->getStream());
+      copy_HtoD<TensorConvInOut>(hostMbar.data(), Mbar, tensorSplit.sizeMbar, this->getStream());
     }
   }
 
   if (tensorSplit.method == Packed || tensorSplit.method == PackedSplit) {
     int MmkSize = (tensorSplit.method == Packed) ? tensorSplit.sizeMmk : tensorSplit.sizeMmk*2;
-    if (Mmk == NULL) {
-      allocate_device<TensorConvInOut>(&Mmk, MmkSize);
-      copy_HtoD<TensorConvInOut>(hostMmk.data(), Mmk, MmkSize, stream);
+    if (Mmk == nullptr) {
+      allocate_device<TensorConvInOut>(&Mmk, MmkSize, this->getStream());
+      copy_HtoD<TensorConvInOut>(hostMmk.data(), Mmk, MmkSize, this->getStream());
     }
-    if (Msh == NULL) {
-      allocate_device<TensorConv>(&Msh, MmkSize);
-      copy_HtoD<TensorConv>(hostMsh.data(), Msh, MmkSize, stream);
+    if (Msh == nullptr) {
+      allocate_device<TensorConv>(&Msh, MmkSize, this->getStream());
+      copy_HtoD<TensorConv>(hostMsh.data(), Msh, MmkSize, this->getStream());
     }
   }
 
 #ifdef SYCL
   stream->wait();
 #endif
+
 }
 
 //
-// Set device buffers to NULL
+// Set device buffers to nullptr
 //
 void librettPlan_t::nullDevicePointers() {
-  Mbar = NULL;
-  Mmk = NULL;
-  Msh = NULL;
-  Mk = NULL;
-  Mm = NULL;
+  Mbar = nullptr;
+  Mmk = nullptr;
+  Msh = nullptr;
+  Mk = nullptr;
+  Mm = nullptr;
 }
 
 librettPlan_t::librettPlan_t() {
 #ifdef SYCL
-  cudaCheck(deviceID = dpct::dev_mgr::instance().current_device_id());
-  stream = & dpct::get_default_queue();
+  Librett::syclGetDevice(&deviceID);
 #elif HIP
   hipCheck(hipGetDevice(&deviceID));
-  stream = 0;
 #else // CUDA
   cudaCheck(cudaGetDevice(&deviceID));
-  stream = 0;
 #endif
+  stream = nullptr;
   numActiveBlock = 0;
   nullDevicePointers();
 }
 
 librettPlan_t::~librettPlan_t() {
   // Deallocate device buffers
-  if (Mbar != NULL) deallocate_device<TensorConvInOut>(&Mbar);
-  if (Mmk != NULL) deallocate_device<TensorConvInOut>(&Mmk);
-  if (Msh != NULL) deallocate_device<TensorConv>(&Msh);
-  if (Mk != NULL) deallocate_device<TensorConv>(&Mk);
-  if (Mm != NULL) deallocate_device<TensorConv>(&Mm);
+  if (Mbar != nullptr) deallocate_device<TensorConvInOut>(&Mbar, this->getStream());
+  if (Mmk != nullptr) deallocate_device<TensorConvInOut>(&Mmk, this->getStream());
+  if (Msh != nullptr) deallocate_device<TensorConv>(&Msh, this->getStream());
+  if (Mk != nullptr) deallocate_device<TensorConv>(&Mk, this->getStream());
+  if (Mm != nullptr) deallocate_device<TensorConv>(&Mm, this->getStream());
 }
 
-void librettPlan_t::setStream(gpuStream_t stream_in) 
+void librettPlan_t::setStream(gpuStream_t& stream_in)
 {
   stream = stream_in;
 }

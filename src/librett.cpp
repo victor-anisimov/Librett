@@ -22,17 +22,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifdef SYCL
-  #include <sycl/sycl.hpp>
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
-  #include <cuda.h>
-#endif
+
 #include <list>
 #include <unordered_map>
 #include "GpuUtils.h"
-#include "GpuMem.h"
+#include "GpuMem.hpp"
 #include "plan.h"
 #include "kernel.h"
 #include "Timer.h"
@@ -41,7 +35,6 @@ SOFTWARE.
 #include <mutex>
 #include <cstdlib>
 // #include <chrono>
-#include "uniapi.h"
 
 // global Umpire allocator
 #ifdef LIBRETT_HAS_UMPIRE
@@ -63,7 +56,7 @@ static std::mutex devicePropsMutex;
 // Also sets shared memory configuration
 void getDeviceProp(int& deviceID, gpuDeviceProp_t &prop) {
   #if SYCL
-    deviceID = dpct::dev_mgr::instance().current_device_id();
+    Librett::syclGetDevice(&deviceID);
   #elif HIP
     hipCheck(hipGetDevice(&deviceID));
   #else // CUDA
@@ -77,7 +70,7 @@ void getDeviceProp(int& deviceID, gpuDeviceProp_t &prop) {
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
     #if SYCL
-      dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
+      Librett::syclGetDeviceProperties(&prop, deviceID);
     #elif HIP
       hipCheck(hipGetDeviceProperties(&prop, deviceID));
       librettKernelSetSharedMemConfig();
@@ -111,18 +104,20 @@ librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t
     }
   }
   delete [] check;
-  if (permutation_fail) return LIBRETT_INVALID_PARAMETER;  
+  if (permutation_fail) return LIBRETT_INVALID_PARAMETER;
 
   return LIBRETT_SUCCESS;
 }
 
-librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType, 
-  gpuStream_t stream) {
+librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
+  gpuStream_t& stream) {
 
-#if SYCL
-  if(stream == 0 )
-    stream = &dpct::get_default_queue();
-#endif
+// #if SYCL
+//   if(stream == nullptr) {
+//     throw std::runtime_error("[SYCL] pass a valid/non-nullptr SYCL queue to the plan constructor!");
+//     //stream = Librett::sycl_default_queue();
+//   }
+// #endif
 
 #ifdef ENABLE_NVTOOLS
   gpuRangeStart("init");
@@ -142,7 +137,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
     if (planStorage.count(*handle) != 0) return LIBRETT_INTERNAL_ERROR;
   }
 
-  // Prepare device
+  // // Prepare device
   int deviceID;
   gpuDeviceProp_t prop;
   getDeviceProp(deviceID, prop);
@@ -173,7 +168,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
   // std::chrono::high_resolution_clock::time_point plan_start;
   // plan_start = std::chrono::high_resolution_clock::now();
 
-  if (!librettPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(), 
+  if (!librettPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(),
     sizeofType, deviceID, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 
   // std::chrono::high_resolution_clock::time_point plan_end;
@@ -230,7 +225,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
 }
 
 librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
-  gpuStream_t stream, void* idata, void* odata)
+  gpuStream_t& stream, void* idata, void* odata)
 {
 
   // Check that input parameters are valid
@@ -249,7 +244,7 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
     if (planStorage.count(*handle) != 0) return LIBRETT_INTERNAL_ERROR;
   }
 
-  // Prepare device
+  // // Prepare device
   int deviceID;
   gpuDeviceProp_t prop;
   getDeviceProp(deviceID, prop);
@@ -269,7 +264,7 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
   // Create plans from non-reduced ranks
   // if (!createPlans(rank, dim, permutation, sizeofType, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 #else
-  if (!librettPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(), 
+  if (!librettPlan_t::createPlans(rank, dim, permutation, redDim.size(), redDim.data(), redPermutation.data(),
     sizeofType, deviceID, prop, plans)) return LIBRETT_INTERNAL_ERROR;
 #endif
 
@@ -290,17 +285,18 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
   for (auto it=plans.begin();it != plans.end();it++) {
     // Activate plan
     it->activate();
+
     // Clear output data to invalidate caches
-#if SYCL
     set_device_array<char>((char *)odata, -1, numBytes, stream);
-    dpct::get_current_device().queues_wait_and_throw();
+
+#if SYCL
+    stream->wait_and_throw();
 #elif HIP
-    set_device_array<char>((char *)odata, -1, numBytes);
-    hipCheck(hipDeviceSynchronize());
+    hipCheck(hipStreamSynchronize(stream));
 #else // CUDA
-    set_device_array<char>((char *)odata, -1, numBytes);
-    cudaCheck(cudaDeviceSynchronize());
+    cudaCheck(cudaStreamSynchronize(stream));
 #endif
+
     timer.start();
     // Execute plan
     if (!librettKernel(*it, idata, odata)) return LIBRETT_INTERNAL_ERROR;
@@ -344,7 +340,6 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
   return LIBRETT_SUCCESS;
 }
 
-//void CUDART_CB librettDestroy_callback(gpuStream_t stream, gpuError_t status,
 void librettDestroy_callback(gpuStream_t stream, gpuError_t status,
   void *userData) {
   librettPlan_t* plan = (librettPlan_t*) userData;
@@ -364,18 +359,15 @@ librettResult librettDestroy(librettHandle handle) {
   // register callback to deallocate plan
   cudaStreamAddCallback(stream, librettDestroy_callback, plan, 0);
 #else
-  // Delete instance of librettPlan_t	 
-  delete it->second;	  
-  // Delete entry from plan storage	  
+  // Delete instance of librettPlan_t
+  delete it->second;
+  // Delete entry from plan storage
   planStorage.erase(it);
 #endif
   return LIBRETT_SUCCESS;
 }
 
-librettResult librettExecute(librettHandle handle, void *idata, void *odata) 
-#ifdef SYCL 
-try 
-#endif
+librettResult librettExecute(librettHandle handle, void *idata, void *odata)
 {
   // prevent modification when find
   std::lock_guard<std::mutex> lock(planStorageMutex);
@@ -386,9 +378,9 @@ try
 
   librettPlan_t& plan = *(it->second);
 
-  int deviceID;
+  int deviceID=0;
 #if SYCL
-  deviceID = dpct::dev_mgr::instance().current_device_id();
+  Librett::syclGetDevice(&deviceID);
 #elif HIP
   hipCheck(hipGetDevice(&deviceID));
 #else // CUDA
@@ -399,13 +391,6 @@ try
   if (!librettKernel(plan, idata, odata)) return LIBRETT_INTERNAL_ERROR;
   return LIBRETT_SUCCESS;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 void librettInitialize() {
 #ifdef LIBRETT_HAS_UMPIRE
@@ -425,7 +410,7 @@ sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attri
   #ifdef __SYCL_DEVICE_ONLY__
     return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
   #else
-    throw cl::sycl::runtime_error("Sub-groups are not supported on host device.", PI_ERROR_INVALID_DEVICE);
+    throw sycl::runtime_error("Sub-groups are not supported on host device.", PI_ERROR_INVALID_DEVICE);
   #endif
 }
 #endif

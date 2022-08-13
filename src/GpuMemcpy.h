@@ -25,18 +25,10 @@ SOFTWARE.
 #ifndef LIBRETTMEMCPY_H
 #define LIBRETTMEMCPY_H
 
-#if SYCL
-  #include <sycl/sycl.hpp>
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
-  #include <cuda_runtime.h>
-#endif
-
 #include "uniapi.h"
 
-template <typename T> void scalarCopy(const int n, const T* data_in, T* data_out, gpuStream_t stream);
-template <typename T> void vectorCopy(const int n, T* data_in, T* data_out, gpuStream_t stream);
-void memcpyFloat(const int n, float* data_in, float* data_out, gpuStream_t stream);
+template <typename T> void scalarCopy(const int n, const T* data_in, T* data_out, gpuStream_t& stream);
+template <typename T> void vectorCopy(const int n, T* data_in, T* data_out, gpuStream_t& stream);
+void memcpyFloat(const int n, float* data_in, float* data_out, gpuStream_t& stream);
 
 #endif // LIBRETTMEMCPY_H

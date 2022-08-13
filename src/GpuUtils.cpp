@@ -23,10 +23,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
-#if SYCL
-  #include <sycl/sycl.hpp>
-#endif
-
 #include <stdio.h>
 
 #ifdef ENABLE_NVTOOLS
@@ -38,60 +34,35 @@ SOFTWARE.
 //----------------------------------------------------------------------------------------
 
 void set_device_array_async_T(void *data, int value, const size_t ndata,
-                              gpuStream_t stream, const size_t sizeofT) 
-#if SYCL
-try 
-#endif
+                              gpuStream_t& stream, const size_t sizeofT)
 {
   #if SYCL
-    if(stream == 0)
-      dpct::get_default_queue().memset(data, value, sizeofT * ndata);
-    else
-      stream->memset(data, value, sizeofT * ndata);
+    stream->memset(data, value, sizeofT * ndata);
   #elif HIP
     hipCheck(hipMemsetAsync(data, value, sizeofT*ndata, stream));
   #else // CUDA
     cudaCheck(cudaMemsetAsync(data, value, sizeofT*ndata, stream));
   #endif
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
-void set_device_array_T(void *data, int value, const size_t ndata, const size_t sizeofT) 
-#if SYCL
-try 
-#endif
+void set_device_array_sync_T(void *data, int value, const size_t ndata,
+                             gpuStream_t& stream, const size_t sizeofT)
 {
   #if SYCL
-    dpct::get_default_queue().memset(data, value, sizeofT * ndata).wait();
+    stream->memset(data, value, sizeofT * ndata).wait();
   #elif HIP
     hipCheck(hipMemset(data, value, sizeofT*ndata));
   #else // CUDA
     cudaCheck(cudaMemset(data, value, sizeofT*ndata));
   #endif
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //----------------------------------------------------------------------------------------
 //
 // Copies memory Host -> Device
 //
 void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len,
-                       gpuStream_t stream, const size_t sizeofT) 
-#if SYCL
-try 
-#endif
+                       gpuStream_t& stream, const size_t sizeofT)
 {
   #if SYCL
     stream->memcpy(d_array, h_array, sizeofT * array_len);
@@ -101,44 +72,25 @@ try
     cudaCheck(cudaMemcpyAsync(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault, stream));
   #endif
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
-void copy_HtoD_T(const void *h_array, void *d_array, size_t array_len, const size_t sizeofT) 
-#if SYCL
-try
-#endif
+void copy_HtoD_sync_T(const void *h_array, void *d_array, size_t array_len,
+                       gpuStream_t& stream, const size_t sizeofT)
 {
   #if SYCL
-    dpct::get_default_queue().memcpy(d_array, h_array, sizeofT * array_len).wait();
+    stream->memcpy(d_array, h_array, sizeofT * array_len).wait();
   #elif HIP
     hipCheck(hipMemcpy(d_array, h_array, sizeofT*array_len, hipMemcpyDefault));
   #else // CUDA
     cudaCheck(cudaMemcpy(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault));
   #endif
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //----------------------------------------------------------------------------------------
 //
 // Copies memory Device -> Host
 //
-void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len, 
-		       gpuStream_t stream, const size_t sizeofT) 
-#if SYCL
-try 
-#endif
+void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len,
+		       gpuStream_t& stream, const size_t sizeofT)
 {
   #if SYCL
     stream->memcpy(h_array, d_array, sizeofT * array_len);
@@ -148,34 +100,18 @@ try
     cudaCheck(cudaMemcpyAsync(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault, stream));
   #endif
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
-void copy_DtoH_T(const void *d_array, void *h_array, const size_t array_len, const size_t sizeofT) 
-#if SYCL
-try 
-#endif
+void copy_DtoH_sync_T(const void *d_array, void *h_array, const size_t array_len,
+                      gpuStream_t& stream, const size_t sizeofT)
 {
   #if SYCL
-    dpct::get_default_queue().memcpy(h_array, d_array, sizeofT * array_len).wait();
+    stream->memcpy(h_array, d_array, sizeofT * array_len).wait();
   #elif HIP
     hipCheck(hipMemcpy(h_array, d_array, sizeofT*array_len, hipMemcpyDefault));
   #else
     cudaCheck(cudaMemcpy(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault));
   #endif
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //----------------------------------------------------------------------------------------
 #ifdef ENABLE_NVTOOLS
@@ -208,7 +144,7 @@ void gpuRangeStop() {
 
 void DeviceReset() {
   #if SYCL
-    dpct::get_current_device().reset();
+  // does nothing
   #elif HIP
     hipCheck(hipDeviceReset());
   #else // CUDA
@@ -219,7 +155,7 @@ void DeviceReset() {
 void SelectDevice(int gpuid){
   if (gpuid >= 0) {
     #if SYCL
-      dpct::dev_mgr::instance().select_device(gpuid);
+      Librett::syclSetDevice(gpuid);
     #elif HIP
       hipCheck(hipSetDevice(gpuid));
     #else // CUDA
