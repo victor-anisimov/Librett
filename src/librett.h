@@ -25,7 +25,16 @@ SOFTWARE.
 #ifndef LIBRETT_H
 #define LIBRETT_H
 
-#include "uniapi.h"
+#ifdef SYCL
+  #include <sycl/sycl.hpp>
+  using librett_gpuStream_t     = sycl::queue*;
+#elif HIP
+  #include <hip/hip_runtime.h>
+  using librett_gpuStream_t     = hipStream_t;
+#else // CUDA
+  #include <cuda_runtime.h>
+  using librett_gpuStream_t     = cudaStream_t;
+#endif
 
 // Handle type that is used to store and access librett plans
 typedef unsigned int librettHandle;
@@ -66,7 +75,7 @@ void librettFinalize();
 // Returns
 // Success/unsuccess code
 //
-librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType, gpuStream_t& stream);
+librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType, librett_gpuStream_t& stream);
 
 //
 // Create plan and choose implementation by measuring performance
@@ -85,7 +94,7 @@ librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permut
 // Success/unsuccess code
 //
 librettResult librettPlanMeasure(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-                                 gpuStream_t& stream, void* idata, void* odata);
+                                 librett_gpuStream_t& stream, void* idata, void* odata);
 
 //
 // Destroy plan
