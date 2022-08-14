@@ -8,8 +8,8 @@ set(LIBRETT_SOURCE_FILES
   GpuUtils.h
   librett.cpp
   librett.h
-  # GpuModel.cpp
-  # GpuModel.h
+  GpuModel.cpp
+  GpuModel.h
   # GpuModelKernel.cpp
   # GpuModelKernel.h
   kernel.cpp
