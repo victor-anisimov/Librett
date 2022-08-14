@@ -105,7 +105,7 @@ endif(ENABLE_HIP)
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
 
-  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size=32")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size 64 -fno-sycl-id-queries-fit-in-int -Wsycl-strict -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=gfx90a")
 endif(ENABLE_SYCL)
 
 # ENABLE_NO_ALIGNED_ALLOC
