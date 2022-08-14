@@ -110,7 +110,7 @@ librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t
 }
 
 librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
-  gpuStream_t& stream) {
+  gpuStream_t stream) {
 
 // #if SYCL
 //   if(stream == nullptr) {
@@ -225,7 +225,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
 }
 
 librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
-  gpuStream_t& stream, void* idata, void* odata)
+  gpuStream_t stream, void* idata, void* odata)
 {
 
   // Check that input parameters are valid
