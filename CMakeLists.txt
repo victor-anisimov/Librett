@@ -105,9 +105,9 @@ endif(ENABLE_HIP)
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
 
-  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size 64 -fno-sycl-id-queries-fit-in-int -Wsycl-strict -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=gfx90a")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size 64 -fno-sycl-id-queries-fit-in-int -Wsycl-strict -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=gfx90a")
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size 32 -fno-sycl-id-queries-fit-in-int -Wsycl-strict -fsycl-targets=nvptx64-nvidia-cuda -Xsycl-target-backend '--cuda-gpu-arch=sm_80' --cuda-path=/soft/compilers/cudatoolkit/cuda-11.4.4/")
+  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -fsycl -fsycl-unnamed-lambda -fsycl-default-sub-group-size 32 -fno-sycl-id-queries-fit-in-int -Wsycl-strict -fsycl-targets=nvptx64-nvidia-cuda -Xsycl-target-backend '--cuda-gpu-arch=sm_80' --cuda-path=/soft/compilers/cudatoolkit/cuda-11.4.4/")
 endif(ENABLE_SYCL)
 
 # ENABLE_NO_ALIGNED_ALLOC
