@@ -1695,7 +1695,7 @@ librettPlan_t::~librettPlan_t() {
   if (Mm != nullptr) deallocate_device<TensorConv>(&Mm, this->getStream());
 }
 
-void librettPlan_t::setStream(gpuStream_t& stream_in)
+void librettPlan_t::setStream(gpuStream_t stream_in)
 {
   stream = stream_in;
 }

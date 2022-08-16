@@ -27,7 +27,7 @@ SOFTWARE.
 #include "plan.h"
 
 void runCounters(const int warpSize, const int* hostPosData, const int numPosData,
-  const int accWidth, const int cacheWidth, int* host_tran, int* host_cl_full, int* host_cl_part);
+  const int accWidth, const int cacheWidth, int* host_tran, int* host_cl_full, int* host_cl_part, gpuStream_t gpustream);
 
 bool librettGpuModelKernel(librettPlan_t& plan, const int accWidth, const int cacheWidth,
   int& gld_tran, int& gst_tran, int& gld_req, int& gst_req,

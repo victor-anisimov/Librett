@@ -51,7 +51,7 @@ __global__ void scalarCopyKernel(const int n, const T* data_in, T* data_out)
 }
 
 template <typename T>
-void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t& stream) {
+void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t stream) {
 
   int numblock = (n - 1)/numthread + 1;
   // numblock = min(65535, numblock);
@@ -105,7 +105,7 @@ __global__ void vectorCopyKernel(const int n, T* data_in, T* data_out)
 }
 
 template <typename T>
-void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t& stream) {
+void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t stream) {
 
   const int vectorLength = 16/sizeof(T);
 
@@ -178,7 +178,7 @@ __global__ void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *
 }
 
 #define NUM_ELEM 2
-void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t& stream) {
+void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t stream) {
 
   int numblock = (n/(4*NUM_ELEM) - 1)/numthread + 1;
   int shmemsize = 0;
@@ -211,10 +211,10 @@ void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t& stre
 // -----------------------------------------------------------------------------------
 
 // Explicit instances
-template void scalarCopy<int>(const int n, const int* data_in, int* data_out, gpuStream_t& stream);
+template void scalarCopy<int>(const int n, const int* data_in, int* data_out, gpuStream_t stream);
 template void scalarCopy<long long int>(const int n, const long long int* data_in, long long int* data_out,
-                                        gpuStream_t& stream);
-template void vectorCopy<int>(const int n, int* data_in, int* data_out, gpuStream_t& stream);
+                                        gpuStream_t stream);
+template void vectorCopy<int>(const int n, int* data_in, int* data_out, gpuStream_t stream);
 template void vectorCopy<long long int>(const int n, long long int* data_in, long long int* data_out,
-                                        gpuStream_t& stream);
-void memcpyFloat(const int n, float* data_in, float* data_out, gpuStream_t& stream);
+                                        gpuStream_t stream);
+void memcpyFloat(const int n, float* data_in, float* data_out, gpuStream_t stream);

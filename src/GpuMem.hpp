@@ -41,7 +41,7 @@ extern umpire::Allocator librett_umpire_allocator;
 // len = length of the array
 //
 template <class T>
-void allocate_device(T **pp, const size_t len, gpuStream_t& gpuStream) {
+void allocate_device(T **pp, const size_t len, gpuStream_t gpuStream) {
 
 #ifdef LIBRETT_HAS_UMPIRE
   *pp = librett_umpire_allocator.allocate(sizeof(T)*len);
@@ -63,7 +63,7 @@ void allocate_device(T **pp, const size_t len, gpuStream_t& gpuStream) {
 // pp = memory pointer
 //
 template <class T>
-void deallocate_device(T **pp, gpuStream_t& gpuStream) {
+void deallocate_device(T **pp, gpuStream_t gpuStream) {
 
 #ifdef LIBRETT_HAS_UMPIRE
   librett_umpire_allocator.deallocate((void *) (*pp) );

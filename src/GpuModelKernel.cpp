@@ -153,14 +153,14 @@ __gpu_inline__ void countCacheLines(const int pos, const int n,
 
   unsigned int valbit = (((val << cacheWidth) - 1)*val) << warpLane;
   // Perform warpSize-way bitwise or
-#if SYCL
-  valbit = sycl::reduce_over_group(sg, valbit, sycl::bit_or<unsigned int>());
-#else
+// #if SYCL
+//   valbit = sycl::reduce_over_group(sg, valbit, sycl::bit_or<unsigned int>());
+// #else
   #pragma unroll
   for (int i=warpSize/2; i >= 1; i/=2) {  // AMD change
     valbit |= gpu_shfl_xor(valbit, i);
   }
-#endif // SYCL
+//#endif // SYCL
   // Now: lanes with valbit set are part of a full cache line,
   //      lanes with valbit unset are part of a partial cache line
   int full = (valbit >> warpLane) & 1;
@@ -949,69 +949,64 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 //######################################################################################
 
 void runCounters(const int warpSize, const int *hostPosData, const int numPosData,
-  const int accWidth, const int cacheWidth, int *host_tran, int *host_cl_full, int *host_cl_part)
+  const int accWidth, const int cacheWidth, int *host_tran, int *host_cl_full, int *host_cl_part, gpuStream_t gpustream)
 {
   const int numWarp = numPosData/warpSize;
 
   int* devPosData;
-#if SYCL
-  allocate_device<int>(&devPosData, numPosData);
-  sycl::queue* in_order_q = Librett::sycl_default_queue();
-  copy_HtoD<int>(hostPosData, devPosData, numPosData, in_order_q);
-#else // CUDA or HIP
-  allocate_device<int>(&devPosData, numPosData);
-  copy_HtoD<int>(hostPosData, devPosData, numPosData);
-#endif
+
+  allocate_device<int>(&devPosData, numPosData, gpustream);
+  copy_HtoD<int>(hostPosData, devPosData, numPosData, gpustream);
 
   int* dev_tran;
   int* dev_cl_full;
   int* dev_cl_part;
-  allocate_device<int>(&dev_tran, numWarp);
-  allocate_device<int>(&dev_cl_full, numWarp);
-  allocate_device<int>(&dev_cl_part, numWarp);
+  allocate_device<int>(&dev_tran, numWarp, gpustream);
+  allocate_device<int>(&dev_cl_full, numWarp, gpustream);
+  allocate_device<int>(&dev_cl_part, numWarp, gpustream);
 
   int nthread = 512;
   int nblock = (numPosData - 1)/nthread + 1;
 #if SYCL
-  in_order_q->parallel_for(
+  gpustream->parallel_for(
     sycl::nd_range<3>(sycl::range<3>(1, 1, nblock) *
                       sycl::range<3>(1, 1, nthread),
                       sycl::range<3>(1, 1, nthread)),
-    [=](sycl::nd_item<3> item) [[intel::reqd_sub_group_size(32)]] {
+    [=](sycl::nd_item<3> item) {
       runCountersKernel(devPosData, numPosData, accWidth,
                         cacheWidth, dev_tran, dev_cl_full, dev_cl_part, item);
     });
 
-  copy_DtoH<int>(dev_tran,    host_tran,    numWarp, in_order_q);
-  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp, in_order_q);
-  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, in_order_q);
+  copy_DtoH<int>(dev_tran,    host_tran,    numWarp, gpustream);
+  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp, gpustream);
+  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, gpustream);
 
-  in_order_q->wait();
+  gpustream->wait();
 #elif HIP
-  hipLaunchKernelGGL(runCountersKernel, dim3(nblock), dim3(nthread ), 0, 0, devPosData, numPosData,
+  hipLaunchKernelGGL(runCountersKernel, dim3(nblock), dim3(nthread ), 0, gpustream, devPosData, numPosData,
     accWidth, cacheWidth, dev_tran, dev_cl_full, dev_cl_part);
   hipCheck(hipGetLastError());
 
-  copy_DtoH<int>(dev_tran,    host_tran,    numWarp);
-  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp);
-  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp);
+  copy_DtoH<int>(dev_tran,    host_tran,    numWarp, gpustream);
+  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp, gpustream);
+  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, gpustream);
   hipCheck(hipDeviceSynchronize());
 #else // CUDA
-  runCountersKernel<<< nblock, nthread >>>(devPosData, numPosData,
+  runCountersKernel<<< nblock, nthread, 0, gpustream >>>(devPosData, numPosData,
     accWidth, cacheWidth, dev_tran, dev_cl_full, dev_cl_part);
   cudaCheck(cudaGetLastError());
 
-  copy_DtoH<int>(dev_tran,    host_tran,    numWarp);
-  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp);
-  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp);
+  copy_DtoH<int>(dev_tran,    host_tran,    numWarp, gpustream);
+  copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp, gpustream);
+  copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, gpustream);
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
-  deallocate_device<int>(&dev_tran);
-  deallocate_device<int>(&dev_cl_full);
-  deallocate_device<int>(&dev_cl_part);
+  deallocate_device<int>(&dev_tran, gpustream);
+  deallocate_device<int>(&dev_cl_full, gpustream);
+  deallocate_device<int>(&dev_cl_part, gpustream);
 
-  deallocate_device<int>(&devPosData);
+  deallocate_device<int>(&devPosData, gpustream);
 }
 
 bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int cacheWidth,
@@ -1023,7 +1018,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
   TensorSplit& ts = plan.tensorSplit;
 
   MemStat* devMemStat;
-  allocate_device<MemStat>(&devMemStat, 1);
+  allocate_device<MemStat>(&devMemStat, 1, plan.stream);
   set_device_array<MemStat>(devMemStat, 0, 1, plan.stream);
 
   switch(ts.method) {
@@ -1216,7 +1211,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 #else // CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
-  deallocate_device<MemStat>(&devMemStat);
+  deallocate_device<MemStat>(&devMemStat, plan.stream);
 
   gld_tran   = hostMemStat.gld_tran;
   gst_tran   = hostMemStat.gst_tran;

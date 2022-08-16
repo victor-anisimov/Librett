@@ -1371,10 +1371,15 @@ const int shTestData[138][3] =
   {
     // create the GPU streams
     // TODO: need to check the gpustreams here
+    gpuStream_t gpustream;
     #if SYCL
-    sycl::queue* gpuStream = new sycl::queue();
+    gpustream = new sycl::queue(sycl::gpu_selector{},
+                                Librett::sycl_asynchandler,
+                                sycl::property_list{sycl::property::queue::in_order{}});
     #elif HIP
+    hipCheck(hipStreamCreate(&gpustream));
     #elif CUDA
+    cudaCheck(cudaStreamCreate(&gpustream));    
     #endif
     for (int i=0;i < numArray;i++) {
       memcpy(&gpuPosData[i*warpSize], posData[i], warpSize*sizeof(int));
@@ -1382,7 +1387,7 @@ const int shTestData[138][3] =
     int* tran_data = new int[numArray + numCont];
     int* cl_full_data = new int[numArray + numCont];
     int* cl_part_data = new int[numArray + numCont];
-    runCounters(warpSize, gpuPosData, (numArray + numCont)*warpSize, accWidth, cacheWidth, tran_data, cl_full_data, cl_part_data);
+    runCounters(warpSize, gpuPosData, (numArray + numCont)*warpSize, accWidth, cacheWidth, tran_data, cl_full_data, cl_part_data, gpustream);
 
     for (int i=0;i < numArray;i++) {
       bool ok = true;
