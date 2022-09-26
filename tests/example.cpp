@@ -70,19 +70,8 @@ int main(int argc, char *argv[])
   DeviceReset();
 
   bool passed = true;
-  int rank = 5;
-  std::vector<int> dim(rank);
-  std::vector<int> permutation(rank);
-  dim[0] = 3;
-  dim[1] = 3;
-  dim[2] = 3;
-  dim[3] = 2;
-  dim[4] = 4;
-  permutation[0] = 1;
-  permutation[1] = 3;
-  permutation[2] = 0;
-  permutation[3] = 4;
-  permutation[4] = 2;
+  std::vector<int> dim{3,3,3,2,4};
+  std::vector<int> permutation{1,3,0,4,2};
 
   // Allocate device data, 200M elements
   allocate_device<std::complex<double>>(&dataIn, nData);
