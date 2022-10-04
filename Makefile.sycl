@@ -82,7 +82,7 @@ GPUROOT = $(GPU_PATH)
 CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL
 
 # AoT compilation
-CFLAGS += -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0"
+CFLAGS += -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.50.4,12.60.7"
 
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native

@@ -11,8 +11,8 @@ endforeach()
 # add AoT compilation for Intel GPU
 if(ENABLE_SYCL)
   foreach(_exec ${LIBRETT_TESTS})
-    target_compile_options(${_exec} PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
-    target_link_options(${_exec} PRIVATE -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.1.0,12.4.0")
+    target_compile_options(librett PUBLIC -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.50.4,12.60.7")
+    target_link_options(librett PUBLIC -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.50.4,12.60.7")
   endforeach()
 endif(ENABLE_SYCL)
 
