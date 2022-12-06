@@ -218,4 +218,5 @@ namespace Librett {
   static inline void syclGetDeviceProperties(DeviceProp_t* prop, int id) {
     dev_mgr::instance().get_device_prop( prop, id );
   }
+
 } // namespace Librett

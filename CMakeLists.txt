@@ -107,7 +107,7 @@ endif(ENABLE_HIP)
 #enable SYCL
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
-  set(SYCL_GROUP_SIZE 64)
+  set(SYCL_GROUP_SIZE 16)
   if(ENABLE_SYCL_CUDA)
     set(SYCL_GROUP_SIZE 32)
   endif()

@@ -1033,9 +1033,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 #if SYCL
   #define CALL0(NREG)                                                          \
   plan.stream->submit([&](sycl::handler &cgh) {                                \
-    sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,                 \
-                   sycl::access::target::local>                                \
-        dpct_local_acc_ct1(sycl::range<1>(ts.volMmk * sizeof(int)), cgh);      \
+    sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1(ts.volMmk, cgh);       \
                                                                                \
     auto ts_volMmk_ct0 = ts.volMmk;                                            \
     auto ts_volMbar_ct1 = ts.volMbar;                                          \
@@ -1085,9 +1083,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 #if SYCL
   #define CALL0(NREG)                                                          \
   plan.stream->submit([&](sycl::handler &cgh) {                                \
-    sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,                 \
-                   sycl::access::target::local>                                \
-        dpct_local_acc_ct1(sycl::range<1>(volMmkSplit * sizeof(int)), cgh);    \
+    sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1{volMmkSplit, cgh};     \
                                                                                \
     auto ts_splitDim_ct0 = ts.splitDim;                                        \
     auto ts_volMmkUnsplit_ct1 = ts.volMmkUnsplit;                              \

@@ -1637,27 +1637,30 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
 //
 void librettPlan_t::activate() {
 
+  gpuStream_t queue = this->getStream();
+
   if (tensorSplit.sizeMbar > 0) {
     if (Mbar == nullptr) {
-      allocate_device<TensorConvInOut>(&Mbar, tensorSplit.sizeMbar, this->getStream());
-      copy_HtoD<TensorConvInOut>(hostMbar.data(), Mbar, tensorSplit.sizeMbar, this->getStream());
+      allocate_device<TensorConvInOut>(&Mbar, tensorSplit.sizeMbar, queue);
+      copy_HtoD<TensorConvInOut>(hostMbar.data(), Mbar, tensorSplit.sizeMbar, queue);
     }
   }
 
   if (tensorSplit.method == Packed || tensorSplit.method == PackedSplit) {
     int MmkSize = (tensorSplit.method == Packed) ? tensorSplit.sizeMmk : tensorSplit.sizeMmk*2;
     if (Mmk == nullptr) {
-      allocate_device<TensorConvInOut>(&Mmk, MmkSize, this->getStream());
-      copy_HtoD<TensorConvInOut>(hostMmk.data(), Mmk, MmkSize, this->getStream());
+      allocate_device<TensorConvInOut>(&Mmk, MmkSize, queue);
+      copy_HtoD<TensorConvInOut>(hostMmk.data(), Mmk, MmkSize, queue);
     }
     if (Msh == nullptr) {
-      allocate_device<TensorConv>(&Msh, MmkSize, this->getStream());
-      copy_HtoD<TensorConv>(hostMsh.data(), Msh, MmkSize, this->getStream());
+      allocate_device<TensorConv>(&Msh, MmkSize, queue);
+      copy_HtoD<TensorConv>(hostMsh.data(), Msh, MmkSize, queue);
     }
   }
 
 #ifdef SYCL
-  stream->wait();
+  if(!stream->is_in_order())
+    stream->wait();
 #endif
 
 }
@@ -1695,7 +1698,7 @@ librettPlan_t::~librettPlan_t() {
   if (Mm != nullptr) deallocate_device<TensorConv>(&Mm, this->getStream());
 }
 
-void librettPlan_t::setStream(gpuStream_t stream_in)
+void librettPlan_t::setStream(gpuStream_t& stream_in)
 {
   stream = stream_in;
 }

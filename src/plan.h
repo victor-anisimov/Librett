@@ -192,7 +192,7 @@ public:
   ~librettPlan_t();
   void print();
   gpuStream_t getStream() { return stream; };
-  void setStream(gpuStream_t stream_in);
+  void setStream(gpuStream_t& stream_in);
   bool countCycles(const gpuDeviceProp_t &prop, const int numPosMbarSample=0);
   void activate();
   void nullDevicePointers();

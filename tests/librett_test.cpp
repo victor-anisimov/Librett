@@ -67,7 +67,7 @@ bool test1(gpuStream_t&);
 bool test2(gpuStream_t&);
 bool test3(gpuStream_t&);
 bool test4();
-bool test5(gpuStream_t&);
+bool test5();
 template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& permutation, gpuStream_t& stream);
 void printVec(std::vector<int>& vec);
 
@@ -83,7 +83,7 @@ void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
 
 void CreateGpuStream(gpuStream_t& master_gpustream) {
   #if SYCL
-  sycl::device dev(sycl::gpu_selector{});
+  sycl::device dev(sycl::gpu_selector_v);
   sycl::context ctxt(dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   master_gpustream = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   #elif HIP
@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
 #ifndef PERFTEST
   if(passed){passed = test4(); if(!passed) printf("Test 4 failed\n");}
 #ifndef HIP
-  if(passed){passed = test5(gpumasterstream); if(!passed) printf("Test 5 failed\n");}
+  if(passed){passed = test5(); if(!passed) printf("Test 5 failed\n");}
 #endif
 #endif
 
@@ -445,7 +445,7 @@ bool test4()
   gpuStream_t streams[numStream];
 
 #if SYCL
-  sycl::device dev(sycl::gpu_selector{});
+  sycl::device dev(sycl::gpu_selector_v);
   sycl::context ctxt(dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   for (int i=0;i < numStream;i++) {
     streams[i] = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});

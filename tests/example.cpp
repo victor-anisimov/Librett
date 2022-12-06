@@ -47,7 +47,7 @@ void printVec(std::vector<int>& vec);
 
 void CreateGpuStream(gpuStream_t& master_gpustream) {
   #if SYCL
-  sycl::device dev(sycl::gpu_selector{});
+  sycl::device dev(sycl::gpu_selector_v);
   sycl::context ctxt(dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   master_gpustream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   #elif HIP

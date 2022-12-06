@@ -75,7 +75,7 @@ void librettFinalize();
 // Returns
 // Success/unsuccess code
 //
-librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType, librett_gpuStream_t stream);
+librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType, librett_gpuStream_t& stream);
 
 //
 // Create plan and choose implementation by measuring performance
@@ -94,7 +94,7 @@ librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permut
 // Success/unsuccess code
 //
 librettResult librettPlanMeasure(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-                                 librett_gpuStream_t stream, void* idata, void* odata);
+                                 librett_gpuStream_t& stream, void* idata, void* odata);
 
 //
 // Destroy plan
