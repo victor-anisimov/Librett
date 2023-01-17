@@ -42,7 +42,7 @@ __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int nda
 template<typename T>
 #if SYCL
 void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
-  TensorError_t* glError, int* glFail, sycl::nd_item<1>& item, uint8_t *dpct_local)
+  TensorError_t* glError, int* glFail, sycl::nd_item<3>& item, uint8_t *dpct_local)
 #else
 __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
   TensorError_t* glError, int* glFail)
@@ -138,19 +138,11 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
 //
 // Class constructor
 //
-TensorTester::TensorTester() : maxRank(32), maxNumblock(256) {
+TensorTester::TensorTester(gpuStream_t& stream) : maxRank(32), maxNumblock(256) {
   h_tensorConv = new TensorConv[maxRank];
   h_error      = new TensorError_t[maxNumblock];
 
-  #if SYCL
-  sycl::device dev(sycl::gpu_selector_v);
-  sycl::context ctxt(dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
-  tt_gpustream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
-  #elif HIP
-  hipCheck(hipStreamCreate(&tt_gpustream));
-  #elif CUDA
-  cudaCheck(cudaStreamCreate(&tt_gpustream));
-  #endif
+  this->tt_gpustream = stream;
 
   allocate_device<TensorConv>(&d_tensorConv, maxRank, tt_gpustream);
   allocate_device<TensorError_t>(&d_error, maxNumblock, tt_gpustream);
@@ -163,18 +155,10 @@ TensorTester::TensorTester() : maxRank(32), maxNumblock(256) {
 TensorTester::~TensorTester() {
   delete [] h_tensorConv;
   delete [] h_error;
+
   deallocate_device<TensorConv>(&d_tensorConv, tt_gpustream);
   deallocate_device<TensorError_t>(&d_error, tt_gpustream);
   deallocate_device<int>(&d_fail, tt_gpustream);
-
-  #if SYCL
-  delete tt_gpustream;
-  #elif HIP
-  hipCheck(hipStreamDestroy(tt_gpustream));
-  #elif CUDA
-  cudaCheck(cudaStreamDestroy(tt_gpustream));
-  #endif
-
 }
 
 void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata) {
@@ -264,15 +248,15 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data)
   int shmemsize = numthread*sizeof(unsigned int);
 #if SYCL
   this->tt_gpustream->submit([&](sycl::handler &cgh) {
-    sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1{numthread, cgh};
+    sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1{sycl::range<1>(shmemsize), cgh};
 
     auto d_tensorConv_ct3 = d_tensorConv;
     auto d_error_ct4 = d_error;
     auto d_fail_ct5 = d_fail;
 
-    cgh.parallel_for(sycl::nd_range<1>(sycl::range<1>(numblock * numthread),
-                                       sycl::range<1>(numthread)),
-            [=](sycl::nd_item<1> item) {
+    cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1,1,numblock) * sycl::range<3>(1,1,numthread),
+                                       sycl::range<3>(1,1,numthread)),
+            [=](sycl::nd_item<3> item) {
                checkTransposeKernel(data, ndata, rank, d_tensorConv_ct3,
                d_error_ct4, d_fail_ct5, item, dpct_local_acc_ct1.get_pointer());
             });

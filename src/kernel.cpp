@@ -125,7 +125,6 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
         posMajorIn += __shfl_xor_sync(0xffffffff,posMajorIn,i);
         posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
       #endif
-
     }
 #endif // SYCL
 
@@ -1037,9 +1036,6 @@ int librettKernelLaunchConfiguration(const int sizeofType, const TensorSplit &ts
 }
 
 bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut)
-#if SYCL
-try
-#endif
 {
   LaunchConfig& lc = plan.launchConfig;
   TensorSplit& ts = plan.tensorSplit;
@@ -1249,10 +1245,3 @@ try
 #endif
   return true;
 }
-#if SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif

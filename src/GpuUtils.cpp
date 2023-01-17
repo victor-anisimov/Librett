@@ -146,20 +146,10 @@ void DeviceReset() {
   #if SYCL
   // does nothing
   #elif HIP
+    hipCheck(hipSetDevice(0));
     hipCheck(hipDeviceReset());
   #else // CUDA
+    cudaCheck(cudaSetDevice(0));
     cudaCheck(cudaDeviceReset());
   #endif
-}
-
-void SelectDevice(int gpuid){
-  if (gpuid >= 0) {
-    #if SYCL
-      Librett::syclSetDevice(gpuid);
-    #elif HIP
-      hipCheck(hipSetDevice(gpuid));
-    #else // CUDA
-      cudaCheck(cudaSetDevice(gpuid));
-    #endif
-  }
 }

@@ -143,7 +143,6 @@ int main(int argc, char *argv[])
   }
 
   if (gpuid >= 0) {
-    SelectDevice(gpuid);
     DeviceReset();
   }
 
@@ -153,9 +152,7 @@ int main(int argc, char *argv[])
 
   /* DPC++ currently does not support configuring shared memory on devices. */
 
-  sycl::device dev(sycl::gpu_selector_v);
-  sycl::context ctxt(dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
-  gpuStream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  gpuStream = new sycl::queue(sycl::gpu_selector_v, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
 #elif HIP
   hipStreamCreate(&gpustream);
   if (elemsize == 4) {
@@ -189,7 +186,7 @@ int main(int argc, char *argv[])
   allocate_device<char>(&dataOut, dataSize*(size_t)elemsize, gpuStream);
 
   // Create tester
-  tester = new TensorTester();
+  tester = new TensorTester(gpuStream);
   tester->setTensorCheckPattern((unsigned int *)dataIn, dataSize*(size_t)elemsize/sizeof(unsigned int));
 
   std::vector<int> worstDim;

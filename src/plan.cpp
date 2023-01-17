@@ -1677,13 +1677,7 @@ void librettPlan_t::nullDevicePointers() {
 }
 
 librettPlan_t::librettPlan_t() {
-#ifdef SYCL
-  Librett::syclGetDevice(&deviceID);
-#elif HIP
-  hipCheck(hipGetDevice(&deviceID));
-#else // CUDA
-  cudaCheck(cudaGetDevice(&deviceID));
-#endif
+  deviceID = 0;
   stream = nullptr;
   numActiveBlock = 0;
   nullDevicePointers();

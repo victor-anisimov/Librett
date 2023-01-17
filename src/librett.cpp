@@ -54,23 +54,21 @@ static std::mutex devicePropsMutex;
 
 // Checks prepares device if it's not ready yet and returns device properties
 // Also sets shared memory configuration
-void getDeviceProp(int& deviceID, gpuDeviceProp_t &prop) {
-  #if SYCL
-    Librett::syclGetDevice(&deviceID);
-  #elif HIP
-    hipCheck(hipGetDevice(&deviceID));
-  #else // CUDA
-    cudaCheck(cudaGetDevice(&deviceID));
-  #endif
-
+void getDeviceProp(int& deviceID, gpuStream_t& stream, gpuDeviceProp_t &prop) {
   // need to lock this function
   std::lock_guard<std::mutex> lock(devicePropsMutex);
+
+  #if HIP
+    hipCheck(hipGetDevice(&deviceID));
+  #elif CUDA
+    cudaCheck(cudaGetDevice(&deviceID));
+  #endif
 
   auto it = deviceProps.find(deviceID);
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
     #if SYCL
-      Librett::syclGetDeviceProperties(&prop, deviceID);
+      Librett::syclGetDeviceProperties(&prop, stream);
     #elif HIP
       hipCheck(hipGetDeviceProperties(&prop, deviceID));
       librettKernelSetSharedMemConfig();
@@ -139,7 +137,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
   // // Prepare device
   int deviceID;
   gpuDeviceProp_t prop;
-  getDeviceProp(deviceID, prop);
+  getDeviceProp(deviceID, stream, prop);
 
   // Reduce ranks
   std::vector<int> redDim;
@@ -251,7 +249,7 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
   // // Prepare device
   int deviceID;
   gpuDeviceProp_t prop;
-  getDeviceProp(deviceID, prop);
+  getDeviceProp(deviceID, stream, prop);
 
   // Reduce ranks
   std::vector<int> redDim;
@@ -382,16 +380,6 @@ librettResult librettExecute(librettHandle handle, void *idata, void *odata)
 
   librettPlan_t& plan = *(it->second);
 
-  int deviceID=0;
-#if SYCL
-  Librett::syclGetDevice(&deviceID);
-#elif HIP
-  hipCheck(hipGetDevice(&deviceID));
-#else // CUDA
-  cudaCheck(cudaGetDevice(&deviceID));
-#endif
-  if (deviceID != plan.deviceID) return LIBRETT_INVALID_DEVICE;
-
   if (!librettKernel(plan, idata, odata)) return LIBRETT_INTERNAL_ERROR;
   return LIBRETT_SUCCESS;
 }
@@ -414,7 +402,7 @@ sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attri
   #ifdef __SYCL_DEVICE_ONLY__
     return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
   #else
-    throw sycl::runtime_error("Sub-groups are not supported on host device.", PI_ERROR_INVALID_DEVICE);
+    throw sycl::exception(std::error_code(PI_ERROR_INVALID_DEVICE, sycl::sycl_category()), "Sub-groups are not supported on host device.");
   #endif
 }
 #endif

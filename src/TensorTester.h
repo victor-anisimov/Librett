@@ -56,7 +56,7 @@ public:
   TensorError_t* d_error;
   int* d_fail;
 
-  TensorTester();
+  TensorTester(gpuStream_t& gpustream);
   ~TensorTester();
 
   void setTensorCheckPattern(unsigned int* data, unsigned int ndata);

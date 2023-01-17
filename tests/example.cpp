@@ -79,26 +79,6 @@ void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
 
 int main(int argc, char *argv[])
 {
-  int gpuid = -1;
-  bool arg_ok = true;
-  if (argc >= 3) {
-    if (strcmp(argv[1], "-device") == 0) {
-      sscanf(argv[2], "%d", &gpuid);
-    } else {
-      arg_ok = false;
-    }
-  } else if (argc > 1) {
-    arg_ok = false;
-  }
-
-  if (!arg_ok) {
-    printf("Usage: tt_example [options]\n");
-    printf("\tOptions:\n");
-    printf("\t-device gpuid : use GPU with ID gpuid\n");
-    return 1;
-  }
-
-  SelectDevice(gpuid);
   DeviceReset();
   // create a master gpu stream
   gpuStream_t gpumasterstream;
