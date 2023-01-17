@@ -279,7 +279,7 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
 
 #if SYCL
     // avoid multiple threads writing into the same address space
-    if(sg.get_local_id()[0] == 0) {
+    if(sg.leader()) {
       int j = i / warpSize;
       tranData[j] = tran;
       cl_fullData[j] = cl_full;

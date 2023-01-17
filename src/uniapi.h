@@ -141,9 +141,9 @@ extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
 
 // Functions
 #ifdef SYCL
-  #define gpu_shfl_xor(a,b)   item.get_sub_group().shuffle_xor(a,b)
-  #define gpu_shuffle(a,b)    item.get_sub_group().shuffle(a,b)
-  #define gpu_shfl_down(a,b)  item.get_sub_group().shuffle_down(a,b)
+  #define gpu_shfl_xor(a,b)   sycl::ext::oneapi::experimental::this_sub_group().shuffle_xor(a,b)
+  #define gpu_shuffle(a,b)    sycl::ext::oneapi::experimental::this_sub_group().shuffle(a,b)
+  #define gpu_shfl_down(a,b)  sycl::ext::oneapi::experimental::this_sub_group().shuffle_down(a,b)
 #define gpu_atomicAdd(a,b)    sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>((a)).fetch_add(b)
 #elif HIP
   #define gpu_shfl_xor(a,b)   __shfl_xor(a,b)
