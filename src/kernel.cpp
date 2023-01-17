@@ -1061,8 +1061,7 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut)
         #if SYCL
         #define CALL0(TYPE, NREG)                                       \
         {auto event = plan.stream->submit([&](sycl::handler &cgh) {     \
-          sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,    \
-                         sycl::access::target::local>                   \
+          sycl::local_accessor<uint8_t, 1>                              \
             dpct_local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);      \
                                                                         \
           auto ts_volMmk_ct0 = ts.volMmk;                               \
@@ -1113,8 +1112,7 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut)
         #if SYCL
           #define CALL0(TYPE, NREG)                                                 \
           plan.stream->submit([&](sycl::handler &cgh) {                             \
-            sycl::accessor<uint8_t, 1, sycl::access::mode::read_write,              \
-                           sycl::access::target::local>                             \
+            sycl::local_accessor<uint8_t, 1>                                        \
                 dpct_local_acc_ct1(sycl::range<1>(lc.shmemsize), cgh);              \
                                                                                     \
             auto ts_splitDim_ct0 = ts.splitDim;                                     \
