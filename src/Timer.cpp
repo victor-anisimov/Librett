@@ -23,11 +23,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
-#ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#endif
-
 #include "Timer.h"
 #include "GpuUtils.h"
 // #include <limits>       // std::numeric_limits
@@ -38,19 +33,8 @@ SOFTWARE.
 
 #ifdef GPU_EVENT_TIMER
   #if SYCL
-    Timer::Timer() try { }
-    catch (sycl::exception const &exc) {
-      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-                << ", line:" << __LINE__ << std::endl;
-      std::exit(1);
-    }
-    Timer::~Timer() try { }
-    catch (sycl::exception const &exc) {
-      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-                << ", line:" << __LINE__ << std::endl;
-      std::exit(1);
-    }
-
+    Timer::Timer() { }
+    Timer::~Timer() { }
   #elif HIP
     Timer::Timer() {
       hipCheck(hipEventCreate(&tmstart));
@@ -76,13 +60,8 @@ SOFTWARE.
 void Timer::start()
 #ifdef GPU_EVENT_TIMER
   #ifdef SYCL
-    try {
+    {
       tmstart_ct1 = std::chrono::steady_clock::now();
-    }
-    catch (sycl::exception const &exc) {
-      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-                << ", line:" << __LINE__ << std::endl;
-      std::exit(1);
     }
   #elif HIP
     { hipCheck(hipEventRecord(tmstart, 0)); }
@@ -96,14 +75,9 @@ void Timer::start()
 void Timer::stop() 
 #ifdef GPU_EVENT_TIMER
   #ifdef SYCL
-    try {
+    {
       tmend_ct1 = std::chrono::steady_clock::now();
       tmend.wait_and_throw();
-    }
-    catch (sycl::exception const &exc) {
-      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-                << ", line:" << __LINE__ << std::endl;
-      std::exit(1);
     }
   #elif HIP
     {
@@ -136,15 +110,10 @@ void Timer::stop()
 double Timer::seconds()
 #ifdef GPU_EVENT_TIMER
   #ifdef SYCL
-    try {
+    {
     float ms;
     ms = std::chrono::duration<float, std::milli>(tmend_ct1 - tmstart_ct1).count();
     return (double)(ms/1000.0f);
-    }
-    catch (sycl::exception const &exc) {
-      std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-                << ", line:" << __LINE__ << std::endl;
-      std::exit(1);
     }
   #elif HIP
     {

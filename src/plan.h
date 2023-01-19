@@ -28,15 +28,6 @@ All rights reserved.
 #ifndef LIBRETTPLAN_H
 #define LIBRETTPLAN_H
 
-#if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
-  #include <cuda.h>
-#endif
-
 #include <list>
 #include <vector>
 #include "Types.h"
@@ -118,7 +109,7 @@ public:
 
 class LaunchConfig {
 public:
- // Kernel launch configuration
+  // Kernel launch configuration
 #ifdef SYCL
   sycl::range<3> numthread = {0, 0, 0};
   sycl::range<3> numblock  = {0, 0, 0};
@@ -145,7 +136,7 @@ public:
 
   // Kernel launch configuration
   LaunchConfig launchConfig;
-  
+
   // Rank of the tensor
   int rank;
 
@@ -200,13 +191,14 @@ public:
   librettPlan_t();
   ~librettPlan_t();
   void print();
-  void setStream(gpuStream_t stream_in);
+  gpuStream_t getStream() { return stream; };
+  void setStream(gpuStream_t& stream_in);
   bool countCycles(const gpuDeviceProp_t &prop, const int numPosMbarSample=0);
   void activate();
   void nullDevicePointers();
 
   static bool createPlans(const int rank, const int* dim, const int* permutation,
-    const int redRank, const int* redDim, const int* redPermutation, const size_t sizeofType, 
+    const int redRank, const int* redDim, const int* redPermutation, const size_t sizeofType,
     const int deviceID, const gpuDeviceProp_t &prop, std::list<librettPlan_t>& plans);
 
 private:

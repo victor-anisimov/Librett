@@ -27,16 +27,16 @@ SOFTWARE.
 #define UNIAPI_H
 
 #ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
+  #include "sycl_device.hpp"
   #include <complex>
-  typedef std::complex<double> librett_complex;  
+  typedef std::complex<double> librett_complex;
 #elif HIP
   #include <hip/hip_runtime.h>
   #include <hip/hip_complex.h>
-  typedef hipDoubleComplex librett_complex;  
+  typedef hipDoubleComplex librett_complex;
 #else // CUDA
   #include <cuda.h>
+  #include <cuda_runtime.h>
   #include <cuComplex.h>
   typedef cuDoubleComplex librett_complex;
 #endif
@@ -47,34 +47,43 @@ SOFTWARE.
 
 // Work units
 #ifdef SYCL
-  #define threadIdx_x   item_ct1.get_local_id(2)
-  #define blockIdx_x    item_ct1.get_group(2)
-  #define blockDim_x    item_ct1.get_local_range().get(2)
-  #define gridDim_x     item_ct1.get_group_range(2)
-  #define threadIdx_y   item_ct1.get_local_id(1)
-  #define blockIdx_y    item_ct1.get_group(1)
-  #define blockDim_y    item_ct1.get_local_range().get(1)
-  #define gridDim_y     item_ct1.get_group_range(1)
-  #define threadIdx_z   item_ct1.get_local_id(0)
-  #define blockIdx_z    item_ct1.get_group(0)
-  #define blockDim_z    item_ct1.get_local_range().get(0)
-  #define gridDim_z     item_ct1.get_group_range(0)
-  #define syncthreads() item_ct1.barrier()
-  #define subgroup      item_ct1.get_sub_group()
-  #define maxThreadsPerBlock  get_max_work_group_size()
-  #define sharedMemPerBlock   get_local_mem_size()
+  #define threadIdx_x   item.get_local_id(2)
+  #define blockIdx_x    item.get_group(2)
+  #define blockDim_x    item.get_local_range().get(2)
+  #define gridDim_x     item.get_group_range(2)
+  #define threadIdx_y   item.get_local_id(1)
+  #define blockIdx_y    item.get_group(1)
+  #define blockDim_y    item.get_local_range().get(1)
+  #define gridDim_y     item.get_group_range(1)
+  #define threadIdx_z   item.get_local_id(0)
+  #define blockIdx_z    item.get_group(0)
+  #define blockDim_z    item.get_local_range().get(0)
+  #define gridDim_z     item.get_group_range(0)
+  #define sharedMemPerBlock
   #define numthread_x   numthread[2]
   #define numthread_y   numthread[1]
   #define numthread_z   numthread[0]
   #define numblock_x    numblock[2]
   #define numblock_y    numblock[1]
   #define numblock_z    numblock[0]
-  #define gpuMultiProcessorCount   prop.get_max_compute_units()
-  #define gpuMaxGridSize           prop.get_max_nd_range_size()
-  #define clockRate     get_max_clock_frequency()
+  #define gpuMaxThreadsPerBlock    (prop.get_max_work_group_size())
+  #define gpuMultiProcessorCount   (prop.get_max_compute_units())
+  #define gpuWarpSize              (prop.get_min_sub_group_size())
+  #define gpuClockRate             (prop.get_max_clock_frequency())
+  #define gpuMajor                 (prop.get_major_version())
+  #define gpuSharedMemPerBlock     (prop.get_local_mem_size())
   #define tiledVol_x    tiledVol.x()
   #define tiledVol_y    tiledVol.y()
-  #define __gpu_inline__     __dpct_inline__
+  #define __gpu_inline__     __attribute__((always_inline))
+  #define __global__
+  #define __device__
+
+#ifdef __SYCL_DEVICE_ONLY__
+extern SYCL_EXTERNAL sycl::detail::ConvertToOpenCLType_t<sycl::vec<unsigned, 4>> __spirv_GroupNonUniformBallot(int, bool) __attribute__((convergent));
+#endif
+
+extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
+
 #else // CUDA & HIP
   #define threadIdx_x   threadIdx.x
   #define blockIdx_x    blockIdx.x
@@ -92,11 +101,15 @@ SOFTWARE.
   #define numthread_x   numthread.x
   #define numthread_y   numthread.y
   #define numthread_z   numthread.z
-  #define numblock_x    numblock.x 
-  #define numblock_y    numblock.y 
-  #define numblock_z    numblock.z 
-  #define gpuMultiProcessorCount   prop.multiProcessorCount
-  #define gpuMaxGridSize           prop.maxGridSize
+  #define numblock_x    numblock.x
+  #define numblock_y    numblock.y
+  #define numblock_z    numblock.z
+  #define gpuMaxThreadsPerBlock    (prop.maxThreadsPerBlock)
+  #define gpuMultiProcessorCount   (prop.multiProcessorCount)
+  #define gpuWarpSize              (prop.warpSize)
+  #define gpuClockRate             (prop.clockRate / 1000.0)
+  #define gpuMajor                 (prop.major)
+  #define gpuSharedMemPerBlock     (prop.sharedMemPerBlock)
   #define tiledVol_x    tiledVol.x
   #define tiledVol_y    tiledVol.y
   #define __gpu_inline__     __device__ __forceinline__
@@ -104,12 +117,11 @@ SOFTWARE.
 
 // Data types
 #ifdef SYCL
-  using ndItem3_t       = sycl::nd_item<3>;
   using int2_t          = sycl::int2;
   using int4_t          = sycl::int4;
   using float4_t        = sycl::float4;
   using gpuStream_t     = sycl::queue*;
-  using gpuDeviceProp_t = dpct::device_info;
+  using gpuDeviceProp_t = Librett::DeviceProp_t;
   using gpuError_t      = int;
 #elif HIP
   using int2_t          = int2;
@@ -129,24 +141,21 @@ SOFTWARE.
 
 // Functions
 #ifdef SYCL
-  #define gpu_shfl_xor(a,b)   item_ct1.get_sub_group().shuffle_xor(a,b)
-  #define gpu_shuffle(a,b)    item_ct1.get_sub_group().shuffle(a,b)
-  #define gpu_shfl_down(a,b)  item_ct1.get_sub_group().shuffle_down(a,b)
-  #define gpu_atomicAdd(a,b)  sycl::atomic<int>(sycl::global_ptr<int>(&(a))).fetch_add(b)
-  #define DeviceSynchronize() dpct::get_current_device().queues_wait_and_throw()
+  #define gpu_shfl_xor(a,b)   sycl::ext::oneapi::experimental::this_sub_group().shuffle_xor(a,b)
+  #define gpu_shuffle(a,b)    sycl::ext::oneapi::experimental::this_sub_group().shuffle(a,b)
+  #define gpu_shfl_down(a,b)  sycl::ext::oneapi::experimental::this_sub_group().shuffle_down(a,b)
+#define gpu_atomicAdd(a,b)    sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>((a)).fetch_add(b)
 #elif HIP
   #define gpu_shfl_xor(a,b)   __shfl_xor(a,b)
   #define gpu_shuffle(a,b)    __shfl(a,b)
   #define gpu_shfl_down(a,b)  __shfl_down(a,b)
   #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
-  #define DeviceSynchronize() hipCheck(hipDeviceSynchronize())
   #define gpuOccupancyMaxActiveBlocksPerMultiprocessor hipOccupancyMaxActiveBlocksPerMultiprocessor
 #else // CUDA
   #define gpu_shfl_xor(a,b)   __shfl_xor_sync(0xffffffff,a,b)
   #define gpu_shuffle(a,b)    __shfl_sync(0xffffffff,a,b)
   #define gpu_shfl_down(a,b)  __shfl_down_sync(0xffffffff,a,b)
   #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
-  #define DeviceSynchronize() cudaCheck(cudaDeviceSynchronize())
   #define gpuOccupancyMaxActiveBlocksPerMultiprocessor cudaOccupancyMaxActiveBlocksPerMultiprocessor
 #endif
 

@@ -1,8 +1,7 @@
 
 set(LIBRETT_SOURCE_FILES
   calls.h
-  GpuMem.cpp
-  GpuMem.h
+  GpuMem.hpp
   GpuMemcpy.cpp
   GpuMemcpy.h
   GpuUtils.cpp

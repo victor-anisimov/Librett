@@ -83,10 +83,10 @@ ifdef NO_ALIGNED_ALLOC
 DEFS += -DNO_ALIGNED_ALLOC
 endif
 
-OBJSLIB = build/librett.o build/plan.o build/kernel.o build/GpuModel.o build/GpuMem.o build/GpuUtils.o build/Timer.o build/GpuModelKernel.o
-OBJSTEST1 = build/example.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
-OBJSTESTX = build/librett_test.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
-OBJSBENCH = build/librett_bench.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o build/GpuMemcpy.o
+OBJSLIB = build/librett.o build/plan.o build/kernel.o build/GpuModel.o build/GpuUtils.o build/Timer.o build/GpuModelKernel.o
+OBJSTEST1 = build/example.o build/TensorTester.o build/GpuUtils.o build/Timer.o
+OBJSTESTX = build/librett_test.o build/TensorTester.o build/GpuUtils.o build/Timer.o
+OBJSBENCH = build/librett_bench.o build/TensorTester.o build/GpuUtils.o build/Timer.o build/GpuMemcpy.o
 OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
@@ -97,7 +97,7 @@ CFLAGS += -march=native
 endif
 CFLAGS += $(option)
 
-CUDA_CFLAGS = --amdgpu-target=gfx906,gfx908 -std=c++11 $(OPTLEV) -DHIP -D_FORCE_INLINES
+CUDA_CFLAGS = --amdgpu-target=gfx906,gfx908,gfx90a -std=c++11 $(OPTLEV) -DHIP -D_FORCE_INLINES
 
 ifeq ($(OS),osx)
 CUDA_LFLAGS = -L$(CUDAROOT)/lib

@@ -26,8 +26,8 @@
 #################### User Settings ####################
 
 # C++ compiler
-HOST_CC = dpcpp
-GPU_CC = dpcpp
+HOST_CC = icpx
+GPU_CC = icpx
 
 #######################################################
 
@@ -69,10 +69,10 @@ ifdef NO_ALIGNED_ALLOC
 DEFS += -DNO_ALIGNED_ALLOC
 endif
 
-OBJSLIB = build/librett.o build/plan.o build/kernel.o build/GpuModel.o build/GpuMem.o build/GpuUtils.o build/Timer.o build/GpuModelKernel.o
-OBJSTEST1 = build/example.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
-OBJSTESTX = build/librett_test.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o
-OBJSBENCH = build/librett_bench.o build/TensorTester.o build/GpuMem.o build/GpuUtils.o build/Timer.o build/GpuMemcpy.o
+OBJSLIB = build/librett.o build/plan.o build/kernel.o build/GpuModel.o build/GpuUtils.o build/Timer.o build/GpuModelKernel.o
+OBJSTEST1 = build/example.o build/TensorTester.o build/GpuUtils.o build/Timer.o
+OBJSTESTX = build/librett_test.o build/TensorTester.o build/GpuUtils.o build/Timer.o
+OBJSBENCH = build/librett_bench.o build/TensorTester.o build/GpuUtils.o build/Timer.o build/GpuMemcpy.o
 OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
@@ -82,7 +82,7 @@ GPUROOT = $(GPU_PATH)
 CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL
 
 # AoT compilation
-CFLAGS += -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.50.4,12.60.7"
+CFLAGS += -sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7"
 
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native

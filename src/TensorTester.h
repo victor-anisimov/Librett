@@ -28,6 +28,8 @@ All rights reserved.
 #ifndef TENSORTESTER_H
 #define TENSORTESTER_H
 #include "Types.h"
+#include "GpuUtils.h"
+#include "GpuMem.hpp"
 
 //
 // Simple tensor transpose tester class
@@ -45,6 +47,7 @@ private:
 
   const int maxRank;
   const int maxNumblock;
+  gpuStream_t tt_gpustream;
 
 public:
   TensorConv* h_tensorConv;
@@ -53,11 +56,11 @@ public:
   TensorError_t* d_error;
   int* d_fail;
 
-  TensorTester();
+  TensorTester(gpuStream_t& gpustream);
   ~TensorTester();
 
   void setTensorCheckPattern(unsigned int* data, unsigned int ndata);
-  
+
   template<typename T> bool checkTranspose(int rank, int* dim, int* permutation, T* data);
 
 };

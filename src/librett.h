@@ -26,7 +26,7 @@ SOFTWARE.
 #define LIBRETT_H
 
 #ifdef SYCL
-  #include <CL/sycl.hpp>
+  #include <sycl/sycl.hpp>
   using librett_gpuStream_t     = sycl::queue*;
 #elif HIP
   #include <hip/hip_runtime.h>
@@ -75,8 +75,7 @@ void librettFinalize();
 // Returns
 // Success/unsuccess code
 //
-librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-  librett_gpuStream_t stream);
+librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType, librett_gpuStream_t& stream);
 
 //
 // Create plan and choose implementation by measuring performance
@@ -95,14 +94,14 @@ librettResult librettPlan(librettHandle* handle, int rank, int* dim, int* permut
 // Success/unsuccess code
 //
 librettResult librettPlanMeasure(librettHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-  librett_gpuStream_t stream, void* idata, void* odata);
+                                 librett_gpuStream_t& stream, void* idata, void* odata);
 
 //
 // Destroy plan
 //
 // Parameters
 // handle            = Handle to the LIBRETT plan
-// 
+//
 // Returns
 // Success/unsuccess code
 //
@@ -115,7 +114,7 @@ librettResult librettDestroy(librettHandle handle);
 // handle            = Returned handle to LIBRETT plan
 // idata             = Input data size product(dim)
 // odata             = Output data size product(dim)
-// 
+//
 // Returns
 // Success/unsuccess code
 //

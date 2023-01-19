@@ -22,16 +22,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#if SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
-  #include <cuda.h>
-#endif
 
-#include "GpuUtils.h"
 #include "GpuMemcpy.h"
 
 // suppress Clang warning about it being unable to unroll a loop
@@ -49,9 +40,9 @@ const int numthread = 64;
 //
 template <typename T>
 #if SYCL
-void scalarCopyKernel(const int n, const T* data_in, T* data_out, ndItem3_t item_ct1) 
+void scalarCopyKernel(const int n, const T* data_in, T* data_out, sycl::nd_item<3> item)
 #else
-__global__ void scalarCopyKernel(const int n, const T* data_in, T* data_out) 
+__global__ void scalarCopyKernel(const int n, const T* data_in, T* data_out)
 #endif
 {
   for (int i = threadIdx_x + blockIdx_x*blockDim_x; i < n; i += blockDim_x*gridDim_x) {
@@ -60,21 +51,21 @@ __global__ void scalarCopyKernel(const int n, const T* data_in, T* data_out)
 }
 
 template <typename T>
-void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t stream) {
+void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t& stream) {
 
   int numblock = (n - 1)/numthread + 1;
   // numblock = min(65535, numblock);
   // numblock = min(256, numblock);
 
 #if SYCL
-  stream->submit([&](sycl::handler &cgh) {
-    cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
-                                       sycl::range<3>(1, 1, numthread),
-                                       sycl::range<3>(1, 1, numthread)),
-    [=](ndItem3_t item_ct1) { scalarCopyKernel<T>(n, data_in, data_out, item_ct1); });
-  });
+  stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
+                                         sycl::range<3>(1, 1, numthread),
+                                         sycl::range<3>(1, 1, numthread)),
+                       [=](sycl::nd_item<3> item) {
+                         scalarCopyKernel<T>(n, data_in, data_out, item);
+                       });
 #elif HIP
-  hipLaunchKernelGGL(HIP_KERNEL_NAME(scalarCopyKernel<T>), dim3(numblock), dim3(numthread), 
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(scalarCopyKernel<T>), dim3(numblock), dim3(numthread),
      0, stream, n, data_in, data_out);
 
   hipCheck(hipGetLastError());
@@ -92,7 +83,7 @@ void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t stream) 
 //
 template <typename T>
 #if SYCL
-void vectorCopyKernel(const int n, T* data_in, T* data_out, ndItem3_t item_ct1) 
+void vectorCopyKernel(const int n, T* data_in, T* data_out, sycl::nd_item<3> item)
 #else
 __global__ void vectorCopyKernel(const int n, T* data_in, T* data_out)
 #endif
@@ -114,7 +105,7 @@ __global__ void vectorCopyKernel(const int n, T* data_in, T* data_out)
 }
 
 template <typename T>
-void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t stream) {
+void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t& stream) {
 
   const int vectorLength = 16/sizeof(T);
 
@@ -123,14 +114,14 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t stream) {
   int shmemsize = 0;
 
 #if SYCL
-  stream->submit([&](sycl::handler &cgh) {
-    cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
-                                       sycl::range<3>(1, 1, numthread),
-                                       sycl::range<3>(1, 1, numthread)),
-    [=](ndItem3_t item_ct1) { vectorCopyKernel<T>(n, data_in, data_out, item_ct1); });
-  });
+  stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
+                                         sycl::range<3>(1, 1, numthread),
+                                         sycl::range<3>(1, 1, numthread)),
+                       [=](sycl::nd_item<3> item) {
+                         vectorCopyKernel<T>(n, data_in, data_out, item);
+                       });
 #elif HIP
-  hipLaunchKernelGGL(HIP_KERNEL_NAME(vectorCopyKernel<T>), dim3(numblock), dim3(numthread), 
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(vectorCopyKernel<T>), dim3(numblock), dim3(numthread),
      shmemsize, stream, n, data_in, data_out);
 
   hipCheck(hipGetLastError());
@@ -148,9 +139,9 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t stream) {
 //
 template <int numElem>
 #if SYCL
-void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out, ndItem3_t item_ct1) 
+void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out, sycl::nd_item<3> item)
 #else
-__global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out) 
+__global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out)
 #endif
 {
   int index = threadIdx_x + numElem*blockIdx_x*blockDim_x;
@@ -167,7 +158,7 @@ __global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data
 
 template <int numElem>
 #if SYCL
-void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out, ndItem3_t item_ct1) 
+void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out, sycl::nd_item<3> item)
 #else
 __global__ void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out)
 #endif
@@ -187,21 +178,19 @@ __global__ void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *
 }
 
 #define NUM_ELEM 2
-void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t stream) {
+void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t& stream) {
 
   int numblock = (n/(4*NUM_ELEM) - 1)/numthread + 1;
   int shmemsize = 0;
 #if SYCL
-  stream->submit([&](sycl::handler &cgh) {
-    cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
-                                       sycl::range<3>(1, 1, numthread),
-                                       sycl::range<3>(1, 1, numthread)),
-    [=](ndItem3_t item_ct1) {
-       memcpyFloatKernel<NUM_ELEM>( n/4, (float4_t *)data_in, (float4_t *)data_out, item_ct1);
-    });
-  });
+  stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
+                                         sycl::range<3>(1, 1, numthread),
+                                         sycl::range<3>(1, 1, numthread)),
+                       [=](sycl::nd_item<3> item) {
+                         memcpyFloatKernel<NUM_ELEM>( n/4, (float4_t *)data_in, (float4_t *)data_out, item);
+                       });
 #elif HIP
-  hipLaunchKernelGGL(HIP_KERNEL_NAME(memcpyFloatKernel<NUM_ELEM>), dim3(numblock), dim3(numthread), 
+  hipLaunchKernelGGL(HIP_KERNEL_NAME(memcpyFloatKernel<NUM_ELEM>), dim3(numblock), dim3(numthread),
      shmemsize, stream , n/4, (float4_t *)data_in, (float4_t *)data_out);
 
   hipCheck(hipGetLastError());
@@ -220,10 +209,10 @@ void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t strea
 // -----------------------------------------------------------------------------------
 
 // Explicit instances
-template void scalarCopy<int>(const int n, const int* data_in, int* data_out, gpuStream_t stream);
-template void scalarCopy<long long int>(const int n, const long long int* data_in, long long int* data_out, 
-                                        gpuStream_t stream);
-template void vectorCopy<int>(const int n, int* data_in, int* data_out, gpuStream_t stream);
-template void vectorCopy<long long int>(const int n, long long int* data_in, long long int* data_out, 
-                                        gpuStream_t stream);
-void memcpyFloat(const int n, float* data_in, float* data_out, gpuStream_t stream);
+template void scalarCopy<int>(const int n, const int* data_in, int* data_out, gpuStream_t& stream);
+template void scalarCopy<long long int>(const int n, const long long int* data_in, long long int* data_out,
+                                        gpuStream_t& stream);
+template void vectorCopy<int>(const int n, int* data_in, int* data_out, gpuStream_t& stream);
+template void vectorCopy<long long int>(const int n, long long int* data_in, long long int* data_out,
+                                        gpuStream_t& stream);
+void memcpyFloat(const int n, float* data_in, float* data_out, gpuStream_t& stream);

@@ -30,7 +30,7 @@ SOFTWARE.
 #include <complex>
 #include "librett.h"
 #include "GpuUtils.h"
-#include "GpuMem.h"
+#include "GpuMem.hpp"
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuModel.h"      // testCounters
@@ -42,59 +42,75 @@ int nData = 200000000;
 
 #define DEBUG_PRINT 0   // set to 1 to print all tensor index values
 
-template <typename T> bool tensor_transpose(std::vector<int>& dim, std::vector<int>& permutation);
+template <typename T> bool tensor_transpose(std::vector<int>& dim, std::vector<int>& permutation, gpuStream_t& gpustream);
 void printVec(std::vector<int>& vec);
 
-int main(int argc, char *argv[]) 
+void CreateGpuStream(gpuStream_t& master_gpustream) {
+  #if SYCL
+  sycl::device dev(sycl::gpu_selector_v);
+  sycl::context ctxt(dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  master_gpustream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+  #elif HIP
+  hipCheck(hipStreamCreate(&master_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamCreate(&master_gpustream));
+  #endif
+}
+
+void DestroyGpuStream(gpuStream_t& master_gpustream) {
+  #if SYCL
+  delete master_gpustream;
+  #elif HIP
+  hipCheck(hipStreamDestroy(master_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamDestroy(master_gpustream));
+  #endif
+}
+
+void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
+  #if SYCL
+  master_gpustream->wait_and_throw();
+  #elif HIP
+  hipCheck(hipStreamSynchronize(master_gpustream));
+  #elif CUDA
+  cudaCheck(cudaStreamSynchronize(master_gpustream));
+  #endif
+}
+
+int main(int argc, char *argv[])
 {
-  int gpuid = -1;
-  bool arg_ok = true;
-  if (argc >= 3) {
-    if (strcmp(argv[1], "-device") == 0) {
-      sscanf(argv[2], "%d", &gpuid);
-    } else { 
-      arg_ok = false;
-    }
-  } else if (argc > 1) {
-    arg_ok = false;
-  }
-  
-  if (!arg_ok) {
-    printf("Usage: tt_example [options]\n");
-    printf("\tOptions:\n");
-    printf("\t-device gpuid : use GPU with ID gpuid\n");
-    return 1;
-  }
-  
-  SelectDevice(gpuid);
   DeviceReset();
+  // create a master gpu stream
+  gpuStream_t gpumasterstream;
+  CreateGpuStream(gpumasterstream);
 
   bool passed = true;
   std::vector<int> dim{3,3,3,2,4};
   std::vector<int> permutation{1,3,0,4,2};
 
   // Allocate device data, 200M elements
-  allocate_device<std::complex<double>>(&dataIn, nData);
-  allocate_device<std::complex<double>>(&dataOut, nData);
+  allocate_device<std::complex<double>>(&dataIn, nData, gpumasterstream);
+  allocate_device<std::complex<double>>(&dataOut, nData, gpumasterstream);
 
   printf("\n4-byte test\n");
-  if (!tensor_transpose<int>(dim, permutation)) passed = false;
+  if (!tensor_transpose<int>(dim, permutation, gpumasterstream)) passed = false;
 
   printf("\n8-byte test\n");
-  if (!tensor_transpose<long long int>(dim, permutation)) passed = false;
+  if (!tensor_transpose<long long int>(dim, permutation, gpumasterstream)) passed = false;
 
   printf("\n16-byte test\n");
-  if (!tensor_transpose<std::complex<double>>(dim, permutation)) passed = false;
+  if (!tensor_transpose<std::complex<double>>(dim, permutation, gpumasterstream)) passed = false;
 
   if(passed)
     printf("\nTest OK\n");
-  else 
+  else
     printf("\nTest failed\n");
 
-  deallocate_device<std::complex<double>>(&dataIn);
-  deallocate_device<std::complex<double>>(&dataOut);
+  deallocate_device<std::complex<double>>(&dataIn, gpumasterstream);
+  deallocate_device<std::complex<double>>(&dataOut, gpumasterstream);
 
   DeviceReset();
+  DestroyGpuStream(gpumasterstream);
 
   if(passed)
     return 0;
@@ -104,7 +120,7 @@ int main(int argc, char *argv[])
 
 
 template <typename T>
-bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation)
+bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation, gpuStream_t& gpustream)
 {
   int rank = dim.size();
 
@@ -122,7 +138,7 @@ bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation)
   size_t volmem = vol * sizeof(T);
   size_t datamem = nData * sizeof(long long int);
   if (volmem > datamem) {
-    printf("#ERROR(test_tensor): Data size exceeded: %llu %llu\n",volmem,datamem);
+    printf("#ERROR(test_tensor): Data size exceeded: %zu %zu\n",volmem,datamem);
     return false;
   }
 
@@ -135,12 +151,12 @@ bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation)
     inp[i] = i;
 
   // copy the data to GPU
-  copy_HtoD_sync((T *)inp, (T *)dataIn, vol);
+  copy_HtoD_sync((T *)inp, (T *)dataIn, vol, gpustream);
 
   // create plan
   librettHandle plan;
-  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
-  DeviceSynchronize();
+  librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), gpustream));
+  gpuDeviceSynchronize(gpustream);
 
   // execute plan
   librettCheck(librettExecute(plan, dataIn, dataOut));
@@ -149,7 +165,7 @@ bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation)
   librettCheck(librettDestroy(plan));
 
   // copy transposed tensor back to the host
-  copy_DtoH_sync((T *)dataOut, (T *)out, vol);
+  copy_DtoH_sync((T *)dataOut, (T *)out, vol, gpustream);
 
   // for original tensor, global linear index = i + a*j + a*b*k + a*b*c*l + ...
   // a is size of index i
@@ -208,4 +224,3 @@ void printVec(std::vector<int>& vec) {
   }
   printf("\n");
 }
-

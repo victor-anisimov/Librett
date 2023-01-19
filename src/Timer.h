@@ -26,11 +26,6 @@ SOFTWARE.
 #ifndef LIBRETTTIMER_H
 #define LIBRETTTIMER_H
 
-#ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#endif
-
 #include <vector>
 #include <chrono>
 #include <cstdlib>
@@ -43,6 +38,7 @@ SOFTWARE.
 // -------------------------------------------------
 #ifdef GPU_EVENT_TIMER
   #if SYCL
+    #include <sycl/sycl.hpp>
   #elif HIP
     #include <hip/hip_runtime.h>
   #else

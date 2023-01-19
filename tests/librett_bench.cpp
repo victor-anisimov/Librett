@@ -22,10 +22,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#endif
 #include <vector>
 #include <algorithm>
 #include <cstring>         // strcmp
@@ -36,7 +32,7 @@ SOFTWARE.
 #include <random>
 #include "librett.h"
 #include "GpuUtils.h"
-#include "GpuMem.h"
+#include "GpuMem.hpp"
 #include "TensorTester.h"
 #include "Timer.h"
 #include "GpuMemcpy.h"
@@ -56,25 +52,22 @@ bool use_plantimer;
 
 std::default_random_engine generator;
 
-bool bench1(int numElem);
-bool bench2(int numElem);
-bool bench3(int numElem);
-template <typename T> bool bench5(int numElem, int ratio);
-bool bench6();
-template <typename T> bool bench7();
-template <typename T> bool bench_input(std::vector<int>& dim, std::vector<int>& permutation);
-template <typename T> bool bench_memcpy(int numElem);
+bool bench1(int numElem, gpuStream_t& gpuStream);
+bool bench2(int numElem, gpuStream_t& gpuStream);
+bool bench3(int numElem, gpuStream_t& gpuStream);
+template <typename T> bool bench5(int numElem, int ratio, gpuStream_t& gpuStream);
+bool bench6(gpuStream_t& gpuStream);
+template <typename T> bool bench7(gpuStream_t& gpuStream);
+template <typename T> bool bench_input(std::vector<int>& dim, std::vector<int>& permutation, gpuStream_t& gpuStream);
+template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStream);
 
 bool isTrivial(std::vector<int>& permutation);
 void getRandomDim(double vol, std::vector<int>& dim);
-template <typename T> bool bench_tensor(std::vector<int>& dim, std::vector<int>& permutation);
+template <typename T> bool bench_tensor(std::vector<int>& dim, std::vector<int>& permutation, gpuStream_t& q);
 void printVec(std::vector<int>& vec);
-void printDeviceInfo();
+//void printDeviceInfo();
 
-int main(int argc, char *argv[]) 
-#ifdef SYCL
-try 
-#endif
+int main(int argc, char *argv[])
 {
 
   int gpuid = -1;
@@ -149,30 +142,26 @@ try
     return 1;
   }
 
+  if (gpuid >= 0) {
+    DeviceReset();
+  }
+
+  gpuStream_t gpuStream;
 #ifdef SYCL
-  if (gpuid >= 0) {
-    dpct::dev_mgr::instance().select_device(gpuid);
-  }
+  /* DPC++ cant current reset the device through SYCL APIs */
 
-  dpct::get_current_device().reset();
   /* DPC++ currently does not support configuring shared memory on devices. */
-#elif HIP
-  if (gpuid >= 0) {
-    hipCheck(hipSetDevice(gpuid));
-  }
 
-  hipCheck(hipDeviceReset());
+  gpuStream = new sycl::queue(sycl::gpu_selector_v, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
+#elif HIP
+  hipStreamCreate(&gpustream);
   if (elemsize == 4) {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeFourByte));
   } else {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
   }
 #else // CUDA
-  if (gpuid >= 0) {
-    cudaCheck(cudaSetDevice(gpuid));
-  }
-
-  cudaCheck(cudaDeviceReset());
+  cudaStreamCreate(&gpustream);
   if (elemsize == 4) {
     cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte));
   } else {
@@ -180,7 +169,7 @@ try
   }
 #endif
 
-  printDeviceInfo();
+  //printDeviceInfo();
   printf("CPU using vector type %s of length %d\n", INT_VECTOR_TYPE, INT_VECTOR_LEN);
 
   timer = new librettTimer(elemsize);
@@ -193,11 +182,11 @@ try
 #endif
 
   // Allocate device data, 100M elements
-  allocate_device<char>(&dataIn, dataSize*(size_t)elemsize);
-  allocate_device<char>(&dataOut, dataSize*(size_t)elemsize);
+  allocate_device<char>(&dataIn, dataSize*(size_t)elemsize, gpuStream);
+  allocate_device<char>(&dataOut, dataSize*(size_t)elemsize, gpuStream);
 
   // Create tester
-  tester = new TensorTester();
+  tester = new TensorTester(gpuStream);
   tester->setTensorCheckPattern((unsigned int *)dataIn, dataSize*(size_t)elemsize/sizeof(unsigned int));
 
   std::vector<int> worstDim;
@@ -219,7 +208,7 @@ try
   // }
 
   if (dimIn.size() > 0) {
-    bool ok = (elemsize == 4) ? bench_input<int>(dimIn, permutationIn) : bench_input<long long int>(dimIn, permutationIn);
+    bool ok = (elemsize == 4) ? bench_input<int>(dimIn, permutationIn, gpuStream) : bench_input<long long int>(dimIn, permutationIn, gpuStream);
     if (ok) goto benchOK;
     goto fail;
   }
@@ -229,7 +218,7 @@ try
       printf("bench 3 not implemented for elemsize = 4\n");
       goto fail;
     }
-    if (bench3(200*MILLION)) {
+    if (bench3(200*MILLION, gpuStream)) {
       printf("bench3:\n");
       printf("rank best worst average median\n");
       for (auto it=timer->ranksBegin();it != timer->ranksEnd();it++) {
@@ -256,7 +245,7 @@ try
   }
 
   if (benchID/100 == 5) {
-    bool ok = (elemsize == 4) ? bench5<int>(200*MILLION, benchID % 100) : bench5<long long int>(200*MILLION, benchID % 100);
+    bool ok = (elemsize == 4) ? bench5<int>(200*MILLION, benchID % 100, gpuStream) : bench5<long long int>(200*MILLION, benchID % 100, gpuStream);
     if (ok) {
       printf("bench5:\n");
       for (auto it=timer->ranksBegin();it != timer->ranksEnd();it++) {
@@ -296,7 +285,7 @@ try
       printf("bench 6 not implemented for elemsize = 4\n");
       goto fail;
     }
-    if (bench6()) {
+    if (bench6(gpuStream)) {
       printf("bench6:\n");
       for (auto it=timer->ranksBegin();it != timer->ranksEnd();it++) {
         std::vector<double> v = timer->getData(*it);
@@ -330,7 +319,7 @@ try
   }
 
   if (benchID == 7) {
-    bool ok = (elemsize == 4) ? bench7<int>() : bench7<long long int>();
+    bool ok = (elemsize == 4) ? bench7<int>(gpuStream) : bench7<long long int>(gpuStream);
     if (ok) {
       printf("bench7:\n");
       for (auto it=timer->ranksBegin();it != timer->ranksEnd();it++) {
@@ -367,7 +356,7 @@ try
 
   // Otherwise, do memcopy benchmark
   {
-    bool ok = (elemsize == 4) ? bench_memcpy<int>(benchID) : bench_memcpy<long long int>(benchID);
+    bool ok = (elemsize == 4) ? bench_memcpy<int>(benchID, gpuStream) : bench_memcpy<long long int>(benchID, gpuStream);
     if (ok) goto benchOK;
     goto fail;
   }
@@ -382,8 +371,8 @@ fail:
   passed = false;
 
 end:
-  deallocate_device<char>(&dataIn);
-  deallocate_device<char>(&dataOut);
+  deallocate_device<char>(&dataIn, gpuStream);
+  deallocate_device<char>(&dataOut, gpuStream);
   delete tester;
 
   printf("seed %u\n", seed);
@@ -391,8 +380,7 @@ end:
   delete timer;
 
 #ifdef SYCL
-  dpct::get_current_device().queues_wait_and_throw();
-  dpct::get_current_device().reset();
+  gpuStream->wait_and_throw();
 #elif HIP
   hipCheck(hipDeviceSynchronize());
   hipCheck(hipDeviceReset());
@@ -406,18 +394,11 @@ end:
   else
     return 1;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 //
 // Benchmark 1: ranks 2-8,15 in inverse permutation. 32 start and end dimension
 //
-bool bench1(int numElem) {
+bool bench1(int numElem, gpuStream_t& gpuStream) {
   int ranks[8] = {2, 3, 4, 5, 6, 7, 8, 15};
   for (int i=0;i <= 7;i++) {
     std::vector<int> dim(ranks[i]);
@@ -446,7 +427,7 @@ bool bench1(int numElem) {
       permutation[r] = ranks[i] - 1 - r;
     }
 
-    if (!bench_tensor<long long int>(dim, permutation)) return false;
+    if (!bench_tensor<long long int>(dim, permutation, gpuStream)) return false;
   }
 
   return true;
@@ -455,7 +436,7 @@ bool bench1(int numElem) {
 //
 // Benchmark 2: ranks 2-8,15 in inverse permutation. Even spread of dimensions.
 //
-bool bench2(int numElem) {
+bool bench2(int numElem, gpuStream_t& gpuStream) {
   int ranks[8] = {2, 3, 4, 5, 6, 7, 8, 15};
   for (int i=0;i <= 7;i++) {
     std::vector<int> dim(ranks[i]);
@@ -474,7 +455,7 @@ bool bench2(int numElem) {
       permutation[r] = ranks[i] - 1 - r;
     }
 
-    if (!bench_tensor<long long int>(dim, permutation)) return false;
+    if (!bench_tensor<long long int>(dim, permutation, gpuStream)) return false;
   }
 
   return true;
@@ -483,7 +464,7 @@ bool bench2(int numElem) {
 //
 // Benchmark 3: ranks 2-8,15 in random permutation and dimensions.
 //
-bool bench3(int numElem) {
+bool bench3(int numElem, gpuStream_t& gpuStream) {
 
   int ranks[8] = {2, 3, 4, 5, 6, 7, 8, 15};
 
@@ -494,7 +475,7 @@ bool bench3(int numElem) {
     for (int nsample=0;nsample < 50;nsample++) {
       std::random_shuffle(permutation.begin(), permutation.end());
       getRandomDim((double)numElem, dim);
-      if (!bench_tensor<long long int>(dim, permutation)) return false;
+      if (!bench_tensor<long long int>(dim, permutation, gpuStream)) return false;
     }
   }
 
@@ -502,21 +483,21 @@ bool bench3(int numElem) {
 }
 
 template <typename T>
-bool bench_input(std::vector<int>& dim, std::vector<int>& permutation) {
-  if (!bench_tensor<T>(dim, permutation)) return false;
+bool bench_input(std::vector<int>& dim, std::vector<int>& permutation, gpuStream_t& gpuStream) {
+  if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
   printf("dimensions\n");
   printVec(dim);
   printf("permutation\n");
   printVec(permutation);
   printf("bandwidth %4.2lf GB/s\n", timer->GBs());
-  return true;  
+  return true;
 }
 
 //
 // Benchmark 5: All permutations for ranks 2-4, limited permutations for ranks 5-7
 //
 template <typename T>
-bool bench5(int numElemAvg, int ratio) {
+bool bench5(int numElemAvg, int ratio, gpuStream_t& gpuStream) {
 
   std::normal_distribution<double> numElem_dist((double)numElemAvg, (double)numElemAvg*0.2);
 
@@ -578,7 +559,7 @@ bool bench5(int numElemAvg, int ratio) {
       while (isTrivial(permutation)) {
         std::random_shuffle(permutation.begin(), permutation.end());
       }
-      if (!bench_tensor<T>(dim, permutation)) return false;
+      if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
     }
   }
 
@@ -588,7 +569,7 @@ bool bench5(int numElemAvg, int ratio) {
 //
 // Benchmark 6: from "TTC: A Tensor Transposition Compiler for Multiple Architectures"
 //
-bool bench6() {
+bool bench6(gpuStream_t& gpuStream) {
 
   std::vector< std::vector<int> > dims = {
     std::vector<int>{7248,7248},
@@ -711,7 +692,7 @@ bool bench6() {
   };
 
   for (int i=0;i < dims.size();i++) {
-    if (!bench_tensor<long long int>(dims[i], permutations[i])) return false;
+    if (!bench_tensor<long long int>(dims[i], permutations[i], gpuStream)) return false;
     printf("dimensions\n");
     printVec(dims[i]);
     printf("permutation\n");
@@ -726,7 +707,7 @@ bool bench6() {
 // Benchmark 7: ranks 8 and 12 with 4 large dimensions and rest small dimensions
 //
 template <typename T>
-bool bench7() {
+bool bench7(gpuStream_t& gpuStream) {
 
   // 199584000 elements
   {
@@ -734,14 +715,14 @@ bool bench7() {
     std::vector<int> permutation(8);
     // Inverse
     for (int r=0;r < dim.size();r++) permutation[r] = dim.size() - 1 - r;
-    if (!bench_tensor<T>(dim, permutation)) return false;
+    if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
     // Random
     for (int r=0;r < dim.size();r++) permutation[r] = r;
     for (int nsample=0;nsample < 500;nsample++) {
       std::random_shuffle(dim.begin(), dim.end());
       std::random_shuffle(permutation.begin(), permutation.end());
       if (!isTrivial(permutation)) {
-        if (!bench_tensor<T>(dim, permutation)) return false;
+        if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
       }
     }
   }
@@ -752,14 +733,14 @@ bool bench7() {
     std::vector<int> permutation(12);
     // Inverse
     for (int r=0;r < dim.size();r++) permutation[r] = dim.size() - 1 - r;
-    if (!bench_tensor<T>(dim, permutation)) return false;
+    if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
     // Random
     for (int r=0;r < dim.size();r++) permutation[r] = r;
     for (int nsample=0;nsample < 500;nsample++) {
       std::random_shuffle(dim.begin(), dim.end());
       std::random_shuffle(permutation.begin(), permutation.end());
       if (!isTrivial(permutation)) {
-        if (!bench_tensor<T>(dim, permutation)) return false;
+        if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
       }
     }
   }
@@ -810,15 +791,8 @@ void getRandomDim(double vol, std::vector<int>& dim) {
 }
 
 template <typename T>
-bool bench_tensor(std::vector<int> &dim, std::vector<int> &permutation) 
-#ifdef SYCL
-try 
-#endif
+bool bench_tensor(std::vector<int> &dim, std::vector<int> &permutation, gpuStream_t& q)
 {
-#ifdef SYCL
-sycl::queue q = dpct::get_default_queue();
-#endif
-
   int rank = dim.size();
 
   int vol = 1;
@@ -851,17 +825,9 @@ sycl::queue q = dpct::get_default_queue();
     plan_start = std::chrono::high_resolution_clock::now();
   }
   if (use_librettPlanMeasure) {
-#ifdef SYCL
-    librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q, dataIn, dataOut));
-#else // CUDA or HIP
-    librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0, dataIn, dataOut));
-#endif
+    librettCheck(librettPlanMeasure(&plan, rank, dim.data(), permutation.data(), sizeof(T), q, dataIn, dataOut));
   } else {
-#ifdef SYCL
-    librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), &q));
-#else // CUDA or HIP
-    librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), 0));
-#endif
+    librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), q));
   }
   if (use_plantimer) {
     std::chrono::high_resolution_clock::time_point plan_end;
@@ -871,15 +837,14 @@ sycl::queue q = dpct::get_default_queue();
   }
 
   for (int i=0;i < 4;i++) {
+    set_device_array<T>((T *)dataOut, -1, vol, q);
+
 #if SYCL
-    set_device_array<T>((T *)dataOut, -1, vol, &q);
-    dpct::get_current_device().queues_wait_and_throw();
+    q->wait_and_throw();
 #elif HIP
-    set_device_array<T>((T *)dataOut, -1, vol);
-    hipCheck(hipDeviceSynchronize());
+    hipCheck(hipStreamSynchronize(q));
 #else // CUDA
-    set_device_array<T>((T *)dataOut, -1, vol);
-    cudaCheck(cudaDeviceSynchronize());
+    cudaCheck(cudaStreamSynchronize(q));
 #endif
 
     timer->start(dim, permutation);
@@ -892,13 +857,6 @@ sycl::queue q = dpct::get_default_queue();
   librettCheck(librettDestroy(plan));
   return tester->checkTranspose<T>(rank, dim.data(), permutation.data(), (T *)dataOut);
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
 void printVec(std::vector<int>& vec) {
   for (int i=0;i < vec.size();i++) {
@@ -910,38 +868,27 @@ void printVec(std::vector<int>& vec) {
 //
 // Benchmarks memory copy. Returns bandwidth in GB/s
 //
-template <typename T> bool bench_memcpy(int numElem) 
-#ifdef SYCL
-try 
-#endif
+template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
 {
-#ifdef SYCL
-  //dpct::device_ext &dev_ct1 = dpct::get_current_device();
-  sycl::queue q = dpct::get_default_queue();
-#endif
-
   std::vector<int> dim(1, numElem);
   std::vector<int> permutation(1, 0);
 
   {
     librettTimer timer(sizeof(T));
     for (int i=0;i < 4;i++) {
+      set_device_array<T>((T *)dataOut, -1, numElem, gpuStr);
+
 #ifdef SYCL
-      set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      dpct::get_current_device().queues_wait_and_throw();
-      timer.start(dim, permutation);
-      scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, &q);
+      gpuStr->wait_and_throw();
 #elif HIP
-      set_device_array<T>((T *)dataOut, -1, numElem);
-      hipCheck(hipDeviceSynchronize());
-      timer.start(dim, permutation);
-      scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
+      hipCheck(hipStreamSynchronize(gpuStr));
 #else // CUDA
-      set_device_array<T>((T *)dataOut, -1, numElem);
-      cudaCheck(cudaDeviceSynchronize());
-      timer.start(dim, permutation);
-      scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
+      cudaCheck(cudaStreamSynchronize(gpuStr));
 #endif
+
+      timer.start(dim, permutation);
+      scalarCopy<T>(numElem, (T *)dataIn, (T *)dataOut, gpuStr);
+
       timer.stop();
       printf("%4.2lf GB/s\n", timer.GBs());
     }
@@ -952,22 +899,19 @@ try
   {
     librettTimer timer(sizeof(T));
     for (int i=0;i < 4;i++) {
+      set_device_array<T>((T *)dataOut, -1, numElem, gpuStr);
+
 #ifdef SYCL
-      set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      dpct::get_current_device().queues_wait_and_throw();
-      timer.start(dim, permutation);
-      vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, &q);
+      gpuStr->wait_and_throw();
 #elif HIP
-      set_device_array<T>((T *)dataOut, -1, numElem);
-      hipCheck(hipDeviceSynchronize());
-      timer.start(dim, permutation);
-      vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
+      hipCheck(hipStreamSynchronize(gpuStr));
 #else // CUDA
-      set_device_array<T>((T *)dataOut, -1, numElem);
-      cudaCheck(cudaDeviceSynchronize());
-      timer.start(dim, permutation);
-      vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, 0);
+      cudaCheck(cudaStreamSynchronize(gpuStr));
 #endif
+
+      timer.start(dim, permutation);
+      vectorCopy<T>(numElem, (T *)dataIn, (T *)dataOut, gpuStr);
+
       timer.stop();
       printf("%4.2lf GB/s\n", timer.GBs());
     }
@@ -978,22 +922,20 @@ try
   {
     librettTimer timer(sizeof(T));
     for (int i=0;i < 4;i++) {
+
+      set_device_array<T>((T *)dataOut, -1, numElem, gpuStr);
+
 #ifdef SYCL
-      set_device_array<T>((T *)dataOut, -1, numElem, &q);
-      dpct::get_current_device().queues_wait_and_throw();
-      timer.start(dim, permutation);
-      memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, &q);
+      gpuStr->wait_and_throw();
 #elif HIP
-      set_device_array<T>((T *)dataOut, -1, numElem);
-      hipCheck(hipDeviceSynchronize());
-      timer.start(dim, permutation);
-      memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, 0);
+      hipCheck(hipStreamSynchronize(gpuStr));
 #else // CUDA
-      set_device_array<T>((T *)dataOut, -1, numElem);
-      cudaCheck(cudaDeviceSynchronize());
-      timer.start(dim, permutation);
-      memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, 0);
+      cudaCheck(cudaStreamSynchronize(gpuStr));
 #endif
+
+      timer.start(dim, permutation);
+      memcpyFloat(numElem*sizeof(T)/sizeof(float), (float *)dataIn, (float *)dataOut, gpuStr);
+
       timer.stop();
       printf("%4.2lf GB/s\n", timer.GBs());
     }
@@ -1003,74 +945,62 @@ try
 
   return true;
 }
-#ifdef SYCL
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#endif
 
-#ifdef SYCL
-void printDeviceInfo() try {
-  int deviceID;
-  deviceID = dpct::dev_mgr::instance().current_device_id();
-  dpct::device_info prop;
-  dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
-  int pConfig = 0;
-  //cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
-  int shMemBankSize = 4;
-  if (pConfig == 2) shMemBankSize = 8;
-  //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
-  double mem_BW = 0.0;
-  /*
-  DPCT1005:13: The device version is different. You need to rewrite this code.
-  */
-  printf("Using %s SM version %d.%d\n", prop.get_name(),
-         prop.get_major_version(), prop.get_minor_version());
-  int ECCEnabled = 0;
-  double l2CacheSize = 0.0;
-  printf(
-      "Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n",
-      (double)prop.get_max_clock_frequency() / 1e6,
-      prop.get_max_compute_units(), ECCEnabled, mem_BW, shMemBankSize);
-  printf("L2 %1.2lfMB\n", (double)l2CacheSize/(double)(1024*1024));
-}
-catch (sycl::exception const &exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  std::exit(1);
-}
-#elif HIP
-void printDeviceInfo() {
-  int deviceID;
-  hipCheck(hipGetDevice(&deviceID));
-  hipDeviceProp_t prop;
-  hipCheck(hipGetDeviceProperties(&prop, deviceID));
-  hipSharedMemConfig pConfig;
-  hipCheck(hipDeviceGetSharedMemConfig(&pConfig));
-  int shMemBankSize = 4;
-  if (pConfig == hipSharedMemBankSizeEightByte) shMemBankSize = 8;
-  double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
-  printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
-  printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
-    prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
-  printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
-}
-#else // CUDA
-void printDeviceInfo() {
-  int deviceID;
-  cudaCheck(cudaGetDevice(&deviceID));
-  cudaDeviceProp prop;
-  cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
-  cudaSharedMemConfig pConfig;
-  cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
-  int shMemBankSize = 4;
-  if (pConfig == cudaSharedMemBankSizeEightByte) shMemBankSize = 8;
-  double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
-  printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
-  printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
-    prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
-  printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
-}
-#endif
+// #ifdef SYCL
+// void printDeviceInfo() {
+//   int deviceID;
+//   deviceID = dpct::dev_mgr::instance().current_device_id();
+//   dpct::device_info prop;
+//   dpct::dev_mgr::instance().get_device(deviceID).get_device_info(prop);
+//   int pConfig = 0;
+//   //cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
+//   int shMemBankSize = 4;
+//   if (pConfig == 2) shMemBankSize = 8;
+//   //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+//   double mem_BW = 0.0;
+//   /*
+//   DPCT1005:13: The device version is different. You need to rewrite this code.
+//   */
+//   printf("Using %s SM version %d.%d\n", prop.get_name(),
+//          prop.get_major_version(), prop.get_minor_version());
+//   int ECCEnabled = 0;
+//   double l2CacheSize = 0.0;
+//   printf(
+//       "Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n",
+//       (double)prop.get_max_clock_frequency() / 1e6,
+//       prop.get_max_compute_units(), ECCEnabled, mem_BW, shMemBankSize);
+//   printf("L2 %1.2lfMB\n", (double)l2CacheSize/(double)(1024*1024));
+// }
+// #elif HIP
+// void printDeviceInfo() {
+//   int deviceID;
+//   hipCheck(hipGetDevice(&deviceID));
+//   hipDeviceProp_t prop;
+//   hipCheck(hipGetDeviceProperties(&prop, deviceID));
+//   hipSharedMemConfig pConfig;
+//   hipCheck(hipDeviceGetSharedMemConfig(&pConfig));
+//   int shMemBankSize = 4;
+//   if (pConfig == hipSharedMemBankSizeEightByte) shMemBankSize = 8;
+//   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+//   printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
+//   printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
+//     prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
+//   printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
+// }
+// #else // CUDA
+// void printDeviceInfo() {
+//   int deviceID;
+//   cudaCheck(cudaGetDevice(&deviceID));
+//   cudaDeviceProp prop;
+//   cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
+//   cudaSharedMemConfig pConfig;
+//   cudaCheck(cudaDeviceGetSharedMemConfig(&pConfig));
+//   int shMemBankSize = 4;
+//   if (pConfig == cudaSharedMemBankSizeEightByte) shMemBankSize = 8;
+//   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+//   printf("Using %s SM version %d.%d\n", prop.name, prop.major, prop.minor);
+//   printf("Clock %1.3lfGhz numSM %d ECC %d mem BW %1.2lfGB/s shMemBankSize %dB\n", (double)prop.clockRate/1e6,
+//     prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
+//   printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
+// }
+// #endif

@@ -26,14 +26,6 @@ SOFTWARE.
 #include <iostream>
 #include <algorithm>
 #include <random>
-#ifdef SYCL
-  #include <CL/sycl.hpp>
-  #include "dpct/dpct.hpp"
-#elif HIP
-  #include <hip/hip_runtime.h>
-#else // CUDA
- #include <cuda_runtime.h>
-#endif
 #include <cstring> // memcpy
 #include "GpuModel.h"
 #include "GpuModelKernel.h"
@@ -162,7 +154,7 @@ void countCacheLinesRef(const int* pos, const int n, const int cacheWidth, int& 
 
   cl_full = 0;
   cl_part = 0;
-  
+
   if (n == 0) return;
 
   int i = 0;
@@ -238,7 +230,7 @@ void computePos(const int vol0, const int vol1,
 // Starts from zero
 //
 void computePos0(const int vol,
-  const int* __restrict__ dIn, const int* __restrict__ cIn, 
+  const int* __restrict__ dIn, const int* __restrict__ cIn,
   const int* __restrict__ dOut, const int* __restrict__ cOut,
   int* __restrict__ posIn, int* __restrict__ posOut) {
 
@@ -326,7 +318,7 @@ void computePosRef(int vol0, int vol1,
 // Count number of global memory transactions for Packed -method
 //
 void countPackedGlTransactions(const int warpSize, const int accWidth, const int cacheWidth,
-  const int numthread, const int posMbarIn, const int posMbarOut, const int volMmk, 
+  const int numthread, const int posMbarIn, const int posMbarOut, const int volMmk,
   std::vector<int>& posMmkIn, std::vector<int>& posMmkOut,
   int& gld_tran, int& gst_tran, int& gld_req, int& gst_req,
   int& cl_full_l2, int& cl_part_l2, int& cl_full_l1, int& cl_part_l1) {
@@ -401,7 +393,7 @@ void aligned_free( void* p ) {
 // Count number of global memory transactions for Packed -method
 //
 void countPackedGlTransactions0(const int warpSize, const int accWidth, const int cacheWidth,
-  const int numthread, 
+  const int numthread,
   const int numPos, const int posMbarIn[INT_VECTOR_LEN], const int posMbarOut[INT_VECTOR_LEN],
   const int volMmk,  const int* __restrict__ posMmkIn, const int* __restrict__ posMmkOut,
   int& gld_tran, int& gst_tran, int& gld_req, int& gst_req,
@@ -610,7 +602,7 @@ void countTiledGlTransactions(const bool isCopy,
     mlp = (float)mlp_tot/(float)ntile;
   } else {
     // Total number of memory level parallelism
-    int mlp_tot = (TILEDIM/TILEROWS)*(2*ntile_full + ntile_horz + ntile_vert) + 
+    int mlp_tot = (TILEDIM/TILEROWS)*(2*ntile_full + ntile_horz + ntile_vert) +
     ((v - 1)/TILEROWS + 1)*(ntile_vert + ntile_corn) + ((h - 1)/TILEROWS + 1)*(ntile_horz + ntile_corn);
     // Average memory level parallelism per tile
     mlp = (float)mlp_tot/(float)(2*ntile);
@@ -777,6 +769,7 @@ struct GpuModelProp {
   double fac;
 
   GpuModelProp(int major) {
+    #if CUDA
     if (major <= 3) {
       // Kepler
       base_dep_delay = 14.0;
@@ -798,34 +791,33 @@ struct GpuModelProp {
       sh_mem_latency = 1.0;
       iter_cycles = 260.0;
       fac = 2.0;
-    } 
+    }
+    #endif
   }
+
 };
 
-void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp, 
-  int nthread, int numActiveBlock, float mlp, 
-  int gld_req, int gst_req, int gld_tran, int gst_tran, 
-  int sld_req, int sst_req, int sld_tran, int sst_tran, 
-  int cl_full, int cl_part, 
+void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp,
+  int nthread, int numActiveBlock, float mlp,
+  int gld_req, int gst_req, int gld_tran, int gst_tran,
+  int sld_req, int sst_req, int sld_tran, int sst_tran,
+  int cl_full, int cl_part,
   double &delta_ll, double &mem_cycles, double &sh_mem_cycles, double &MWP) {
 
-#ifdef SYCL
-  double active_SM = prop.get_max_compute_units();
+  double active_SM = gpuMultiProcessorCount;
+  // GPU clock in GHz (convert from MHz to GHz)
+  double freq = (double)gpuClockRate/1.0e3;
+  int warpSize = gpuWarpSize;
+
+#if SYCL
   // Memory bandwidth in GB/s
   //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
   //if (prop.ECCEnabled) mem_BW *= (1.0 - 0.125);
   double mem_BW = 0.0;
-  // GPU clock in GHz
-  double freq = (double)prop.get_max_clock_frequency() / 1.0e6;
-  int warpSize = prop.get_max_sub_group_size();
 #else // CUDA or SYCL
-  double active_SM = prop.multiProcessorCount;
   // Memory bandwidth in GB/s
   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
   if (prop.ECCEnabled) mem_BW *= (1.0 - 0.125);
-  // GPU clock in GHz
-  double freq = (double)prop.clockRate/1.0e6;
-  int warpSize = prop.warpSize;
   #if HIP
     return;  // Dmitry Lyakh
   #endif
@@ -862,18 +854,14 @@ void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp,
 }
 
 double cyclesPacked(const bool isSplit, const size_t sizeofType, const gpuDeviceProp_t &prop,
-  int nthread, int numActiveBlock, float mlp, 
-  int gld_req, int gst_req, int gld_tran, int gst_tran, 
+  int nthread, int numActiveBlock, float mlp,
+  int gld_req, int gst_req, int gld_tran, int gst_tran,
   int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part) {
 
-  int warpSize = prop.warpSize;           // AMD change
+  int warpSize = gpuWarpSize;           // AMD change
   int warps_per_block = nthread/warpSize; // AMD change
 
-#ifdef SYCL
-  GpuModelProp gpuModelProp(prop.get_major_version());
-#else // CUDA or HIP
-  GpuModelProp gpuModelProp(prop.major);
-#endif
+  GpuModelProp gpuModelProp(gpuMajor);
 
   double delta_ll, mem_cycles, sh_mem_cycles, MWP;
   prepmodel5(prop, gpuModelProp, nthread, numActiveBlock, mlp,
@@ -888,18 +876,14 @@ double cyclesPacked(const bool isSplit, const size_t sizeofType, const gpuDevice
 }
 
 double cyclesTiled(const bool isCopy, const size_t sizeofType, const gpuDeviceProp_t &prop,
-  int nthread, int numActiveBlock, float mlp, 
-  int gld_req, int gst_req, int gld_tran, int gst_tran, 
+  int nthread, int numActiveBlock, float mlp,
+  int gld_req, int gst_req, int gld_tran, int gst_tran,
   int sld_req, int sst_req, int sld_tran, int sst_tran, int num_iter, int cl_full, int cl_part) {
 
-  int warpSize = prop.warpSize;           // AMD change
+  int warpSize = gpuWarpSize;           // AMD change
   int warps_per_block = nthread/warpSize; // AMD change
 
-#ifdef SYCL
-  GpuModelProp gpuModelProp(prop.get_major_version());
-#else // CUDA
-  GpuModelProp gpuModelProp(prop.major);
-#endif
+  GpuModelProp gpuModelProp(gpuMajor);
 
   double delta_ll, mem_cycles, sh_mem_cycles, MWP;
   prepmodel5(prop, gpuModelProp, nthread, numActiveBlock, mlp,
@@ -962,7 +946,7 @@ bool testCounters(const int warpSize, const int accWidth, const int cacheWidth) 
 {5, 0, 18},
 {4, 5, 4}};
 
-  const int arrayResultsFloat[numArray][3] = 
+  const int arrayResultsFloat[numArray][3] =
 {{0, 0, 0},
 {1, 4, 0},
 {1, 0, 1},
@@ -1111,7 +1095,7 @@ bool testCounters(const int warpSize, const int accWidth, const int cacheWidth) 
 {2,2,2},{2,2,2},{2,2,2},{2,2,2},{2,3,1},{2,3,2},{2,3,2},{2,3,2},{2,3,2},{2,3,2},{2,3,2},{2,3,2}
 };
 
-const int shTestData[138][3] = 
+const int shTestData[138][3] =
 {{32, 6, 1},{1, 6, 1},{96, 180, 2},{1, 6, 1},{6, 30, 6},{960, 4680, 3},{1, 6, 1},{6, 30, 6},
 {180, 26, 180},{96, 84, 2},{1, 6, 1},{6, 14, 6},{640, 2520, 3},{1, 6, 1},{6, 30, 84},
 {180, 14, 6},{160, 756, 3},{1, 6, 1},{6, 9, 84},{54, 14, 6},{960, 4212, 4},{1, 6, 1},
@@ -1216,7 +1200,7 @@ const int shTestData[138][3] =
         if (!ok) {
           printf("%d:%d\n", pos, pos + n - 1);
           printf("tran %d %d cl_full %d %d cl_part %d %d\n", tran, tran2, cl_full, cl_full2, cl_part, cl_part2);
-          return false;        
+          return false;
         }
 
       }
@@ -1273,7 +1257,7 @@ const int shTestData[138][3] =
         int dim[32];
         for (int i=0;i < rank;i++) {
           dim[i] = dimdist(generator);
-        }    
+        }
 
         // Include random set of sub-ranks
         int subrank = 0;
@@ -1385,13 +1369,25 @@ const int shTestData[138][3] =
   // Test GPU version
   //
   {
+    // create the GPU streams
+    // TODO: need to check the gpustreams here
+    gpuStream_t gpustream;
+    #if SYCL
+    gpustream = new sycl::queue(sycl::gpu_selector_v,
+                                Librett::sycl_asynchandler,
+                                sycl::property_list{sycl::property::queue::in_order{}});
+    #elif HIP
+    hipCheck(hipStreamCreate(&gpustream));
+    #elif CUDA
+    cudaCheck(cudaStreamCreate(&gpustream));    
+    #endif
     for (int i=0;i < numArray;i++) {
       memcpy(&gpuPosData[i*warpSize], posData[i], warpSize*sizeof(int));
     }
     int* tran_data = new int[numArray + numCont];
     int* cl_full_data = new int[numArray + numCont];
     int* cl_part_data = new int[numArray + numCont];
-    runCounters(warpSize, gpuPosData, (numArray + numCont)*warpSize, accWidth, cacheWidth, tran_data, cl_full_data, cl_part_data);
+    runCounters(warpSize, gpuPosData, (numArray + numCont)*warpSize, accWidth, cacheWidth, tran_data, cl_full_data, cl_part_data, gpustream);
 
     for (int i=0;i < numArray;i++) {
       bool ok = true;
