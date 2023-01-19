@@ -20,6 +20,7 @@ cuTT     thread safety: Ed Valeev (VT), Dmitry Lyakh (ORNL)
 hipTT    port of cuTT: Luke Roskop (HPE), Dmitry Lyakh (ORNL)
 hipTT    working version: Alessandro Fanfarillo (AMD)
 LibreTT  SYCL port and CUDA,AMD,INTEL platform integration: Victor Anisimov (ANL)
+LibreTT  CMake enhancements and complex-double datatype: Ajay Panyala (PNNL)
 ```
 
 ## Directory Structure

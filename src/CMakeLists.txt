@@ -33,6 +33,11 @@ set(DEVICE_SOURCE_FILES
 
 add_library(librett ${LIBRETT_SOURCE_FILES})
 
+if(ENABLE_SYCL)
+  target_compile_options(librett PUBLIC -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.50.4,12.60.7")
+  target_link_options(librett PUBLIC -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.50.4,12.60.7")
+endif(ENABLE_SYCL)
+
 if(ENABLE_CUDA)
   set_source_files_properties(${DEVICE_SOURCE_FILES} PROPERTIES LANGUAGE CUDA COMPILE_FLAGS "-x cu")
 endif(ENABLE_CUDA)
