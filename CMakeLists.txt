@@ -113,14 +113,12 @@ if(ENABLE_SYCL)
     set(SYCL_GROUP_SIZE 32)
   endif()
 
-  #set(LIBRETT_CXX_FLAGS "-sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -fsycl-default-sub-group-size ${SYCL_GROUP_SIZE} -fno-sycl-id-queries-fit-in-int -Wsycl-strict")
-
   set(LIBRETT_CXX_FLAGS "-sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict")
   
   if(ENABLE_SYCL_HIP)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=${CMAKE_HIP_ARCHITECTURES}")
   elseif(ENABLE_SYCL_CUDA)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda -Xsycl-target-backend '--cuda-gpu-arch=sm_${CMAKE_CUDA_ARCHITECTURES}' --cuda-path=${CUDA_ROOT}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda -Xsycl-target-backend --cuda-gpu-arch=sm_${CMAKE_CUDA_ARCHITECTURES}")
   else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS}")
   endif()
