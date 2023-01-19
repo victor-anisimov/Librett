@@ -21,6 +21,7 @@ hipTT    port of cuTT: Luke Roskop (HPE), Dmitry Lyakh (ORNL)
 hipTT    working version: Alessandro Fanfarillo (AMD)
 LibreTT  SYCL port and CUDA,AMD,INTEL platform integration: Victor Anisimov (ANL)
 LibreTT  CMake enhancements and complex-double datatype: Ajay Panyala (PNNL)
+LibreTT  SYCL portability and remove dependency on DPCT: Abhishek Bagusetty (ANL)
 ```
 
 ## Directory Structure
