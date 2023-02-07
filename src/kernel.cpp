@@ -713,7 +713,15 @@ void librettKernelSetSharedMemConfig() {
 const int CACHE_SIZE = 100000;
 #if HIP
   const int MAX_NUMWARP = (1024/64);  // AMD change
-#else // CUDA & SYCL
+#elif SYCL
+  #if LIBRETT_SUBGROUP_SIZE16
+  const int MAX_NUMWARP = (1024/16);
+  #elif LIBRETT_SUBGROUP_SIZE32
+  const int MAX_NUMWARP = (1024/32);
+  #else
+  const int MAX_NUMWARP = (1024/32);
+  #endif
+#else // CUDA
   const int MAX_NUMWARP = (1024/32);
 #endif
 const int MAX_NUMTYPE = 2;

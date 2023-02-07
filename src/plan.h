@@ -35,7 +35,15 @@ All rights reserved.
 
 #if HIP
   const int TILEDIM = 64;   // AMD change
-#else
+#elif SYCL
+  #if LIBRETT_SUBGROUP_SIZE16
+  const int TILEDIM = 16;
+  #elif LIBRETT_SUBGROUP_SIZE32
+  const int TILEDIM = 32;
+  #else
+  const int TILEDIM = 32;
+  #endif
+#else // CUDA
   const int TILEDIM = 32;
 #endif
 const int TILEROWS = 8;

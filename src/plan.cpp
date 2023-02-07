@@ -1078,7 +1078,15 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
   // L2 cache line width is 32 bytes
 #if HIP
   const int cacheWidth = 64/sizeofType;  // AMD change
-#else
+#elif SYCL
+  #if LIBRETT_SUBGROUP_SIZE16
+  const int cacheWidth = 16/sizeofType;
+  #elif LIBRETT_SUBGROUP_SIZE32
+  const int cacheWidth = 32/sizeofType;
+  #else
+  const int cacheWidth = 32/sizeofType;
+  #endif
+#else // CUDA
   const int cacheWidth = 32/sizeofType;
 #endif
 

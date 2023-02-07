@@ -79,10 +79,16 @@ GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
 GPUROOT = $(GPU_PATH)
 
 # JiT compilation
-CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL
+CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL 
+LDFLAGS =
 
 # AoT compilation
-CFLAGS += -sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7"
+CFLAGS += -sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict -fsycl-targets=spir64_gen 
+LDFLAGS += -Xsycl-target-backend "-device 12.60.7"
+
+# Sub-group size (supported sizes are 16 and 32 only)
+#CFLAGS += -DLIBRETT_SUBGROUP_SIZE32 -fsycl-default-sub-group-size=32
+CFLAGS += -DLIBRETT_SUBGROUP_SIZE16 -fsycl-default-sub-group-size=16
 
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
@@ -113,15 +119,15 @@ lib/librett.a: $(OBJSLIB)
 
 bin/example : lib/librett.a $(OBJSTEST1)
 	mkdir -p bin
-	$(HOST_CC) -o bin/example $(CFLAGS) $(OBJSTEST1) lib/librett.a
+	$(HOST_CC) -o bin/example $(CFLAGS) $(LDFLAGS) $(OBJSTEST1) lib/librett.a
 
 bin/librett_test : lib/librett.a $(OBJSTESTX)
 	mkdir -p bin
-	$(HOST_CC) -o bin/librett_test $(CFLAGS) $(OBJSTESTX) lib/librett.a
+	$(HOST_CC) -o bin/librett_test $(CFLAGS) $(LDFLAGS) $(OBJSTESTX) lib/librett.a
 
 bin/librett_bench : lib/librett.a $(OBJSBENCH)
 	mkdir -p bin
-	$(HOST_CC) -o bin/librett_bench $(CFLAGS) $(OBJSBENCH) lib/librett.a
+	$(HOST_CC) -o bin/librett_bench $(CFLAGS) $(LDFLAGS) $(OBJSBENCH) lib/librett.a
 
 clean:
 	rm -f $(OBJS)
@@ -135,10 +141,9 @@ clean:
 
 build/%.o : src/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
+	$(HOST_CC) -M $(CFLAGS) $< > build/$*.d
 #	$(HOST_CC) -E $(CFLAGS) $< > build/$*.i
-#	$(HOST_CC) -M $(CFLAGS) $< > build/$*.d
 
 build/%.o : tests/%.cpp
 	$(HOST_CC) -c $(CFLAGS) -o build/$*.o $<
-	echo -e 'build/\c' > build/$*.d
 	$(HOST_CC) -M $(CFLAGS) $< >> build/$*.d
