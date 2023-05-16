@@ -7,7 +7,7 @@ before_script:
 
 stages:
   - shell
-  - arcticus
+  - pvc
   - v100
   - mi100
 
@@ -23,10 +23,10 @@ shell_executor:
     - echo "Running on $(hostname) with setuid shell runner"
 
 # Arcticus using Generic batch executor  
-arcticus:
+pvc:
   variables:
-    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 90 -q arcticus"
-  stage: arcticus
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 60 -q florentia"
+  stage: pvc
   needs: []
   tags:
     - batch
@@ -34,7 +34,7 @@ arcticus:
     - echo "SYCL test start"
     - id
     - hostname
-    - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
+    - echo "Running on $(hostname) with setuid batch runner on PVC with generic batch"
     - module load oneapi
     - module load cmake
     - export ZE_AFFINITY_MASK=0.0
@@ -63,7 +63,7 @@ v100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_v100_smx2_debug"
   stage: v100
-  needs: ["arcticus"]
+  needs: ["pvc"]
   tags:
     - batch
   script:
