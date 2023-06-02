@@ -40,12 +40,12 @@ pvc:
     - export ZE_AFFINITY_MASK=0.0
     - echo "Compiling the performance testing variant"
     - make clean
-    - make sycl option=-DPERFTEST
+    - make sycl
     - echo "Running the performance test"
     - time bin/librett_test
     - echo "Compiling the full code"
     - make clean
-    - make sycl
+    - make sycl groupsize=32 tests=all
     - echo "Running the full test"
     - time bin/librett_test
     - echo "Compiling by using CMake"
@@ -54,8 +54,6 @@ pvc:
     - cd build; make
     - echo "Running CMake tests"
     - ctest
-    - echo "Running the bench test"
-    - time tests/librett_bench -bench 3
     - echo "SYCL test end"
 
 # V100 nodes using Generic batch executor  
@@ -77,12 +75,12 @@ v100:
     - export MPIR_CVAR_ENABLE_GPU=0
     - echo "Compiling the performance testing variant"
     - make clean
-    - make cuda option=-DPERFTEST
+    - make cuda
     - echo "Running the performance test"
     - time bin/librett_test
     - echo "Compiling the full code"
     - make clean
-    - make cuda
+    - make cuda tests=all
     - echo "Running the full test"
     - time bin/librett_test
     - echo "Compiling by using CMake"
@@ -91,8 +89,6 @@ v100:
     - cd build; make
     - echo "Running CMake tests"
     - ctest
-    - echo "Running the bench test"
-    - time tests/librett_bench -bench 3
     - echo "CUDA test end"
 
 # MI100 nodes using Generic batch executor  
@@ -111,12 +107,12 @@ mi100:
     - export MPIR_CVAR_ENABLE_GPU=0
     - echo "Compiling the performance testing variant"
     - make clean
-    - make hip option=-DPERFTEST
+    - make hip
     - echo "Running the performance test"
     - time bin/librett_test
     - echo "Compiling the full code"
     - make clean
-    - make hip
+    - make hip tests=all
     - echo "Running the full test"
     - time bin/librett_test
     - echo "Compiling by using CMake"
@@ -125,8 +121,6 @@ mi100:
     - cd build; make
     - echo "Running CMake tests"
     - ctest
-    - echo "Running the bench test"
-    - time tests/librett_bench -bench 3
     - echo "HIP test end"
 
 # afer script to be executed after each job

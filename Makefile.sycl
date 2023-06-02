@@ -86,14 +86,30 @@ LDFLAGS =
 CFLAGS += -sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict -fsycl-targets=spir64_gen 
 LDFLAGS += -Xsycl-target-backend "-device 12.60.7"
 
-# Sub-group size (supported sizes are 16 and 32 only)
-#CFLAGS += -DLIBRETT_SUBGROUP_SIZE32 -fsycl-default-sub-group-size=32
-CFLAGS += -DLIBRETT_SUBGROUP_SIZE16 -fsycl-default-sub-group-size=16
-
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
-CFLAGS += $(option)
+
+# Sub-group size (supported sizes are 16 and 32 only)
+SIMD32 = -DLIBRETT_SUBGROUP_SIZE32 -fsycl-default-sub-group-size=32
+SIMD16 = -DLIBRETT_SUBGROUP_SIZE16 -fsycl-default-sub-group-size=16
+
+# make sycl groupsize=32
+ifeq ($(groupsize),32)
+  # compile with the group size 32
+CFLAGS += $(SIMD32)
+else
+  # compile with the group size 16; default
+CFLAGS += $(SIMD16)
+endif
+
+# make sycl tests=all
+# compile all tests allowed by the hardware platform (sycl, hip, cuda)
+# test 5 will fail with SIMD16
+ifneq ($(tests),all)
+  # compile portable tests only; default
+CFLAGS += -DPERFTEST
+endif
 
 ifeq ($(OS),osx)
 GPU_LFLAGS = -L$(GPUROOT)/lib

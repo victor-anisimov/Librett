@@ -95,7 +95,13 @@ CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++11 $(DEFS) $(OPTLEV) -fPIC -DHIP -D
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
-CFLAGS += $(option)
+
+# make hip tests=all
+# compile all tests allowed by the hardware platform (sycl, hip, cuda)
+ifneq ($(tests),all)
+  # compile portable tests only; default
+CFLAGS += -DPERFTEST
+endif
 
 CUDA_CFLAGS = --amdgpu-target=gfx906,gfx908,gfx90a -std=c++11 $(OPTLEV) -DHIP -D_FORCE_INLINES
 
