@@ -35,6 +35,7 @@ if(ENABLE_CUDA)
   set(ENABLE_HIP OFF)
   set(ENABLE_SYCL OFF)
   option(CMAKE_CUDA_ARCHITECTURES 70)
+
   set(LIBRETT_COMPILE_DEFS LIBRETT_USES_CUDA)
 endif()
 
@@ -99,6 +100,7 @@ if(ENABLE_HIP)
 
   list (APPEND CMAKE_PREFIX_PATH ${ROCM_PATH} ${ROCM_PATH}/hip)
   find_package(hip REQUIRED)
+  set(GPU_TARGETS "${CMAKE_HIP_ARCHITECTURES}" CACHE STRING "GPU targets to compile for")
 
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -D_FORCE_INLINES")
@@ -114,7 +116,7 @@ if(ENABLE_SYCL)
   endif()
 
   set(LIBRETT_CXX_FLAGS "-sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict")
-  
+
   if(ENABLE_SYCL_HIP)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=${CMAKE_HIP_ARCHITECTURES} -DLIBRETT_SUBGROUP_SIZE32 -fsycl-default-sub-group-size=32")
   elseif(ENABLE_SYCL_CUDA)
