@@ -33,6 +33,12 @@ set(DEVICE_SOURCE_FILES
 
 add_library(librett ${LIBRETT_SOURCE_FILES})
 
+if (BUILD_SHARED_LIBS)
+  set_target_properties(librett PROPERTIES LIBRARY_OUTPUT_NAME rett)
+else(BUILD_SHARED_LIBS)
+  set_target_properties(librett PROPERTIES ARCHIVE_OUTPUT_NAME librett)
+endif(BUILD_SHARED_LIBS)
+
 if(ENABLE_SYCL)
   target_compile_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
   target_link_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
