@@ -24,6 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 
 #include "GpuMemcpy.h"
+#include "GpuUtils.h"
 
 // suppress Clang warning about it being unable to unroll a loop
 #if defined(__clang__)
