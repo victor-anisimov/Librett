@@ -77,6 +77,9 @@ if(ENABLE_CUDA)
 
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
+  # since we don't add CUDA to LANGUAGES need to discover the toolkit to be able to use its targets
+  find_package(CUDAToolkit)
+
   option(ENABLE_NVTOOLS "Enable nvvp profiling of CPU code" OFF)
 
   # ENABLE_NVTOOLS
