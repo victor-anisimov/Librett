@@ -146,34 +146,10 @@ if (ENABLE_UMPIRE)
     message(STATUS "Will use Umpire allocator named \"${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR}\"")
 endif ()
 
-add_subdirectory(src)
-
-add_library(librett::librett ALIAS librett)
-target_compile_definitions(librett PUBLIC ${LIBRETT_COMPILE_DEFS})
-if(ENABLE_HIP)
-  target_link_libraries(librett PUBLIC hip::device)
-endif()
-
-set(LIBRETT_HEADERS
-	src/librett.h
-)
-
-
-# Install
-
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/librett)
 
-install(TARGETS librett
-    EXPORT librett-targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-set_target_properties(librett PROPERTIES EXPORT_NAME librett)
-
-#Install headers
-install(FILES ${LIBRETT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
+add_subdirectory(src)
 
 #Export the targets to a script
 install(EXPORT librett-targets

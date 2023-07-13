@@ -31,6 +31,10 @@ set(DEVICE_SOURCE_FILES
   GpuUtils.cpp
   kernel.cpp)
 
+set(LIBRETT_HEADERS
+        src/librett.h
+        )
+
 add_library(librett ${LIBRETT_SOURCE_FILES})
 
 if (BUILD_SHARED_LIBS)
@@ -58,5 +62,24 @@ if(ENABLE_UMPIRE)
   target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
 endif(ENABLE_UMPIRE)
 
+
+add_library(librett::librett ALIAS librett)
+target_compile_definitions(librett PUBLIC ${LIBRETT_COMPILE_DEFS})
+if(ENABLE_HIP)
+  target_link_libraries(librett PUBLIC hip::device)
+endif()
+
+# Install
+
+install(TARGETS librett
+        EXPORT librett-targets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+
+set_target_properties(librett PROPERTIES EXPORT_NAME librett)
+
+#Install headers
+install(FILES ${LIBRETT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
 
 
