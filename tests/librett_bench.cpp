@@ -154,14 +154,14 @@ int main(int argc, char *argv[])
 
   gpuStream = new sycl::queue(sycl::gpu_selector_v, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
 #elif HIP
-  hipStreamCreate(&gpustream);
+  hipStreamCreate(&gpuStream);
   if (elemsize == 4) {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeFourByte));
   } else {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
   }
 #else // CUDA
-  cudaStreamCreate(&gpustream);
+  cudaStreamCreate(&gpuStream);
   if (elemsize == 4) {
     cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte));
   } else {
