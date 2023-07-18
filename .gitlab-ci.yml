@@ -92,11 +92,12 @@ v100:
     - echo "CUDA test end"
 
 # MI100 nodes using Generic batch executor  
+#  needs: ["v100"]
 mi100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_amd_mi100"
   stage: mi100
-  needs: ["v100"]
+  needs: []
   tags:
     - batch
   script:
@@ -106,6 +107,8 @@ mi100:
     - echo "Running on $(hostname) with setuid batch runner on mi100 with generic batch"
     - export MPIR_CVAR_ENABLE_GPU=0
     - echo "Compiling the performance testing variant"
+    - module use /soft/modulefiles
+    - module load rocm/5.5.0 cmake
     - make clean
     - make hip
     - echo "Running the performance test"
