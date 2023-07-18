@@ -63,7 +63,7 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
   const int warpSize = sg.get_local_range().get(0);
 #elif HIP
   __shared__ T shTile[TILEDIM][TILEDIM];
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   __shared__ T shTile[TILEDIM][TILEDIM+1];
 #endif
 
@@ -96,7 +96,7 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
   const unsigned long long int maskIny = __ballot((yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned long long int maskOutx = __ballot((xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
   const unsigned long long int one = 1;
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   const unsigned int maskIny = __ballot_sync(0xffffffff,(yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned int maskOutx = __ballot_sync(0xffffffff,(xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
   const unsigned int one = 1;
@@ -121,7 +121,7 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
       #if HIP
         posMajorIn += __shfl_xor(posMajorIn,i);
         posMajorOut += __shfl_xor(posMajorOut,i);
-      #elif CUDA
+      #elif LIBRETT_USES_CUDA
         posMajorIn += __shfl_xor_sync(0xffffffff,posMajorIn,i);
         posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
       #endif
@@ -194,7 +194,7 @@ __global__ void transposePacked(
   const int warpSize = sg.get_local_range().get(0);
 #elif HIP
   HIP_DYNAMIC_SHARED( char, shBuffer_char)
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   extern __shared__ char shBuffer_char[];
 #endif
   T* shBuffer = (T *)shBuffer_char;
@@ -239,7 +239,7 @@ __global__ void transposePacked(
         posMmkIn[j]  += ((posMmk / __shfl(Mmk.c_in,i))  % __shfl(Mmk.d_in,i))  * __shfl(Mmk.ct_in,i);
         posMmkOut[j] += ((posMmk / __shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
         posSh[j]     += ((posMmk / __shfl(Msh.c,i))     % __shfl(Msh.d,i))     * __shfl(Msh.ct,i);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
         posMmkIn[j]  += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_in,i))  % __shfl_sync(0xffffffff,Mmk.d_in,i))
                                                                         * __shfl_sync(0xffffffff,Mmk.ct_in,i);
         posMmkOut[j] += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_out,i)) % __shfl_sync(0xffffffff,Mmk.d_out,i))
@@ -274,7 +274,7 @@ __global__ void transposePacked(
       #if HIP
 	posMbarOut += __shfl_xor(posMbarOut,i);
 	posMbarIn  += __shfl_xor(posMbarIn,i);
-      #elif CUDA
+      #elif LIBRETT_USES_CUDA
         posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
         posMbarIn  += __shfl_xor_sync(0xffffffff,posMbarIn,i);
       #endif
@@ -341,7 +341,7 @@ __global__ void transposePackedSplit(
   const int warpSize = sg.get_local_range().get(0);
 #elif HIP
   HIP_DYNAMIC_SHARED( char, shBuffer_char)
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   extern __shared__ char shBuffer_char[];
 #endif
   T* shBuffer = (T *)shBuffer_char;
@@ -439,7 +439,7 @@ __global__ void transposePackedSplit(
       #if HIP
         posMbarOut += __shfl_xor(posMbarOut,i);
         posMbarIn += __shfl_xor(posMbarIn,i);
-      #elif CUDA
+      #elif LIBRETT_USES_CUDA
         posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
         posMbarIn += __shfl_xor_sync(0xffffffff,posMbarIn,i);
       #endif
@@ -523,7 +523,7 @@ __global__ void transposeTiledCopy(
 #elif HIP // AMD change
   const unsigned long long int mask = __ballot((y + warpLane < tiledVol.y))*(x < tiledVol.x);
   const unsigned long long int one = 1;
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   const unsigned int mask = __ballot_sync(0xffffffff,(y + warpLane < tiledVol.y))*(x < tiledVol.x);
   const unsigned int one = 1;
 #endif
@@ -548,7 +548,7 @@ __global__ void transposeTiledCopy(
       #if HIP
         posMajorIn += __shfl_xor(posMajorIn,i);
         posMajorOut += __shfl_xor(posMajorOut,i);
-      #elif CUDA
+      #elif LIBRETT_USES_CUDA
         posMajorIn  += __shfl_xor_sync(0xffffffff,posMajorIn,i);
         posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
       #endif
@@ -682,7 +682,7 @@ __global__ void transposeTiledCopy(
 // Sets shared memory bank configuration for all kernels. Needs to be called once per device.
 //
 void librettKernelSetSharedMemConfig() {
-#if LIBRETT_USES_CUDA // CUDA
+#if LIBRETT_USES_CUDA
   #define CALL(NREG) cudaCheck(cudaFuncSetSharedMemConfig(transposePacked<float, NREG>, cudaSharedMemBankSizeFourByte ))
   #include "calls.h"
   #undef CALL
@@ -705,7 +705,7 @@ void librettKernelSetSharedMemConfig() {
   cudaCheck(cudaFuncSetSharedMemConfig(transposeTiled<double>, cudaSharedMemBankSizeEightByte));
   cudaCheck(cudaFuncSetSharedMemConfig(transposeTiledCopy<double>, cudaSharedMemBankSizeEightByte));
 
-#endif // CUDA
+#endif // LIBRETT_USES_CUDA
 }
 
 // Caches for PackedSplit kernels. One cache for all devices
@@ -721,7 +721,7 @@ const int CACHE_SIZE = 100000;
   #else
   const int MAX_NUMWARP = (1024/32);
   #endif
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   const int MAX_NUMWARP = (1024/32);
 #endif
 const int MAX_NUMTYPE = 2;
@@ -771,7 +771,7 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
           Librett::syclGetDeviceCount(&numDevices);
         #elif HIP
           hipCheck(hipGetDeviceCount(&numDevices));
-        #else // CUDA
+        #elif LIBRETT_USES_CUDA
           cudaCheck(cudaGetDeviceCount(&numDevices));
         #endif
       }
@@ -1056,7 +1056,7 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut)
 #elif HIP
       hipCheck(hipMemcpyAsync(dataOut, dataIn, ts.volMmk*ts.volMbar*plan.sizeofType,
         hipMemcpyDefault, plan.stream));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       cudaCheck(cudaMemcpyAsync(dataOut, dataIn, ts.volMmk*ts.volMbar*plan.sizeofType,
         cudaMemcpyDefault, plan.stream));
 #endif

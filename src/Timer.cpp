@@ -45,7 +45,7 @@ SOFTWARE.
       hipCheck(hipEventDestroy(tmend));
     }
 
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     Timer::Timer() {
       cudaCheck(cudaEventCreate(&tmstart));
       cudaCheck(cudaEventCreate(&tmend));
@@ -65,7 +65,7 @@ void Timer::start()
     }
   #elif HIP
     { hipCheck(hipEventRecord(tmstart, 0)); }
-  #else  // CUDA
+  #elif LIBRETT_USES_CUDA
     { cudaCheck(cudaEventRecord(tmstart, 0)); }
   #endif
 #else  // GPU_EVENT_TIMER
@@ -84,7 +84,7 @@ void Timer::stop()
       hipCheck(hipEventRecord(tmend, 0));
       hipCheck(hipEventSynchronize(tmend));
     }
-  #else  // CUDA
+  #elif LIBRETT_USES_CUDA
     {
       cudaCheck(cudaEventRecord(tmend, 0));
       cudaCheck(cudaEventSynchronize(tmend));
@@ -97,7 +97,7 @@ void Timer::stop()
       dpct::get_current_device().queues_wait_and_throw();
     #elif HIP
       hipCheck(hipDeviceSynchronize());
-    #else // CUDA
+    #elif LIBRETT_USES_CUDA
       cudaCheck(cudaDeviceSynchronize());
     #endif
     tmend = std::chrono::high_resolution_clock::now();
@@ -121,7 +121,7 @@ double Timer::seconds()
     hipCheck(hipEventElapsedTime(&ms, tmstart, tmend));
     return (double)(ms/1000.0f);
     }
-  #else  // CUDA
+  #elif LIBRETT_USES_CUDA
     {
     float ms;
     cudaCheck(cudaEventElapsedTime(&ms, tmstart, tmend));

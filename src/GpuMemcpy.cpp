@@ -24,6 +24,7 @@ SOFTWARE.
 *******************************************************************************/
 
 #include "GpuMemcpy.h"
+#include "GpuUtils.h"
 
 // suppress Clang warning about it being unable to unroll a loop
 #if defined(__clang__)
@@ -69,7 +70,7 @@ void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t& stream)
      0, stream, n, data_in, data_out);
 
   hipCheck(hipGetLastError());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   scalarCopyKernel<T> <<< numblock, numthread, 0, stream >>> (n, data_in, data_out);
 
   cudaCheck(cudaGetLastError());
@@ -125,7 +126,7 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t& stream) {
      shmemsize, stream, n, data_in, data_out);
 
   hipCheck(hipGetLastError());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   vectorCopyKernel<T> <<< numblock, numthread, shmemsize, stream >>> (n, data_in, data_out);
 
   cudaCheck(cudaGetLastError());
@@ -194,7 +195,7 @@ void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t& stre
      shmemsize, stream , n/4, (float4_t *)data_in, (float4_t *)data_out);
 
   hipCheck(hipGetLastError());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   memcpyFloatKernel<NUM_ELEM> <<< numblock, numthread, shmemsize, stream >>>
   (n/4, (float4_t *)data_in, (float4_t *)data_out);
 

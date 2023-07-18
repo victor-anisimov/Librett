@@ -7,9 +7,9 @@ before_script:
 
 stages:
   - shell
-  - pvc
   - v100
   - mi100
+  - pvc
 
 # Shell executor will be executed like you are logged in directly to a JLSE login node
 shell_executor:
@@ -117,7 +117,7 @@ mi100:
     - time bin/librett_test
     - echo "Compiling by using CMake"
     - make clean
-    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc
+    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc -DCMAKE_HIP_ARCHITECTURES=gfx908
     - cd build; make
     - echo "Running CMake tests"
     - ctest

@@ -71,10 +71,10 @@ CPU = ppc64
 endif
 
 # Set optimization level
-OPTLEV = -O3
+OPTLEV = -O3 -g
 
 # Defines
-DEFS =
+DEFS = -DLIBRETT_USES_CUDA
 
 ifdef ENABLE_NVTOOLS
 DEFS += -DENABLE_NVTOOLS

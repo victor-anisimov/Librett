@@ -43,7 +43,7 @@ All rights reserved.
   #else
   const int TILEDIM = 32;
   #endif
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   const int TILEDIM = 32;
 #endif
 const int TILEROWS = 8;

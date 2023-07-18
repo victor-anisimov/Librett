@@ -60,7 +60,7 @@ void getDeviceProp(int& deviceID, gpuStream_t& stream, gpuDeviceProp_t &prop) {
 
   #if HIP
     hipCheck(hipGetDevice(&deviceID));
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaGetDevice(&deviceID));
   #endif
 
@@ -72,7 +72,7 @@ void getDeviceProp(int& deviceID, gpuStream_t& stream, gpuDeviceProp_t &prop) {
     #elif HIP
       hipCheck(hipGetDeviceProperties(&prop, deviceID));
       librettKernelSetSharedMemConfig();
-    #else // CUDA
+    #elif LIBRETT_USES_CUDA
       cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
       librettKernelSetSharedMemConfig();
     #endif
@@ -295,7 +295,7 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
     stream->wait_and_throw();
 #elif HIP
     hipCheck(hipStreamSynchronize(stream));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamSynchronize(stream));
 #endif
 

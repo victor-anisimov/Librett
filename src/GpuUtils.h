@@ -44,7 +44,7 @@ static int warp_size = 64;  // AMD change
       exit(1);                                                                      \
     }                                                                               \
   } while(0)
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   #define cudaCheck(stmt) do {                                                      \
     cudaError_t err = stmt;                                                         \
     if(err != cudaSuccess) {                                                        \

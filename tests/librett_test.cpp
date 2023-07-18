@@ -76,7 +76,7 @@ void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
   master_gpustream->wait_and_throw();
   #elif HIP
   hipCheck(hipDeviceSynchronize());
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
   #endif
 }
@@ -88,7 +88,7 @@ void CreateGpuStream(gpuStream_t& master_gpustream) {
   master_gpustream = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   #elif HIP
   hipCheck(hipStreamCreate(&master_gpustream));
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamCreate(&master_gpustream));
   #endif
 }
@@ -98,7 +98,7 @@ void DestroyGpuStream(gpuStream_t& master_gpustream) {
   delete master_gpustream;
   #elif HIP
   hipCheck(hipStreamDestroy(master_gpustream));
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamDestroy(master_gpustream));
   #endif
 }
@@ -152,8 +152,8 @@ int main(int argc, char *argv[])
   delete timerFloat;
   delete timerDouble;
 
-  DeviceReset();
   DestroyGpuStream(gpumasterstream);
+  DeviceReset();
 
   if(passed)
     return 0;
@@ -434,7 +434,7 @@ bool test4()
   for (int i=0;i < numStream;i++) {
     hipCheck(hipStreamCreate(&streams[i]));
   }
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   for (int i=0;i < numStream;i++) {
     cudaCheck(cudaStreamCreate(&streams[i]));
   }
@@ -453,7 +453,7 @@ bool test4()
   }
 #elif HIP
   hipCheck(hipDeviceSynchronize());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
@@ -465,7 +465,7 @@ bool test4()
   }
 #elif HIP
   hipCheck(hipDeviceSynchronize());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
@@ -476,7 +476,7 @@ bool test4()
     delete streams[i];
 #elif HIP
     hipCheck(hipStreamDestroy(streams[i]));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamDestroy(streams[i]));
 #endif
   }
@@ -548,7 +548,7 @@ bool test_tensor(std::vector<int> &dim, std::vector<int> &permutation, gpuStream
   gpustream->wait_and_throw();
 #elif HIP
   hipCheck(hipDeviceSynchronize());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
 
