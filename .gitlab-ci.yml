@@ -61,7 +61,7 @@ v100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_v100_smx2_debug"
   stage: v100
-  needs: ["pvc"]
+  needs: []
   tags:
     - batch
   script:
