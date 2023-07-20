@@ -37,8 +37,25 @@ src/                Source code directory
 ```
 
 ## Manual Compilation
+`make cuda [tests=all]`
 
-`make platform [option=-DPERFTEST]` where platform = cuda, hip, or sycl. The option=-DPERFTEST compiles the light version of librett_test suitable for performance analysis. EXAMPLE: `make hip option=-DPERFTEST`
+`make hip  [tests=all]`
+
+`make sycl [groupsize=16 | groupsize=32] [tests=all]` 
+
+The default mode `make cuda | hip | sycl` will compile portable tests only, i.e. tests 1, 2, and 3.
+
+The option `tests=all` instructs the build process to compile all tests in librett_test.cpp.
+
+CUDA: Use `make cuda tests=all` to build all tests or `make cuda` to build only portable tests.
+
+HIP:  Use `make hip` to build only portable tests since non-portable tests 4 and 5 will fail for HIP platform.
+
+SYCL: Use `make sycl` to build only portable tests. The `groupsize=16` is default for SYCL platform. 
+
+The non-portable test 5 will fail with `make sycl groupsize=16 tests=all`. 
+
+Use `make sycl groupsize=32 tests=all` to check that all tests pass.
 
 ## The outcome of manual build
 

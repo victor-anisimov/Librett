@@ -52,7 +52,7 @@ void CreateGpuStream(gpuStream_t& master_gpustream) {
   master_gpustream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   #elif HIP
   hipCheck(hipStreamCreate(&master_gpustream));
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamCreate(&master_gpustream));
   #endif
 }
@@ -62,7 +62,7 @@ void DestroyGpuStream(gpuStream_t& master_gpustream) {
   delete master_gpustream;
   #elif HIP
   hipCheck(hipStreamDestroy(master_gpustream));
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamDestroy(master_gpustream));
   #endif
 }
@@ -72,7 +72,7 @@ void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
   master_gpustream->wait_and_throw();
   #elif HIP
   hipCheck(hipStreamSynchronize(master_gpustream));
-  #elif CUDA
+  #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamSynchronize(master_gpustream));
   #endif
 }
@@ -109,8 +109,8 @@ int main(int argc, char *argv[])
   deallocate_device<std::complex<double>>(&dataIn, gpumasterstream);
   deallocate_device<std::complex<double>>(&dataOut, gpumasterstream);
 
-  DeviceReset();
   DestroyGpuStream(gpumasterstream);
+  DeviceReset();
 
   if(passed)
     return 0;

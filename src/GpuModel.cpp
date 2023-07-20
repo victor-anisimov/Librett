@@ -29,9 +29,7 @@ SOFTWARE.
 #include <cstring> // memcpy
 #include "GpuModel.h"
 #include "GpuModelKernel.h"
-#ifdef ENABLE_NVTOOLS
 #include "GpuUtils.h"
-#endif
 
 // #define CALC_L1_CACHELINES
 
@@ -769,7 +767,7 @@ struct GpuModelProp {
   double fac;
 
   GpuModelProp(int major) {
-    #if CUDA
+    #if LIBRETT_USES_CUDA
     if (major <= 3) {
       // Kepler
       base_dep_delay = 14.0;
@@ -1378,7 +1376,7 @@ const int shTestData[138][3] =
                                 sycl::property_list{sycl::property::queue::in_order{}});
     #elif HIP
     hipCheck(hipStreamCreate(&gpustream));
-    #elif CUDA
+    #elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamCreate(&gpustream));    
     #endif
     for (int i=0;i < numArray;i++) {

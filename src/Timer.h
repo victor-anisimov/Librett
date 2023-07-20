@@ -58,7 +58,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> tmend_ct1;
   #elif HIP
     hipEvent_t tmstart, tmend;
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaEvent_t tmstart, tmend;
   #endif
 #else

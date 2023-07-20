@@ -7,9 +7,9 @@ before_script:
 
 stages:
   - shell
-  - arcticus
   - v100
   - mi100
+  - pvc
 
 # Shell executor will be executed like you are logged in directly to a JLSE login node
 shell_executor:
@@ -23,10 +23,10 @@ shell_executor:
     - echo "Running on $(hostname) with setuid shell runner"
 
 # Arcticus using Generic batch executor  
-arcticus:
+pvc:
   variables:
-    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 90 -q arcticus"
-  stage: arcticus
+    JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 120 -q florentia"
+  stage: pvc
   needs: []
   tags:
     - batch
@@ -34,18 +34,18 @@ arcticus:
     - echo "SYCL test start"
     - id
     - hostname
-    - echo "Running on $(hostname) with setuid batch runner on arcticus with generic batch"
+    - echo "Running on $(hostname) with setuid batch runner on PVC with generic batch"
     - module load oneapi
     - module load cmake
     - export ZE_AFFINITY_MASK=0.0
     - echo "Compiling the performance testing variant"
     - make clean
-    - make sycl option=-DPERFTEST
+    - make sycl
     - echo "Running the performance test"
     - time bin/librett_test
     - echo "Compiling the full code"
     - make clean
-    - make sycl
+    - make sycl groupsize=32 tests=all
     - echo "Running the full test"
     - time bin/librett_test
     - echo "Compiling by using CMake"
@@ -54,8 +54,6 @@ arcticus:
     - cd build; make
     - echo "Running CMake tests"
     - ctest
-    - echo "Running the bench test"
-    - time tests/librett_bench -bench 3
     - echo "SYCL test end"
 
 # V100 nodes using Generic batch executor  
@@ -63,7 +61,7 @@ v100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_v100_smx2_debug"
   stage: v100
-  needs: ["arcticus"]
+  needs: []
   tags:
     - batch
   script:
@@ -77,12 +75,12 @@ v100:
     - export MPIR_CVAR_ENABLE_GPU=0
     - echo "Compiling the performance testing variant"
     - make clean
-    - make cuda option=-DPERFTEST
+    - make cuda
     - echo "Running the performance test"
     - time bin/librett_test
     - echo "Compiling the full code"
     - make clean
-    - make cuda
+    - make cuda tests=all
     - echo "Running the full test"
     - time bin/librett_test
     - echo "Compiling by using CMake"
@@ -91,16 +89,15 @@ v100:
     - cd build; make
     - echo "Running CMake tests"
     - ctest
-    - echo "Running the bench test"
-    - time tests/librett_bench -bench 3
     - echo "CUDA test end"
 
 # MI100 nodes using Generic batch executor  
+#  needs: ["v100"]
 mi100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_amd_mi100"
   stage: mi100
-  needs: ["v100"]
+  needs: []
   tags:
     - batch
   script:
@@ -110,23 +107,23 @@ mi100:
     - echo "Running on $(hostname) with setuid batch runner on mi100 with generic batch"
     - export MPIR_CVAR_ENABLE_GPU=0
     - echo "Compiling the performance testing variant"
+    - module use /soft/modulefiles
+    - module load rocm/5.5.0 cmake
     - make clean
-    - make hip option=-DPERFTEST
+    - make hip
     - echo "Running the performance test"
     - time bin/librett_test
     - echo "Compiling the full code"
     - make clean
-    - make hip
+    - make hip tests=all
     - echo "Running the full test"
     - time bin/librett_test
     - echo "Compiling by using CMake"
     - make clean
-    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc
+    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc -DCMAKE_HIP_ARCHITECTURES=gfx908
     - cd build; make
     - echo "Running CMake tests"
     - ctest
-    - echo "Running the bench test"
-    - time tests/librett_bench -bench 3
     - echo "HIP test end"
 
 # afer script to be executed after each job

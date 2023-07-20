@@ -56,7 +56,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
   auto shPos = (unsigned int *)dpct_local;
 #elif HIP
   HIP_DYNAMIC_SHARED( unsigned int, shPos)
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   extern __shared__ unsigned int shPos[];
 #endif
 
@@ -80,7 +80,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
       refVal += ((i / sg.shuffle(tc.c, j)) % sg.shuffle(tc.d, j)) * sg.shuffle(tc.ct, j);
 #elif HIP
       refVal += ((i/__shfl(tc.c,j)) % __shfl(tc.d,j))*__shfl(tc.ct,j);
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       refVal += ((i/__shfl_sync(0xffffffff,tc.c,j)) % __shfl_sync(0xffffffff,tc.d,j))*__shfl_sync(0xffffffff,tc.ct,j);
 #endif
     }
@@ -114,7 +114,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
     sycl::group_barrier( wrk_grp );
     shPos[threadIdx_x] = sycl::min(posval, shPos[threadIdx_x]);
     sycl::group_barrier( wrk_grp );
-#else // CUDA or HIP
+#elif LIBRETT_USES_CUDA
     syncthreads();
     shPos[threadIdx_x] = min(posval, shPos[threadIdx_x]);
     syncthreads();
@@ -177,7 +177,7 @@ void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata)
   int numblock = min(65535, (ndata - 1)/numthread + 1 );
   hipLaunchKernelGGL(setTensorCheckPatternKernel, dim3(numblock), dim3(numthread ), 0, this->tt_gpustream, data, ndata);
   hipCheck(hipGetLastError());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   int numblock = min(65535, (ndata - 1)/numthread + 1 );
   setTensorCheckPatternKernel<<< numblock, numthread, 0, this->tt_gpustream >>>(data, ndata);
   cudaCheck(cudaGetLastError());

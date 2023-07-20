@@ -1086,7 +1086,7 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
   #else
   const int cacheWidth = 32/sizeofType;
   #endif
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   const int cacheWidth = 32/sizeofType;
 #endif
 
