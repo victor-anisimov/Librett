@@ -92,15 +92,13 @@ endif(ENABLE_CUDA)
 #enable HIP
 if(ENABLE_HIP)
   message(STATUS "Compiling for HIP platform")
-  enable_language(HIP)
 
-  if(DEFINED ENV{ROCM_PATH})
-    set(ROCM_PATH "$ENV{ROCM_PATH}")
-  endif()
-
-  list (APPEND CMAKE_PREFIX_PATH ${ROCM_PATH} ${ROCM_PATH}/hip)
-  find_package(hip REQUIRED)
+  #Set the GPU_TARGETS (before find_package/enable_language) to ensure that the ARCH is
+  #not overridden by cmake
   set(GPU_TARGETS "${CMAKE_HIP_ARCHITECTURES}" CACHE STRING "GPU targets to compile for")
+
+  enable_language(HIP)
+  find_package(hip REQUIRED)
 
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -D_FORCE_INLINES")
