@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
   } else {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeEightByte));
   }
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   cudaStreamCreate(&gpuStream);
   if (elemsize == 4) {
     cudaCheck(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeFourByte));
@@ -384,7 +384,7 @@ end:
 #elif HIP
   hipCheck(hipDeviceSynchronize());
   hipCheck(hipDeviceReset());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
   cudaCheck(cudaDeviceReset());
 #endif
@@ -843,7 +843,7 @@ bool bench_tensor(std::vector<int> &dim, std::vector<int> &permutation, gpuStrea
     q->wait_and_throw();
 #elif HIP
     hipCheck(hipStreamSynchronize(q));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamSynchronize(q));
 #endif
 
@@ -882,7 +882,7 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
       gpuStr->wait_and_throw();
 #elif HIP
       hipCheck(hipStreamSynchronize(gpuStr));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       cudaCheck(cudaStreamSynchronize(gpuStr));
 #endif
 
@@ -905,7 +905,7 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
       gpuStr->wait_and_throw();
 #elif HIP
       hipCheck(hipStreamSynchronize(gpuStr));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       cudaCheck(cudaStreamSynchronize(gpuStr));
 #endif
 
@@ -929,7 +929,7 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
       gpuStr->wait_and_throw();
 #elif HIP
       hipCheck(hipStreamSynchronize(gpuStr));
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       cudaCheck(cudaStreamSynchronize(gpuStr));
 #endif
 
@@ -987,7 +987,7 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
 //     prop.multiProcessorCount, prop.ECCEnabled, mem_BW, shMemBankSize);
 //   printf("L2 %1.2lfMB\n", (double)prop.l2CacheSize/(double)(1024*1024));
 // }
-// #else // CUDA
+// #elif LIBRETT_USES_CUDA
 // void printDeviceInfo() {
 //   int deviceID;
 //   cudaCheck(cudaGetDevice(&deviceID));

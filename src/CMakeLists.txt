@@ -54,7 +54,6 @@ endif(ENABLE_CUDA)
 
 if(ENABLE_HIP)
   set_source_files_properties(${DEVICE_SOURCE_FILES} PROPERTIES LANGUAGE HIP)
-  # set_property(TARGET librett PROPERTY HIP_ARCHITECTURES gfx906 gfx908)
 endif(ENABLE_HIP)
 
 if(ENABLE_UMPIRE)
@@ -71,9 +70,6 @@ if(ENABLE_CUDA)
   else()
     target_link_libraries(librett PUBLIC CUDA::cudart_static)
   endif()
-endif()
-if(ENABLE_HIP)
-  target_link_libraries(librett PUBLIC hip::device)
 endif()
 
 # Install

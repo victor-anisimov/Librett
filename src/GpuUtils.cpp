@@ -40,7 +40,7 @@ void set_device_array_async_T(void *data, int value, const size_t ndata,
     stream->memset(data, value, sizeofT * ndata);
   #elif HIP
     hipCheck(hipMemsetAsync(data, value, sizeofT*ndata, stream));
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemsetAsync(data, value, sizeofT*ndata, stream));
   #endif
 }
@@ -52,7 +52,7 @@ void set_device_array_sync_T(void *data, int value, const size_t ndata,
     stream->memset(data, value, sizeofT * ndata).wait();
   #elif HIP
     hipCheck(hipMemset(data, value, sizeofT*ndata));
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemset(data, value, sizeofT*ndata));
   #endif
 }
@@ -68,7 +68,7 @@ void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len,
     stream->memcpy(d_array, h_array, sizeofT * array_len);
   #elif HIP
     hipCheck(hipMemcpyAsync(d_array, h_array, sizeofT*array_len, hipMemcpyDefault, stream));
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemcpyAsync(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault, stream));
   #endif
 }
@@ -80,7 +80,7 @@ void copy_HtoD_sync_T(const void *h_array, void *d_array, size_t array_len,
     stream->memcpy(d_array, h_array, sizeofT * array_len).wait();
   #elif HIP
     hipCheck(hipMemcpy(d_array, h_array, sizeofT*array_len, hipMemcpyDefault));
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemcpy(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault));
   #endif
 }
@@ -96,7 +96,7 @@ void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_le
     stream->memcpy(h_array, d_array, sizeofT * array_len);
   #elif HIP
     hipCheck(hipMemcpyAsync(h_array, d_array, sizeofT*array_len, hipMemcpyDefault, stream));
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemcpyAsync(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault, stream));
   #endif
 }
@@ -148,7 +148,7 @@ void DeviceReset() {
   #elif HIP
     hipCheck(hipSetDevice(0));
     hipCheck(hipDeviceReset());
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     cudaCheck(cudaSetDevice(0));
     cudaCheck(cudaDeviceReset());
   #endif

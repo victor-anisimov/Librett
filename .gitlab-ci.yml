@@ -7,9 +7,9 @@ before_script:
 
 stages:
   - shell
-  - pvc
   - v100
   - mi100
+  - pvc
 
 # Shell executor will be executed like you are logged in directly to a JLSE login node
 shell_executor:
@@ -61,7 +61,7 @@ v100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_v100_smx2_debug"
   stage: v100
-  needs: ["pvc"]
+  needs: []
   tags:
     - batch
   script:
@@ -92,11 +92,12 @@ v100:
     - echo "CUDA test end"
 
 # MI100 nodes using Generic batch executor  
+#  needs: ["v100"]
 mi100:
   variables:
     JLSE_SCHEDULER_PARAMETERS: "-n 1  -t 30 -q gpu_amd_mi100"
   stage: mi100
-  needs: ["v100"]
+  needs: []
   tags:
     - batch
   script:
@@ -106,6 +107,8 @@ mi100:
     - echo "Running on $(hostname) with setuid batch runner on mi100 with generic batch"
     - export MPIR_CVAR_ENABLE_GPU=0
     - echo "Compiling the performance testing variant"
+    - module use /soft/modulefiles
+    - module load rocm/5.5.0 cmake
     - make clean
     - make hip
     - echo "Running the performance test"
@@ -117,7 +120,7 @@ mi100:
     - time bin/librett_test
     - echo "Compiling by using CMake"
     - make clean
-    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc
+    - cmake -H. -Bbuild -DENABLE_HIP=ON -DCMAKE_CXX_COMPILER=hipcc -DCMAKE_HIP_ARCHITECTURES=gfx908
     - cd build; make
     - echo "Running CMake tests"
     - ctest

@@ -106,7 +106,7 @@ int countGlTransactions(const int pos, const int n, const int accWidth, const in
     int count = sycl::popcount(ballot(item.get_sub_group(), seg0 != seg1).s0()) + 1;
   #elif HIP // AMD change
     int count = __popcll((unsigned long long int)__ballot(seg0 != seg1)) + 1;
-  #else // CUDA
+  #elif LIBRETT_USES_CUDA
     int count = __popc(__ballot_sync(0xffffffff,seg0 != seg1)) + 1;
   #endif
   count = (n == 0) ? 0 : count;
@@ -256,7 +256,7 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
       int ffsval = __ffsll((unsigned long long int)__ballot(flag)) - 1;  // AMD change
       int n = (__any(flag)) ? ffsval : warpSize;
       int tran = countGlTransactions(pos, n, accWidth, warpLane);
-    #else // CUDA
+    #elif LIBRETT_USES_CUDA
       int ffsval = __ffs(__ballot_sync(0xffffffff,flag)) - 1;
       int n = (__any_sync(0xffffffff,flag)) ? ffsval : warpSize;
       int tran = countGlTransactions(pos, n, accWidth, warpLane);
@@ -383,7 +383,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
 #elif HIP // AMD change
   const unsigned long long int maskIny = __ballot((yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned long long int maskOutx = __ballot((xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   const unsigned int maskIny = __ballot_sync(0xffffffff,(yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned int maskOutx = __ballot_sync(0xffffffff,(xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
 #endif
@@ -425,7 +425,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
 	int n = __popcll((unsigned long long int)__ballot(maskIny & (1 << j))); // AMD change
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any(n > 0);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
 	int n = __popc(__ballot_sync(0xffffffff,maskIny & (1 << j)));
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any_sync(0xffffffff,n > 0);
@@ -445,7 +445,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any(n > 0);
         countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
         int n = __popc(__ballot_sync(0xffffffff,maskOutx & (1 << j)));
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any_sync(0xffffffff,n > 0);
@@ -493,7 +493,7 @@ countPacked(const int volMmk, const int volMbar,
   auto shSegOut = (int *)dpct_local;
 #elif HIP
   HIP_DYNAMIC_SHARED( int, shSegOut)
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   extern __shared__ int shSegOut[];
 #endif
 
@@ -568,7 +568,7 @@ countPacked(const int volMmk, const int volMbar,
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmk));  // AMD change
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any(n > 0);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
 	int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmk));
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any_sync(0xffffffff,n > 0);
@@ -588,7 +588,7 @@ countPacked(const int volMmk, const int volMbar,
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmk));  // AMD change
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any(n > 0);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
 	int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmk));
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any_sync(0xffffffff,n > 0);
@@ -668,7 +668,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
   auto shSegOut = (int *)dpct_local;
 #elif HIP
   HIP_DYNAMIC_SHARED( int, shSegOut)
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   extern __shared__ int shSegOut[];
 #endif
 
@@ -758,7 +758,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmkSplit));  // AMD change
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any(n > 0);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
         int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmkSplit));
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any_sync(0xffffffff,n > 0);
@@ -778,7 +778,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmkSplit));  // AMD change
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any(n > 0);
-      #else // CUDA
+      #elif LIBRETT_USES_CUDA
 	int n = __popc(__ballot_sync(0xffffffff,posMmk < volMmkSplit));
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any_sync(0xffffffff,n > 0);
@@ -895,7 +895,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 	  int n = __popcll((unsigned long long int)__ballot((x < tiledVol.x) && (y + j < tiledVol.y))); // AMD change
           memStat.gld_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gld_req += __any(n > 0);
-	#else // CUDA
+	#elif LIBRETT_USES_CUDA
 	  int n = __popc(__ballot_sync(0xffffffff,(x < tiledVol.x) && (y + j < tiledVol.y)));
           memStat.gld_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gld_req += __any_sync(0xffffffff,n > 0);
@@ -925,7 +925,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
           memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gst_req += __any(n > 0);
           countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2);
-	#else // CUDA
+	#elif LIBRETT_USES_CUDA
 	  int n = __popc(__ballot_sync(0xffffffff,(x < tiledVol.x) && (y + j < tiledVol.y)));
           memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gst_req += __any_sync(0xffffffff,n > 0);
@@ -991,7 +991,7 @@ void runCounters(const int warpSize, const int *hostPosData, const int numPosDat
   copy_DtoH<int>(dev_cl_full, host_cl_full, numWarp, gpustream);
   copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, gpustream);
   hipCheck(hipDeviceSynchronize());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   runCountersKernel<<< nblock, nthread, 0, gpustream >>>(devPosData, numPosData,
     accWidth, cacheWidth, dev_tran, dev_cl_full, dev_cl_part);
   cudaCheck(cudaGetLastError());
@@ -1150,7 +1150,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
       hipLaunchKernelGGL(countTiled, dim3(lc.numblock), dim3(lc.numthread), 0, plan.stream ,
 	((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.tiledVol, plan.cuDimMk, plan.cuDimMm,
         plan.Mbar, accWidth, cacheWidth, devMemStat);
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       countTiled <<< lc.numblock, lc.numthread, 0, plan.stream >>>
         (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.tiledVol, plan.cuDimMk,
         plan.cuDimMm, plan.Mbar, accWidth, cacheWidth, devMemStat);
@@ -1181,7 +1181,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
       hipLaunchKernelGGL(countTiledCopy, dim3(lc.numblock), dim3(lc.numthread), 0, plan.stream ,
 	((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.cuDimMk, plan.cuDimMm, plan.tiledVol,
         plan.Mbar, accWidth, cacheWidth, devMemStat);
-#else // CUDA
+#elif LIBRETT_USES_CUDA
       countTiledCopy <<< lc.numblock, lc.numthread, 0, plan.stream >>>
         (((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.cuDimMk, plan.cuDimMm,
         plan.tiledVol, plan.Mbar, accWidth, cacheWidth, devMemStat);
@@ -1204,7 +1204,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
   plan.stream->wait_and_throw();
 #elif HIP
   hipCheck(hipDeviceSynchronize());
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
 #endif
   deallocate_device<MemStat>(&devMemStat, plan.stream);

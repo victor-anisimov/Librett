@@ -31,7 +31,7 @@ SOFTWARE.
 #elif HIP
   #include <hip/hip_runtime.h>
   using librett_gpuStream_t     = hipStream_t;
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   #include <cuda_runtime.h>
   using librett_gpuStream_t     = cudaStream_t;
 #endif

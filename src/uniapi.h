@@ -34,7 +34,7 @@ SOFTWARE.
   #include <hip/hip_runtime.h>
   #include <hip/hip_complex.h>
   typedef hipDoubleComplex librett_complex;
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   #include <cuda.h>
   #include <cuda_runtime.h>
   #include <cuComplex.h>
@@ -130,7 +130,7 @@ extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
   using gpuStream_t     = hipStream_t;
   using gpuDeviceProp_t = hipDeviceProp_t;
   using gpuError_t      = hipError_t;
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   using int2_t          = int2;
   using int4_t          = int4;
   using float4_t        = float4;
@@ -151,7 +151,7 @@ extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
   #define gpu_shfl_down(a,b)  __shfl_down(a,b)
   #define gpu_atomicAdd(a,b)  atomicAdd(&(a), b)
   #define gpuOccupancyMaxActiveBlocksPerMultiprocessor hipOccupancyMaxActiveBlocksPerMultiprocessor
-#else // CUDA
+#elif LIBRETT_USES_CUDA
   #define gpu_shfl_xor(a,b)   __shfl_xor_sync(0xffffffff,a,b)
   #define gpu_shuffle(a,b)    __shfl_sync(0xffffffff,a,b)
   #define gpu_shfl_down(a,b)  __shfl_down_sync(0xffffffff,a,b)

@@ -70,10 +70,10 @@ CPU = ppc64
 endif
 
 # Set optimization level
-OPTLEV = -O3
+OPTLEV = -O3 -g
 
 # Defines
-DEFS =
+DEFS = -DHIP
 
 ifdef ENABLE_NVTOOLS
 DEFS += -DENABLE_NVTOOLS
@@ -91,7 +91,7 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
-CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++11 $(DEFS) $(OPTLEV) -fPIC -DHIP -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
+CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DHIP -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif
@@ -103,7 +103,7 @@ ifneq ($(tests),all)
 CFLAGS += -DPERFTEST
 endif
 
-CUDA_CFLAGS = --amdgpu-target=gfx906,gfx908,gfx90a -std=c++11 $(OPTLEV) -DHIP -D_FORCE_INLINES
+CUDA_CFLAGS = --amdgpu-target=gfx906,gfx908,gfx90a -std=c++17 $(DEFS) $(OPTLEV) -D_FORCE_INLINES
 
 ifeq ($(OS),osx)
 CUDA_LFLAGS = -L$(CUDAROOT)/lib
