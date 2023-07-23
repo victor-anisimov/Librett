@@ -31,7 +31,17 @@ set(DEVICE_SOURCE_FILES
   GpuUtils.cpp
   kernel.cpp)
 
+set(LIBRETT_HEADERS
+        src/librett.h
+        )
+
 add_library(librett ${LIBRETT_SOURCE_FILES})
+
+if (BUILD_SHARED_LIBS)
+  set_target_properties(librett PROPERTIES LIBRARY_OUTPUT_NAME rett)
+else(BUILD_SHARED_LIBS)
+  set_target_properties(librett PROPERTIES ARCHIVE_OUTPUT_NAME librett)
+endif(BUILD_SHARED_LIBS)
 
 if(ENABLE_SYCL)
   target_compile_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
@@ -50,3 +60,29 @@ if(ENABLE_UMPIRE)
   target_link_libraries(librett umpire)
   target_compile_definitions(librett PUBLIC LIBRETT_HAS_UMPIRE -DLIBRETT_USES_THIS_UMPIRE_ALLOCATOR=${LIBRETT_USES_THIS_UMPIRE_ALLOCATOR})
 endif(ENABLE_UMPIRE)
+
+
+add_library(librett::librett ALIAS librett)
+target_compile_definitions(librett PUBLIC ${LIBRETT_COMPILE_DEFS})
+if(ENABLE_CUDA)
+  if (BUILD_SHARED_LIBS)
+    target_link_libraries(librett PUBLIC CUDA::cudart)
+  else()
+    target_link_libraries(librett PUBLIC CUDA::cudart_static)
+  endif()
+endif()
+
+# Install
+
+install(TARGETS librett
+        EXPORT librett-targets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+
+set_target_properties(librett PROPERTIES EXPORT_NAME librett)
+
+#Install headers
+install(FILES ${LIBRETT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
+
+
