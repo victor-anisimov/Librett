@@ -31,9 +31,7 @@ set(DEVICE_SOURCE_FILES
   GpuUtils.cpp
   kernel.cpp)
 
-set(LIBRETT_HEADERS
-        src/librett.h
-        )
+set(LIBRETT_HEADERS librett.h)
 
 add_library(librett ${LIBRETT_SOURCE_FILES})
 
