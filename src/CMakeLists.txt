@@ -65,12 +65,10 @@ target_compile_definitions(librett PUBLIC ${LIBRETT_COMPILE_DEFS})
 if(ENABLE_CUDA)
   if (BUILD_SHARED_LIBS)
     target_link_libraries(librett PUBLIC CUDA::cudart)
-  else()
-    target_link_libraries(librett PUBLIC CUDA::cudart_static)
   endif()
 endif()
 if(ENABLE_HIP)
-  target_link_libraries(librett PUBLIC hip::device)
+  target_link_libraries(librett PUBLIC hip::host)
 endif()
 
 # Install
