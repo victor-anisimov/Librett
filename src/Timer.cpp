@@ -32,10 +32,10 @@ SOFTWARE.
 #endif
 
 #ifdef GPU_EVENT_TIMER
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     Timer::Timer() { }
     Timer::~Timer() { }
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     Timer::Timer() {
       hipCheck(hipEventCreate(&tmstart));
       hipCheck(hipEventCreate(&tmend));
@@ -59,11 +59,11 @@ SOFTWARE.
 
 void Timer::start()
 #ifdef GPU_EVENT_TIMER
-  #ifdef SYCL
+  #ifdef LIBRETT_USES_SYCL
     {
       tmstart_ct1 = std::chrono::steady_clock::now();
     }
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     { hipCheck(hipEventRecord(tmstart, 0)); }
   #elif LIBRETT_USES_CUDA
     { cudaCheck(cudaEventRecord(tmstart, 0)); }
@@ -74,12 +74,12 @@ void Timer::start()
 
 void Timer::stop() 
 #ifdef GPU_EVENT_TIMER
-  #ifdef SYCL
+  #ifdef LIBRETT_USES_SYCL
     {
       tmend_ct1 = std::chrono::steady_clock::now();
       tmend.wait_and_throw();
     }
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     {
       hipCheck(hipEventRecord(tmend, 0));
       hipCheck(hipEventSynchronize(tmend));
@@ -92,10 +92,10 @@ void Timer::stop()
   #endif
 #else  // GPU_EVENT_TIMER
   {
-    #if SYCL
+    #if LIBRETT_USES_SYCL
       // Synchronize Device
       dpct::get_current_device().queues_wait_and_throw();
-    #elif HIP
+    #elif LIBRETT_USES_HIP
       hipCheck(hipDeviceSynchronize());
     #elif LIBRETT_USES_CUDA
       cudaCheck(cudaDeviceSynchronize());
@@ -109,13 +109,13 @@ void Timer::stop()
 //
 double Timer::seconds()
 #ifdef GPU_EVENT_TIMER
-  #ifdef SYCL
+  #ifdef LIBRETT_USES_SYCL
     {
     float ms;
     ms = std::chrono::duration<float, std::milli>(tmend_ct1 - tmstart_ct1).count();
     return (double)(ms/1000.0f);
     }
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     {
     float ms;
     hipCheck(hipEventElapsedTime(&ms, tmstart, tmend));

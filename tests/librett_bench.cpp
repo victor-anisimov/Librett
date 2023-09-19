@@ -147,13 +147,13 @@ int main(int argc, char *argv[])
   }
 
   gpuStream_t gpuStream;
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   /* DPC++ cant current reset the device through SYCL APIs */
 
   /* DPC++ currently does not support configuring shared memory on devices. */
 
   gpuStream = new sycl::queue(sycl::gpu_selector_v, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipStreamCreate(&gpuStream);
   if (elemsize == 4) {
     hipCheck(hipDeviceSetSharedMemConfig(hipSharedMemBankSizeFourByte));
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
   timer = new librettTimer(elemsize);
 
   dataSize = (elemsize == 4) ? 420*MILLION : 530*MILLION;
-#if HIP
+#if LIBRETT_USES_HIP
 //  dataSize = (elemsize == 4) ? 420*MILLION : 370*MILLION;
 #else // CUDA or SYCL
 //  dataSize = (elemsize == 4) ? 420*MILLION : 530*MILLION;
@@ -379,9 +379,9 @@ end:
 
   delete timer;
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   gpuStream->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipCheck(hipDeviceSynchronize());
   hipCheck(hipDeviceReset());
 #elif LIBRETT_USES_CUDA
@@ -839,9 +839,9 @@ bool bench_tensor(std::vector<int> &dim, std::vector<int> &permutation, gpuStrea
   for (int i=0;i < 4;i++) {
     set_device_array<T>((T *)dataOut, -1, vol, q);
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     q->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
     hipCheck(hipStreamSynchronize(q));
 #elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamSynchronize(q));
@@ -878,9 +878,9 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
     for (int i=0;i < 4;i++) {
       set_device_array<T>((T *)dataOut, -1, numElem, gpuStr);
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
       gpuStr->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
       hipCheck(hipStreamSynchronize(gpuStr));
 #elif LIBRETT_USES_CUDA
       cudaCheck(cudaStreamSynchronize(gpuStr));
@@ -901,9 +901,9 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
     for (int i=0;i < 4;i++) {
       set_device_array<T>((T *)dataOut, -1, numElem, gpuStr);
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
       gpuStr->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
       hipCheck(hipStreamSynchronize(gpuStr));
 #elif LIBRETT_USES_CUDA
       cudaCheck(cudaStreamSynchronize(gpuStr));
@@ -925,9 +925,9 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
 
       set_device_array<T>((T *)dataOut, -1, numElem, gpuStr);
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
       gpuStr->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
       hipCheck(hipStreamSynchronize(gpuStr));
 #elif LIBRETT_USES_CUDA
       cudaCheck(cudaStreamSynchronize(gpuStr));
@@ -946,7 +946,7 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
   return true;
 }
 
-// #ifdef SYCL
+// #ifdef LIBRETT_USES_SYCL
 // void printDeviceInfo() {
 //   int deviceID;
 //   deviceID = dpct::dev_mgr::instance().current_device_id();
@@ -971,7 +971,7 @@ template <typename T> bool bench_memcpy(int numElem, gpuStream_t& gpuStr)
 //       prop.get_max_compute_units(), ECCEnabled, mem_BW, shMemBankSize);
 //   printf("L2 %1.2lfMB\n", (double)l2CacheSize/(double)(1024*1024));
 // }
-// #elif HIP
+// #elif LIBRETT_USES_HIP
 // void printDeviceInfo() {
 //   int deviceID;
 //   hipCheck(hipGetDevice(&deviceID));

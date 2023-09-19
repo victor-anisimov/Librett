@@ -28,7 +28,7 @@ SOFTWARE.
 //
 #include "TensorTester.h"
 
-#if SYCL
+#if LIBRETT_USES_SYCL
 void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata, sycl::nd_item<3>& item)
 #else
 __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int ndata)
@@ -40,7 +40,7 @@ __global__ void setTensorCheckPatternKernel(unsigned int* data, unsigned int nda
 }
 
 template<typename T>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void checkTransposeKernel(T* data, unsigned int ndata, int rank, TensorConv* glTensorConv,
   TensorError_t* glError, int* glFail, sycl::nd_item<3>& item, uint8_t *dpct_local)
 #else
@@ -49,12 +49,12 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
 #endif
 {
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::group wrk_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
   int warpSize = sg.get_local_range().get(0);
   auto shPos = (unsigned int *)dpct_local;
-#elif HIP
+#elif LIBRETT_USES_HIP
   HIP_DYNAMIC_SHARED( unsigned int, shPos)
 #elif LIBRETT_USES_CUDA
   extern __shared__ unsigned int shPos[];
@@ -76,9 +76,9 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
     T dataValT = (i < ndata) ? data[i] : -1;
     int refVal = 0;
     for (int j=0; j < rank; j++) {
-#if SYCL
+#if LIBRETT_USES_SYCL
       refVal += ((i / sg.shuffle(tc.c, j)) % sg.shuffle(tc.d, j)) * sg.shuffle(tc.ct, j);
-#elif HIP
+#elif LIBRETT_USES_HIP
       refVal += ((i/__shfl(tc.c,j)) % __shfl(tc.d,j))*__shfl(tc.ct,j);
 #elif LIBRETT_USES_CUDA
       refVal += ((i/__shfl_sync(0xffffffff,tc.c,j)) % __shfl_sync(0xffffffff,tc.d,j))*__shfl_sync(0xffffffff,tc.ct,j);
@@ -101,7 +101,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
   }
 
   shPos[threadIdx_x] = error.pos;
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::group_barrier( wrk_grp );
   #else
   syncthreads();
@@ -110,7 +110,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
   for (int d = 1; d < blockDim_x; d *= 2) {
     int t = threadIdx_x + d;
     unsigned int posval = (t < blockDim_x) ? shPos[t] : 0xffffffff;
-#if SYCL
+#if LIBRETT_USES_SYCL
     sycl::group_barrier( wrk_grp );
     shPos[threadIdx_x] = sycl::min(posval, shPos[threadIdx_x]);
     sycl::group_barrier( wrk_grp );
@@ -163,7 +163,7 @@ TensorTester::~TensorTester() {
 
 void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata) {
   int numthread = 512;
-#if SYCL
+#if LIBRETT_USES_SYCL
   int numblock = std::min<unsigned int>(65535, (ndata - 1) / numthread + 1);
   this->tt_gpustream->submit([&](sycl::handler &cgh) {
     cgh.parallel_for(sycl::nd_range<3>(
@@ -173,7 +173,7 @@ void TensorTester::setTensorCheckPattern(unsigned int* data, unsigned int ndata)
                        setTensorCheckPatternKernel(data, ndata, item);
                      });
   });
-#elif HIP
+#elif LIBRETT_USES_HIP
   int numblock = min(65535, (ndata - 1)/numthread + 1 );
   hipLaunchKernelGGL(setTensorCheckPatternKernel, dim3(numblock), dim3(numthread ), 0, this->tt_gpustream, data, ndata);
   hipCheck(hipGetLastError());
@@ -246,7 +246,7 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data)
   int numthread = 512;
   int numblock = std::min(maxNumblock, (ndata - 1) / numthread + 1);
   int shmemsize = numthread*sizeof(unsigned int);
-#if SYCL
+#if LIBRETT_USES_SYCL
   this->tt_gpustream->submit([&](sycl::handler &cgh) {
     sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1{sycl::range<1>(shmemsize), cgh};
 
@@ -265,7 +265,7 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data)
   int h_fail;
   copy_DtoH<int>(d_fail, &h_fail, 1, this->tt_gpustream);
   this->tt_gpustream->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipLaunchKernelGGL(checkTransposeKernel, dim3(numblock), dim3(numthread), shmemsize,
 		     this->tt_gpustream, data, ndata, rank, d_tensorConv, d_error, d_fail);
   hipCheck(hipGetLastError());

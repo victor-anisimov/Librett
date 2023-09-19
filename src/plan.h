@@ -33,9 +33,9 @@ All rights reserved.
 #include "Types.h"
 #include "uniapi.h"
 
-#if HIP
+#if LIBRETT_USES_HIP
   const int TILEDIM = 64;   // AMD change
-#elif SYCL
+#elif LIBRETT_USES_SYCL
   #if LIBRETT_SUBGROUP_SIZE16
   const int TILEDIM = 16;
   #elif LIBRETT_SUBGROUP_SIZE32
@@ -118,7 +118,7 @@ public:
 class LaunchConfig {
 public:
   // Kernel launch configuration
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   sycl::range<3> numthread = {0, 0, 0};
   sycl::range<3> numblock  = {0, 0, 0};
 #else

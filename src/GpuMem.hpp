@@ -46,9 +46,9 @@ void allocate_device(T **pp, const size_t len, gpuStream_t gpuStream) {
 #ifdef LIBRETT_HAS_UMPIRE
   *pp = librett_umpire_allocator.allocate(sizeof(T)*len);
 #else  // LIBRETT_HAS_UMPIRE
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   *((void **)pp) = (void *)sycl::malloc_device( sizeof(T)*len, *gpuStream);
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipMalloc((void **)pp, sizeof(T)*len));
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaMalloc((void **)pp, sizeof(T)*len));
@@ -69,9 +69,9 @@ void deallocate_device(T **pp, gpuStream_t gpuStream) {
   librett_umpire_allocator.deallocate((void *) (*pp) );
 #else
   if (*pp != NULL) {
-    #if SYCL
+    #if LIBRETT_USES_SYCL
       sycl::free( (void *)(*pp), *gpuStream );
-    #elif HIP
+    #elif LIBRETT_USES_HIP
       hipCheck(hipFree((void *)(*pp)));
     #elif LIBRETT_USES_CUDA
       cudaCheck(cudaFree((void *)(*pp)));

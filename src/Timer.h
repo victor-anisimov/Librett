@@ -37,9 +37,9 @@ SOFTWARE.
 #define GPU_EVENT_TIMER
 // -------------------------------------------------
 #ifdef GPU_EVENT_TIMER
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     #include <sycl/sycl.hpp>
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     #include <hip/hip_runtime.h>
   #else
     #include <cuda_runtime.h>
@@ -52,11 +52,11 @@ SOFTWARE.
 class Timer {
 private:
 #ifdef GPU_EVENT_TIMER
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     sycl::event tmstart, tmend;
     std::chrono::time_point<std::chrono::steady_clock> tmstart_ct1;
     std::chrono::time_point<std::chrono::steady_clock> tmend_ct1;
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipEvent_t tmstart, tmend;
   #elif LIBRETT_USES_CUDA
     cudaEvent_t tmstart, tmend;

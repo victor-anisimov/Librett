@@ -38,7 +38,7 @@ All rights reserved.
 #include "GpuModel.h"      // testCounters
 #include "GpuUtils.h"
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
 auto sycl_asynchandler = [] (sycl::exception_list exceptions) {
   for (std::exception_ptr const& e : exceptions) {
     try {
@@ -72,9 +72,9 @@ template <typename T> bool test_tensor(std::vector<int>& dim, std::vector<int>& 
 void printVec(std::vector<int>& vec);
 
 void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   master_gpustream->wait_and_throw();
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipDeviceSynchronize());
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
@@ -82,11 +82,11 @@ void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
 }
 
 void CreateGpuStream(gpuStream_t& master_gpustream) {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::device dev(sycl::gpu_selector_v);
   sycl::context ctxt(dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   master_gpustream = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipStreamCreate(&master_gpustream));
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamCreate(&master_gpustream));
@@ -94,9 +94,9 @@ void CreateGpuStream(gpuStream_t& master_gpustream) {
 }
 
 void DestroyGpuStream(gpuStream_t& master_gpustream) {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   delete master_gpustream;
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipStreamDestroy(master_gpustream));
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamDestroy(master_gpustream));
@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
   if(passed){passed = test3(gpumasterstream); if(!passed) printf("Test 3 failed\n");}
 #ifndef PERFTEST
   if(passed){passed = test4(); if(!passed) printf("Test 4 failed\n");}
-#ifndef HIP
+#ifndef LIBRETT_USES_HIP
   if(passed){passed = test5(); if(!passed) printf("Test 5 failed\n");}
 #endif
 #endif
@@ -424,13 +424,13 @@ bool test4()
   const int numStream = 10;
   gpuStream_t streams[numStream];
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::device dev(sycl::gpu_selector_v);
   sycl::context ctxt(dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   for (int i=0;i < numStream;i++) {
     streams[i] = new sycl::queue(ctxt, dev, sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   }
-#elif HIP
+#elif LIBRETT_USES_HIP
   for (int i=0;i < numStream;i++) {
     hipCheck(hipStreamCreate(&streams[i]));
   }
@@ -447,11 +447,11 @@ bool test4()
     librettCheck(librettExecute(plans[i], dataIn, dataOut));
   }
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   for (int i=0;i < numStream;i++) {
     streams[i]->wait_and_throw();
   }
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipCheck(hipDeviceSynchronize());
 #elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
@@ -459,11 +459,11 @@ bool test4()
 
   bool run_ok = tester->checkTranspose(dim.size(), dim.data(), permutation.data(), (long long int *)dataOut);
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   for (int i=0;i < numStream;i++) {
     streams[i]->wait_and_throw();
   }
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipCheck(hipDeviceSynchronize());
 #elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());
@@ -472,9 +472,9 @@ bool test4()
   for (int i=0;i < numStream;i++) {
     librettCheck(librettDestroy(plans[i]));
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     delete streams[i];
-#elif HIP
+#elif LIBRETT_USES_HIP
     hipCheck(hipStreamDestroy(streams[i]));
 #elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamDestroy(streams[i]));
@@ -544,9 +544,9 @@ bool test_tensor(std::vector<int> &dim, std::vector<int> &permutation, gpuStream
   librettCheck(librettPlan(&plan, rank, dim.data(), permutation.data(), sizeof(T), gpustream));
   set_device_array<T>((T *)dataOut, -1, vol, gpustream);
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   gpustream->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipCheck(hipDeviceSynchronize());
 #elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());

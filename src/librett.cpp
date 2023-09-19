@@ -58,7 +58,7 @@ void getDeviceProp(int& deviceID, gpuStream_t& stream, gpuDeviceProp_t &prop) {
   // need to lock this function
   std::lock_guard<std::mutex> lock(devicePropsMutex);
 
-  #if HIP
+  #if LIBRETT_USES_HIP
     hipCheck(hipGetDevice(&deviceID));
   #elif LIBRETT_USES_CUDA
     cudaCheck(cudaGetDevice(&deviceID));
@@ -67,9 +67,9 @@ void getDeviceProp(int& deviceID, gpuStream_t& stream, gpuDeviceProp_t &prop) {
   auto it = deviceProps.find(deviceID);
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
-    #if SYCL
+    #if LIBRETT_USES_SYCL
       Librett::syclGetDeviceProperties(&prop, stream);
-    #elif HIP
+    #elif LIBRETT_USES_HIP
       hipCheck(hipGetDeviceProperties(&prop, deviceID));
       librettKernelSetSharedMemConfig();
     #elif LIBRETT_USES_CUDA
@@ -110,7 +110,7 @@ librettResult librettPlanCheckInput(int rank, int* dim, int* permutation, size_t
 librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
   gpuStream_t& stream) {
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   if(stream == nullptr) {
     throw std::runtime_error("[SYCL] pass a valid/non-nullptr SYCL queue to the plan constructor!");
   }
@@ -224,7 +224,7 @@ librettResult librettPlan(librettHandle *handle, int rank, int *dim, int *permut
 librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int *permutation, size_t sizeofType,
   gpuStream_t& stream, void* idata, void* odata)
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   if(stream == nullptr) {
     throw std::runtime_error("[SYCL] pass a valid/non-nullptr SYCL queue to the plan constructor!");
   }
@@ -291,9 +291,9 @@ librettResult librettPlanMeasure(librettHandle *handle, int rank, int *dim, int 
     // Clear output data to invalidate caches
     set_device_array<char>((char *)odata, -1, numBytes, stream);
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     stream->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
     hipCheck(hipStreamSynchronize(stream));
 #elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamSynchronize(stream));
@@ -397,7 +397,7 @@ void librettInitialize() {
 void librettFinalize() {
 }
 
-#if SYCL
+#if LIBRETT_USES_SYCL
 sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attribute__((convergent)) {
   #ifdef __SYCL_DEVICE_ONLY__
     return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);

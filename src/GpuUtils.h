@@ -33,9 +33,9 @@ static int warp_size = 64;  // AMD change
 //
 // Error checking wrappers
 //
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   #define cudaCheck(stmt) do { int err = stmt; } while (0)
-#elif HIP
+#elif LIBRETT_USES_HIP
   #define hipCheck(stmt) do {                                                       \
     hipError_t err = stmt;                                                          \
     if(err != hipSuccess) {                                                         \

@@ -40,7 +40,7 @@ const int numthread = 64;
 // Copy using scalar loads and stores
 //
 template <typename T>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void scalarCopyKernel(const int n, const T* data_in, T* data_out, sycl::nd_item<3> item)
 #else
 __global__ void scalarCopyKernel(const int n, const T* data_in, T* data_out)
@@ -58,14 +58,14 @@ void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t& stream)
   // numblock = min(65535, numblock);
   // numblock = min(256, numblock);
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                                          sycl::range<3>(1, 1, numthread),
                                          sycl::range<3>(1, 1, numthread)),
                        [=](sycl::nd_item<3> item) {
                          scalarCopyKernel<T>(n, data_in, data_out, item);
                        });
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipLaunchKernelGGL(HIP_KERNEL_NAME(scalarCopyKernel<T>), dim3(numblock), dim3(numthread),
      0, stream, n, data_in, data_out);
 
@@ -83,7 +83,7 @@ void scalarCopy(const int n, const T *data_in, T *data_out, gpuStream_t& stream)
 // Copy using vectorized loads and stores
 //
 template <typename T>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void vectorCopyKernel(const int n, T* data_in, T* data_out, sycl::nd_item<3> item)
 #else
 __global__ void vectorCopyKernel(const int n, T* data_in, T* data_out)
@@ -114,14 +114,14 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t& stream) {
   // numblock = min(65535, numblock);
   int shmemsize = 0;
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                                          sycl::range<3>(1, 1, numthread),
                                          sycl::range<3>(1, 1, numthread)),
                        [=](sycl::nd_item<3> item) {
                          vectorCopyKernel<T>(n, data_in, data_out, item);
                        });
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipLaunchKernelGGL(HIP_KERNEL_NAME(vectorCopyKernel<T>), dim3(numblock), dim3(numthread),
      shmemsize, stream, n, data_in, data_out);
 
@@ -139,7 +139,7 @@ void vectorCopy(const int n, T *data_in, T *data_out, gpuStream_t& stream) {
 // Copy using vectorized loads and stores
 //
 template <int numElem>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out, sycl::nd_item<3> item)
 #else
 __global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data_out)
@@ -158,7 +158,7 @@ __global__ void memcpyFloatKernel(const int n, float4_t *data_in, float4_t *data
 }
 
 template <int numElem>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out, sycl::nd_item<3> item)
 #else
 __global__ void memcpyFloatLoopKernel(const int n, float4_t *data_in, float4_t *data_out)
@@ -183,14 +183,14 @@ void memcpyFloat(const int n, float *data_in, float *data_out, gpuStream_t& stre
 
   int numblock = (n/(4*NUM_ELEM) - 1)/numthread + 1;
   int shmemsize = 0;
-#if SYCL
+#if LIBRETT_USES_SYCL
   stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, numblock) *
                                          sycl::range<3>(1, 1, numthread),
                                          sycl::range<3>(1, 1, numthread)),
                        [=](sycl::nd_item<3> item) {
                          memcpyFloatKernel<NUM_ELEM>( n/4, (float4_t *)data_in, (float4_t *)data_out, item);
                        });
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipLaunchKernelGGL(HIP_KERNEL_NAME(memcpyFloatKernel<NUM_ELEM>), dim3(numblock), dim3(numthread),
      shmemsize, stream , n/4, (float4_t *)data_in, (float4_t *)data_out);
 
