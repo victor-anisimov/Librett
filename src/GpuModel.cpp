@@ -807,7 +807,7 @@ void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp,
   double freq = (double)gpuClockRate/1.0e3;
   int warpSize = gpuWarpSize;
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   // Memory bandwidth in GB/s
   //double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
   //if (prop.ECCEnabled) mem_BW *= (1.0 - 0.125);
@@ -816,7 +816,7 @@ void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp,
   // Memory bandwidth in GB/s
   double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
   if (prop.ECCEnabled) mem_BW *= (1.0 - 0.125);
-  #if HIP
+  #if LIBRETT_USES_HIP
     return;  // Dmitry Lyakh
   #endif
 #endif
@@ -1370,11 +1370,11 @@ const int shTestData[138][3] =
     // create the GPU streams
     // TODO: need to check the gpustreams here
     gpuStream_t gpustream;
-    #if SYCL
+    #if LIBRETT_USES_SYCL
     gpustream = new sycl::queue(sycl::gpu_selector_v,
                                 Librett::sycl_asynchandler,
                                 sycl::property_list{sycl::property::queue::in_order{}});
-    #elif HIP
+    #elif LIBRETT_USES_HIP
     hipCheck(hipStreamCreate(&gpustream));
     #elif LIBRETT_USES_CUDA
     cudaCheck(cudaStreamCreate(&gpustream));    

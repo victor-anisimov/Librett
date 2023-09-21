@@ -25,10 +25,10 @@ SOFTWARE.
 #ifndef LIBRETT_H
 #define LIBRETT_H
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   #include <sycl/sycl.hpp>
   using librett_gpuStream_t     = sycl::queue*;
-#elif HIP
+#elif LIBRETT_USES_HIP
   #include <hip/hip_runtime.h>
   using librett_gpuStream_t     = hipStream_t;
 #elif LIBRETT_USES_CUDA

@@ -26,11 +26,11 @@ SOFTWARE.
 #ifndef UNIAPI_H
 #define UNIAPI_H
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   #include "sycl_device.hpp"
   #include <complex>
   typedef std::complex<double> librett_complex;
-#elif HIP
+#elif LIBRETT_USES_HIP
   #include <hip/hip_runtime.h>
   #include <hip/hip_complex.h>
   typedef hipDoubleComplex librett_complex;
@@ -41,12 +41,12 @@ SOFTWARE.
   typedef cuDoubleComplex librett_complex;
 #endif
 
-#if !defined(SYCL) && !defined(HIP)
+#if !defined(LIBRETT_USES_SYCL) && !defined(LIBRETT_USES_HIP)
   #define LIBRETT_USES_CUDA 1
 #endif
 
 // Work units
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   #define threadIdx_x   item.get_local_id(2)
   #define blockIdx_x    item.get_group(2)
   #define blockDim_x    item.get_local_range().get(2)
@@ -116,14 +116,14 @@ extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
 #endif
 
 // Data types
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   using int2_t          = sycl::int2;
   using int4_t          = sycl::int4;
   using float4_t        = sycl::float4;
   using gpuStream_t     = sycl::queue*;
   using gpuDeviceProp_t = Librett::DeviceProp_t;
   using gpuError_t      = int;
-#elif HIP
+#elif LIBRETT_USES_HIP
   using int2_t          = int2;
   using int4_t          = int4;
   using float4_t        = float4;
@@ -140,12 +140,12 @@ extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
 #endif
 
 // Functions
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   #define gpu_shfl_xor(a,b)   sycl::ext::oneapi::experimental::this_sub_group().shuffle_xor(a,b)
   #define gpu_shuffle(a,b)    sycl::ext::oneapi::experimental::this_sub_group().shuffle(a,b)
   #define gpu_shfl_down(a,b)  sycl::ext::oneapi::experimental::this_sub_group().shuffle_down(a,b)
 #define gpu_atomicAdd(a,b)    sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>((a)).fetch_add(b)
-#elif HIP
+#elif LIBRETT_USES_HIP
   #define gpu_shfl_xor(a,b)   __shfl_xor(a,b)
   #define gpu_shuffle(a,b)    __shfl(a,b)
   #define gpu_shfl_down(a,b)  __shfl_down(a,b)

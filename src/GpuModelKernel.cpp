@@ -70,13 +70,13 @@ struct MemStat {
 // NOTE: c and d on inactive warps must be 1 !!
 //
 __gpu_inline__
-#if SYCL
+#if LIBRETT_USES_SYCL
 int tensorPos(const int p, const int rank, const int c, const int d, const int ct, sycl::nd_item<3>& item)
 #else // CUDA or HIP
 int tensorPos(const int p, const int rank, const int c, const int d, const int ct, const int numLane=warpSize)
 #endif
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   const int numLane = item.get_sub_group().get_local_range().get(0);
 #endif
   int r = ((p / c) % d) * ct;
@@ -94,7 +94,7 @@ int tensorPos(const int p, const int rank, const int c, const int d, const int c
 //
 __gpu_inline__
 int countGlTransactions(const int pos, const int n, const int accWidth, const int warpLane
-#if SYCL
+#if LIBRETT_USES_SYCL
                         , sycl::nd_item<3>& item
 #endif
   )
@@ -102,9 +102,9 @@ int countGlTransactions(const int pos, const int n, const int accWidth, const in
   int seg0 = pos/accWidth;
   int srcLane = (warpLane == 0 || warpLane >= n) ? (warpLane) : (warpLane - 1);
   int seg1 = gpu_shuffle(seg0, srcLane);
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     int count = sycl::popcount(ballot(item.get_sub_group(), seg0 != seg1).s0()) + 1;
-  #elif HIP // AMD change
+  #elif LIBRETT_USES_HIP // AMD change
     int count = __popcll((unsigned long long int)__ballot(seg0 != seg1)) + 1;
   #elif LIBRETT_USES_CUDA
     int count = __popc(__ballot_sync(0xffffffff,seg0 != seg1)) + 1;
@@ -135,7 +135,7 @@ int countGlTransactions(const int* segbuf, const int n, const int threadId, cons
 //
 __gpu_inline__ void countCacheLines(const int pos, const int n,
   const int cacheWidth, const int warpLane, int& cl_full, int& cl_part
-#if SYCL
+#if LIBRETT_USES_SYCL
   , sycl::nd_item<3>& item
 #endif
   )
@@ -143,7 +143,7 @@ __gpu_inline__ void countCacheLines(const int pos, const int n,
   int seg = pos/cacheWidth;
   // Lane is at the beginning of a full cache line, if seg0 matches seg0 cacheWidth - 1 away
   int readLane = warpLane + (cacheWidth - 1);
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::sub_group sg = item.get_sub_group();
   int warpSize = sg.get_local_range().get(0);
   #endif
@@ -153,7 +153,7 @@ __gpu_inline__ void countCacheLines(const int pos, const int n,
 
   unsigned int valbit = (((val << cacheWidth) - 1)*val) << warpLane;
   // Perform warpSize-way bitwise or
-// #if SYCL
+// #if LIBRETT_USES_SYCL
 //   valbit = sycl::reduce_over_group(sg, valbit, sycl::bit_or<unsigned int>());
 // #else
   #pragma unroll
@@ -178,12 +178,12 @@ __gpu_inline__ void countCacheLines(const int pos, const int n,
 //
 __gpu_inline__ void countCacheLines(int* segbuf, const int n,
                                     const int cacheWidth, int& cl_full, int& cl_part
-#if SYCL
+#if LIBRETT_USES_SYCL
                                     , sycl::nd_item<3>& item
 #endif
   )
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::group wrk_grp = item.get_group();
   #endif
   const int topbit = (1 << 31);
@@ -202,7 +202,7 @@ __gpu_inline__ void countCacheLines(int* segbuf, const int n,
       }
     }
   }
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::group_barrier( wrk_grp );
   #else
   syncthreads();
@@ -217,7 +217,7 @@ __gpu_inline__ void countCacheLines(int* segbuf, const int n,
   }
 
   // Clear top bits
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::group_barrier( wrk_grp );
   #else
   syncthreads();
@@ -234,12 +234,12 @@ __gpu_inline__ void countCacheLines(int* segbuf, const int n,
 //
 __global__ void runCountersKernel(const int* posData, const int numPosData,
   const int accWidth, const int cacheWidth, int* tranData, int* cl_fullData, int* cl_partData
-#if SYCL
+#if LIBRETT_USES_SYCL
                                   , sycl::nd_item<3>& item
 #endif
   )
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::sub_group sg = item.get_sub_group();
   const int warpSize = sg.get_local_range().get(0);
 #endif
@@ -248,11 +248,11 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
   for (int i=threadIdx_x + blockIdx_x*blockDim_x; i < numPosData; i+=blockDim_x*gridDim_x) {
     int pos = posData[i];
     int flag = (pos == -1);
-    #if SYCL
+    #if LIBRETT_USES_SYCL
       int ffsval = __builtin_ffs((unsigned long long int)ballot(sg, flag)[0]) - 1;
       int n = (sycl::any_of_group(sg, flag)) ? ffsval : warpSize;
       int tran = countGlTransactions(pos, n, accWidth, warpLane, item);
-    #elif HIP
+    #elif LIBRETT_USES_HIP
       int ffsval = __ffsll((unsigned long long int)__ballot(flag)) - 1;  // AMD change
       int n = (__any(flag)) ? ffsval : warpSize;
       int tran = countGlTransactions(pos, n, accWidth, warpLane);
@@ -264,7 +264,7 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
 
     int cl_full = 0;
     int cl_part = 0;
-#if SYCL
+#if LIBRETT_USES_SYCL
     countCacheLines(pos, n, cacheWidth, warpLane, cl_full, cl_part, item);
     cl_full = sycl::reduce_over_group(sg, cl_full, sycl::plus<int>());
     cl_part = sycl::reduce_over_group(sg, cl_part, sycl::plus<int>());
@@ -277,7 +277,7 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
     }
 #endif // SYCL
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     // avoid multiple threads writing into the same address space
     if(sg.leader()) {
       int j = i / warpSize;
@@ -300,12 +300,12 @@ __global__ void runCountersKernel(const int* posData, const int numPosData,
 //
 __gpu_inline__
 void writeMemStat(const int warpLane, MemStat memStat, MemStat* RESTRICT glMemStat
-#if SYCL
+#if LIBRETT_USES_SYCL
                   , sycl::nd_item<3>& item
 #endif
     )
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   const int warpSize = item.get_sub_group().get_local_range().get(0);
 #endif
   for (int i=warpSize/2; i >= 1; i/=2) {  // AMD change
@@ -338,7 +338,7 @@ void writeMemStat(const int warpLane, MemStat memStat, MemStat* RESTRICT glMemSt
 //  dim3 numthread(TILEDIM, TILEROWS, 1);
 //  dim3 numblock( ((plan.volMm-1)/TILEDIM+1)*((plan.volMk-1)/TILEDIM+1), 1, plan.volMbar);
 //
-#if SYCL
+#if LIBRETT_USES_SYCL
 void countTiled(const int numMm, const int volMbar, const int sizeMbar,
   const int2_t tiledVol, const int cuDimMk, const int cuDimMm,
   const TensorConvInOut* RESTRICT glMbar,
@@ -354,7 +354,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
   MemStat* RESTRICT glMemStat)
 #endif
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::sub_group sg = item.get_sub_group();
   const int warpSize = sg.get_local_range().get(0);
 #endif
@@ -377,10 +377,10 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
   const int xout = bx + threadIdx_y;
   const int yout = by + threadIdx_x;
 
-#if SYCL
+#if LIBRETT_USES_SYCL
   const unsigned int maskIny = ballot(sg, (yin + warpLane < tiledVol.y())).s0() * (xin < tiledVol.x());
   const unsigned int maskOutx = ballot(sg, (xout + warpLane < tiledVol.x())).s0() * (yout < tiledVol.y());
-#elif HIP // AMD change
+#elif LIBRETT_USES_HIP // AMD change
   const unsigned long long int maskIny = __ballot((yin + warpLane < tiledVol.y))*(xin < tiledVol.x);
   const unsigned long long int maskOutx = __ballot((xout + warpLane < tiledVol.x))*(yout < tiledVol.y);
 #elif LIBRETT_USES_CUDA
@@ -401,7 +401,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
     // Compute global memory positions
     int posMajorIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
     int posMajorOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
-#if SYCL
+#if LIBRETT_USES_SYCL
     posMajorIn = sycl::reduce_over_group(sg, posMajorIn, sycl::plus<int>());
     posMajorOut = sycl::reduce_over_group(sg, posMajorOut, sycl::plus<int>());
 #else // for CUDA, HIP only
@@ -417,11 +417,11 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
     // Read data into shared memory tile
 #pragma unroll
     for (int j=0; j < TILEDIM; j += TILEROWS) {
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int n = sycl::popcount(ballot(sg, maskIny & (1 << j))[0]);
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane, item);
         memStat.gld_req += sycl::any_of_group(sg, n > 0);
-      #elif HIP
+      #elif LIBRETT_USES_HIP
 	int n = __popcll((unsigned long long int)__ballot(maskIny & (1 << j))); // AMD change
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any(n > 0);
@@ -435,12 +435,12 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
 
 #pragma unroll
     for (int j=0; j < TILEDIM; j += TILEROWS) {
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int n = sycl::popcount(ballot(sg, maskOutx & (1 << j))[0]);
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane, item);
         memStat.gst_req += sycl::any_of_group(sg, n > 0);
         countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2, item);
-      #elif HIP
+      #elif LIBRETT_USES_HIP
 	int n = __popcll((unsigned long long int)__ballot(maskOutx & (1 << j))); // AMD change
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any(n > 0);
@@ -457,7 +457,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
   }
 
   // Reduce memStat within thread block and write result to global memory
-#if SYCL
+#if LIBRETT_USES_SYCL
   writeMemStat(warpLane, memStat, glMemStat, item);
 #else // CUDA or HIP
   writeMemStat(warpLane, memStat, glMemStat);
@@ -468,7 +468,7 @@ countTiled(const int numMm, const int volMbar, const int sizeMbar,
 // Packed transpose. Thread block loads plan.volMmk number of elements
 //
 template <int numRegStorage>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void countPacked(const int volMmk, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const TensorConvInOut* RESTRICT gl_Mmk,
@@ -486,12 +486,12 @@ countPacked(const int volMmk, const int volMbar,
   MemStat* RESTRICT glMemStat)
 #endif
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::group wrk_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
   const int warpSize = sg.get_local_range().get(0);
   auto shSegOut = (int *)dpct_local;
-#elif HIP
+#elif LIBRETT_USES_HIP
   HIP_DYNAMIC_SHARED( int, shSegOut)
 #elif LIBRETT_USES_CUDA
   extern __shared__ int shSegOut[];
@@ -544,7 +544,7 @@ countPacked(const int volMmk, const int volMbar,
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
     int posMbarIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
-#if SYCL
+#if LIBRETT_USES_SYCL
     posMbarOut = sycl::reduce_over_group(sg, posMbarOut, sycl::plus<int>());
     posMbarIn = sycl::reduce_over_group(sg, posMbarIn, sycl::plus<int>());
 #else // CUDA, HIP only
@@ -560,11 +560,11 @@ countPacked(const int volMmk, const int volMbar,
     for (int j=0; j < numRegStorage; j++) {
       int posMmk = threadIdx_x + j*blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int n = sycl::popcount(ballot(sg, posMmk < volMmk)[0]);
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane, item);
         memStat.gld_req += sycl::any_of_group(sg, n > 0);
-      #elif HIP
+      #elif LIBRETT_USES_HIP
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmk));  // AMD change
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any(n > 0);
@@ -580,11 +580,11 @@ countPacked(const int volMmk, const int volMbar,
     for (int j=0; j < numRegStorage; j++) {
       int posMmk = threadIdx_x + j*blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int n = sycl::popcount(ballot(sg, posMmk < volMmk)[0]);
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane, item);
         memStat.gst_req += sycl::any_of_group(sg, n > 0);
-      #elif HIP
+      #elif LIBRETT_USES_HIP
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmk));  // AMD change
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any(n > 0);
@@ -596,7 +596,7 @@ countPacked(const int volMmk, const int volMbar,
       if (posMmk < volMmk) shSegOut[posMmk] = posOut/cacheWidth;
     }
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     sycl::group_barrier( wrk_grp );
     countCacheLines(shSegOut, volMmk, cacheWidth, memStat.cl_full_l2, memStat.cl_part_l2, item);
     sycl::group_barrier( wrk_grp );
@@ -612,7 +612,7 @@ countPacked(const int volMmk, const int volMbar,
       shSegOut[i] /= L2toL1;
     }
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     sycl::group_barrier( wrk_grp );
     countCacheLines(shSegOut, volMmk, accWidth, memStat.cl_full_l1, memStat.cl_part_l1, item);
 #else // CUDA or HIP
@@ -627,7 +627,7 @@ countPacked(const int volMmk, const int volMbar,
   }
 
   // Reduce memStat within thread block and write result to global memory
-#if SYCL
+#if LIBRETT_USES_SYCL
   writeMemStat(warpLane, memStat, glMemStat, item);
 #else // CUDA or HIP
   writeMemStat(warpLane, memStat, glMemStat);
@@ -641,7 +641,7 @@ countPacked(const int volMmk, const int volMbar,
 // dim nblock(ts.numSplit, min(256, max(1, ts.volMbar)), 1)
 //
 template <int numRegStorage>
-#if SYCL
+#if LIBRETT_USES_SYCL
 void countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar,
   const int sizeMmk, const int sizeMbar,
   const int cMmSplit, const int cMkSplit,
@@ -661,12 +661,12 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
   MemStat* RESTRICT glMemStat)
 #endif
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::group wrk_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
   const int warpSize = sg.get_local_range().get(0);
   auto shSegOut = (int *)dpct_local;
-#elif HIP
+#elif LIBRETT_USES_HIP
   HIP_DYNAMIC_SHARED( int, shSegOut)
 #elif LIBRETT_USES_CUDA
   extern __shared__ int shSegOut[];
@@ -734,7 +734,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
 
     int posMbarOut = ((posMbar/Mbar.c_out) % Mbar.d_out)*Mbar.ct_out;
     int posMbarIn = ((posMbar/Mbar.c_in) % Mbar.d_in)*Mbar.ct_in;
-    #if SYCL
+    #if LIBRETT_USES_SYCL
     posMbarOut = sycl::reduce_over_group(sg, posMbarOut, sycl::plus<int>());
     posMbarIn = sycl::reduce_over_group(sg, posMbarIn, sycl::plus<int>());
     #else // CUDA, HIP
@@ -750,11 +750,11 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
     for (int j=0; j < numRegStorage; j++) {
       int posMmk = threadIdx_x + j*blockDim_x;
       int posIn = posMbarIn + posMmkIn[j];
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int n = sycl::popcount(ballot(sg, posMmk < volMmkSplit)[0]);
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane, item);
         memStat.gld_req += sycl::any_of_group(sg, n > 0);
-      #elif HIP
+      #elif LIBRETT_USES_HIP
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmkSplit));  // AMD change
         memStat.gld_tran += countGlTransactions(posIn, n, accWidth, warpLane);
         memStat.gld_req += __any(n > 0);
@@ -770,11 +770,11 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
     for (int j=0; j < numRegStorage; j++) {
       int posMmk = threadIdx_x + j*blockDim_x;
       int posOut = posMbarOut + posMmkOut[j];
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int n = sycl::popcount(ballot(sg, posMmk < volMmkSplit)[0]);
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane, item);
         memStat.gst_req += sycl::any_of_group(sg, n > 0);
-      #elif HIP
+      #elif LIBRETT_USES_HIP
 	int n = __popcll((unsigned long long int)__ballot(posMmk < volMmkSplit));  // AMD change
         memStat.gst_tran += countGlTransactions(posOut, n, accWidth, warpLane);
         memStat.gst_req += __any(n > 0);
@@ -787,7 +787,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
       // countCacheLines(posOut, n, cacheWidth, warpLane, memStat.cl_full, memStat.cl_part);
     }
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     sycl::group_barrier( wrk_grp );
     countCacheLines(shSegOut, volMmkSplit, cacheWidth, memStat.cl_full_l2, memStat.cl_part_l2, item);
     sycl::group_barrier( wrk_grp );
@@ -803,7 +803,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
       shSegOut[i] /= L2toL1;
     }
 
-#if SYCL
+#if LIBRETT_USES_SYCL
     sycl::group_barrier( wrk_grp );
     countCacheLines(shSegOut, volMmkSplit, accWidth, memStat.cl_full_l1, memStat.cl_part_l1, item);
 #else // CUDA or HIP
@@ -817,7 +817,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
   }
 
   // Reduce memStat within thread block and write result to global memory
-#if SYCL
+#if LIBRETT_USES_SYCL
   writeMemStat(warpLane, memStat, glMemStat, item);
 #else // CUDA or HIP
   writeMemStat(warpLane, memStat, glMemStat);
@@ -830,7 +830,7 @@ countPackedSplit( const int splitDim, const int volMmkUnsplit, const int volMbar
 //  dim3 numthread(TILEDIM, TILEROWS, 1);
 //  dim3 numblock( ((plan.volMm-1)/TILEDIM+1)*((plan.volMkBar-1)/TILEDIM+1), 1, plan.volMbar);
 //
-#if SYCL
+#if LIBRETT_USES_SYCL
 void countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
   const int cuDimMk, const int cuDimMm,
   const int2_t tiledVol,
@@ -848,7 +848,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
   MemStat* RESTRICT glMemStat)
 #endif
 {
-#if SYCL
+#if LIBRETT_USES_SYCL
   sycl::group wrk_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
   const int warpSize = sg.get_local_range().get(0);
@@ -877,7 +877,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 
     // Read global memory
     {
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in, item);
       #else // CUDA or HIP
         int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_in, Mbar.d_in, Mbar.ct_in);
@@ -887,11 +887,11 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 #pragma unroll
       for (int j=0; j < TILEDIM; j += TILEROWS) {
         int pos  = pos0  + j*cuDimMk;
-	#if SYCL
+	#if LIBRETT_USES_SYCL
 	  int n = sycl::popcount(ballot(sg, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
           memStat.gld_tran += countGlTransactions(pos, n, accWidth, warpLane, item);
           memStat.gld_req += sycl::any_of_group(sg, n > 0);
-	#elif HIP
+	#elif LIBRETT_USES_HIP
 	  int n = __popcll((unsigned long long int)__ballot((x < tiledVol.x) && (y + j < tiledVol.y))); // AMD change
           memStat.gld_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gld_req += __any(n > 0);
@@ -905,7 +905,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 
     // Write global memory
     {
-      #if SYCL
+      #if LIBRETT_USES_SYCL
         int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out, Mbar.ct_out, item);
       #else // CUDA or HIP
 	int pos0 = tensorPos(posMbar, sizeMbar, Mbar.c_out, Mbar.d_out, Mbar.ct_out);
@@ -915,12 +915,12 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
 #pragma unroll
       for (int j=0; j < TILEDIM; j += TILEROWS) {
         int pos = pos0 + j*cuDimMm;
-        #if SYCL
+        #if LIBRETT_USES_SYCL
 	  int n = sycl::popcount(ballot(sg, (x < tiledVol.x()) && (y + j < tiledVol.y()))[0]);
           memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane, item);
           memStat.gst_req += sycl::any_of_group(sg, n > 0);
           countCacheLines(pos, n, cacheWidth, warpLane, memStat.cl_full_l2, memStat.cl_part_l2, item);
-	#elif HIP
+	#elif LIBRETT_USES_HIP
 	  int n = __popcll((unsigned long long int)__ballot((x < tiledVol.x) && (y + j < tiledVol.y))); // AMD change
           memStat.gst_tran += countGlTransactions(pos, n, accWidth, warpLane);
           memStat.gst_req += __any(n > 0);
@@ -937,7 +937,7 @@ countTiledCopy(const int numMm, const int volMbar, const int sizeMbar,
   }
 
   // Reduce memStat within thread block and write result to global memory
-#if SYCL
+#if LIBRETT_USES_SYCL
   writeMemStat(warpLane, memStat, glMemStat, item);
 #else // CUDA or HIP
   writeMemStat(warpLane, memStat, glMemStat);
@@ -967,7 +967,7 @@ void runCounters(const int warpSize, const int *hostPosData, const int numPosDat
 
   int nthread = 512;
   int nblock = (numPosData - 1)/nthread + 1;
-#if SYCL
+#if LIBRETT_USES_SYCL
   gpustream->parallel_for(
     sycl::nd_range<3>(sycl::range<3>(1, 1, nblock) *
                       sycl::range<3>(1, 1, nthread),
@@ -982,7 +982,7 @@ void runCounters(const int warpSize, const int *hostPosData, const int numPosDat
   copy_DtoH<int>(dev_cl_part, host_cl_part, numWarp, gpustream);
 
   gpustream->wait();
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipLaunchKernelGGL(runCountersKernel, dim3(nblock), dim3(nthread ), 0, gpustream, devPosData, numPosData,
     accWidth, cacheWidth, dev_tran, dev_cl_full, dev_cl_part);
   hipCheck(hipGetLastError());
@@ -1030,7 +1030,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
     case Packed:
     {
       switch(lc.numRegStorage) {
-#if SYCL
+#if LIBRETT_USES_SYCL
   #define CALL0(NREG)                                                          \
   plan.stream->submit([&](sycl::handler &cgh) {                                \
     sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1(ts.volMmk, cgh);       \
@@ -1080,7 +1080,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
       const int volMmkSplit = volSplit*ts.volMmkUnsplit;
 
       switch(lc.numRegStorage) {
-#if SYCL
+#if LIBRETT_USES_SYCL
   #define CALL0(NREG)                                                          \
   plan.stream->submit([&](sycl::handler &cgh) {                                \
     sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1{volMmkSplit, cgh};     \
@@ -1129,7 +1129,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 
     case Tiled:
     {
-#if SYCL
+#if LIBRETT_USES_SYCL
       plan.stream->submit([&](sycl::handler &cgh) {
         auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);
 
@@ -1146,7 +1146,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
                        accWidth, cacheWidth, devMemStat, item);
         });
       });
-#elif HIP
+#elif LIBRETT_USES_HIP
       hipLaunchKernelGGL(countTiled, dim3(lc.numblock), dim3(lc.numthread), 0, plan.stream ,
 	((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.tiledVol, plan.cuDimMk, plan.cuDimMm,
         plan.Mbar, accWidth, cacheWidth, devMemStat);
@@ -1160,7 +1160,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 
     case TiledCopy:
     {
-#if SYCL
+#if LIBRETT_USES_SYCL
       plan.stream->submit([&](sycl::handler &cgh) {
       auto ts_volMm_TILEDIM_ct0 = ((ts.volMm - 1) / TILEDIM + 1);
 
@@ -1177,7 +1177,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
                          accWidth, cacheWidth, devMemStat, item);
         });
       });
-#elif HIP
+#elif LIBRETT_USES_HIP
       hipLaunchKernelGGL(countTiledCopy, dim3(lc.numblock), dim3(lc.numthread), 0, plan.stream ,
 	((ts.volMm - 1)/TILEDIM + 1), ts.volMbar, ts.sizeMbar, plan.cuDimMk, plan.cuDimMm, plan.tiledVol,
         plan.Mbar, accWidth, cacheWidth, devMemStat);
@@ -1191,7 +1191,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 
   }
 
-#if HIP
+#if LIBRETT_USES_HIP
   hipCheck(hipGetLastError());
 #endif
 #if LIBRETT_USES_CUDA
@@ -1200,9 +1200,9 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
 
   MemStat hostMemStat;
   copy_DtoH<MemStat>(devMemStat, &hostMemStat, 1, plan.stream);
-#if SYCL
+#if LIBRETT_USES_SYCL
   plan.stream->wait_and_throw();
-#elif HIP
+#elif LIBRETT_USES_HIP
   hipCheck(hipDeviceSynchronize());
 #elif LIBRETT_USES_CUDA
   cudaCheck(cudaDeviceSynchronize());

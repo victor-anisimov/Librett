@@ -461,7 +461,7 @@ size_t TensorSplit::shmemAlloc(int sizeofType) const {
 
     case Tiled:
     {
-#ifdef HIP
+#ifdef LIBRETT_USES_HIP
       vol = TILEDIM*TILEDIM*sizeofType;
 #else // CUDA and SYCL
       vol = (TILEDIM+1)*TILEDIM*sizeofType;
@@ -1076,9 +1076,9 @@ bool librettPlan_t::countCycles( const gpuDeviceProp_t &prop, const int numPosMb
   // 128 bytes per transaction
   const int accWidth = 128/sizeofType;
   // L2 cache line width is 32 bytes
-#if HIP
+#if LIBRETT_USES_HIP
   const int cacheWidth = 64/sizeofType;  // AMD change
-#elif SYCL
+#elif LIBRETT_USES_SYCL
   #if LIBRETT_SUBGROUP_SIZE16
   const int cacheWidth = 16/sizeofType;
   #elif LIBRETT_SUBGROUP_SIZE32
@@ -1666,7 +1666,7 @@ void librettPlan_t::activate() {
     }
   }
 
-#ifdef SYCL
+#ifdef LIBRETT_USES_SYCL
   if(!stream->is_in_order())
     stream->wait();
 #endif

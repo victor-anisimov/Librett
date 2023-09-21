@@ -36,9 +36,9 @@ SOFTWARE.
 void set_device_array_async_T(void *data, int value, const size_t ndata,
                               gpuStream_t& stream, const size_t sizeofT)
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     stream->memset(data, value, sizeofT * ndata);
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipMemsetAsync(data, value, sizeofT*ndata, stream));
   #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemsetAsync(data, value, sizeofT*ndata, stream));
@@ -48,9 +48,9 @@ void set_device_array_async_T(void *data, int value, const size_t ndata,
 void set_device_array_sync_T(void *data, int value, const size_t ndata,
                              gpuStream_t& stream, const size_t sizeofT)
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     stream->memset(data, value, sizeofT * ndata).wait();
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipMemset(data, value, sizeofT*ndata));
   #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemset(data, value, sizeofT*ndata));
@@ -64,9 +64,9 @@ void set_device_array_sync_T(void *data, int value, const size_t ndata,
 void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len,
                        gpuStream_t& stream, const size_t sizeofT)
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     stream->memcpy(d_array, h_array, sizeofT * array_len);
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipMemcpyAsync(d_array, h_array, sizeofT*array_len, hipMemcpyDefault, stream));
   #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemcpyAsync(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault, stream));
@@ -76,9 +76,9 @@ void copy_HtoD_async_T(const void *h_array, void *d_array, size_t array_len,
 void copy_HtoD_sync_T(const void *h_array, void *d_array, size_t array_len,
                        gpuStream_t& stream, const size_t sizeofT)
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     stream->memcpy(d_array, h_array, sizeofT * array_len).wait();
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipMemcpy(d_array, h_array, sizeofT*array_len, hipMemcpyDefault));
   #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemcpy(d_array, h_array, sizeofT*array_len, cudaMemcpyDefault));
@@ -92,9 +92,9 @@ void copy_HtoD_sync_T(const void *h_array, void *d_array, size_t array_len,
 void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_len,
 		       gpuStream_t& stream, const size_t sizeofT)
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     stream->memcpy(h_array, d_array, sizeofT * array_len);
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipMemcpyAsync(h_array, d_array, sizeofT*array_len, hipMemcpyDefault, stream));
   #elif LIBRETT_USES_CUDA
     cudaCheck(cudaMemcpyAsync(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault, stream));
@@ -104,9 +104,9 @@ void copy_DtoH_async_T(const void *d_array, void *h_array, const size_t array_le
 void copy_DtoH_sync_T(const void *d_array, void *h_array, const size_t array_len,
                       gpuStream_t& stream, const size_t sizeofT)
 {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
     stream->memcpy(h_array, d_array, sizeofT * array_len).wait();
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipMemcpy(h_array, d_array, sizeofT*array_len, hipMemcpyDefault));
   #else
     cudaCheck(cudaMemcpy(h_array, d_array, sizeofT*array_len, cudaMemcpyDefault));
@@ -143,9 +143,9 @@ void gpuRangeStop() {
 #endif
 
 void DeviceReset() {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   // does nothing
-  #elif HIP
+  #elif LIBRETT_USES_HIP
     hipCheck(hipSetDevice(0));
     hipCheck(hipDeviceReset());
   #elif LIBRETT_USES_CUDA

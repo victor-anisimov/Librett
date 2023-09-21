@@ -46,11 +46,11 @@ template <typename T> bool tensor_transpose(std::vector<int>& dim, std::vector<i
 void printVec(std::vector<int>& vec);
 
 void CreateGpuStream(gpuStream_t& master_gpustream) {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   sycl::device dev(sycl::gpu_selector_v);
   sycl::context ctxt(dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
   master_gpustream = new sycl::queue(ctxt, dev, Librett::sycl_asynchandler, sycl::property_list{sycl::property::queue::in_order{}});
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipStreamCreate(&master_gpustream));
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamCreate(&master_gpustream));
@@ -58,9 +58,9 @@ void CreateGpuStream(gpuStream_t& master_gpustream) {
 }
 
 void DestroyGpuStream(gpuStream_t& master_gpustream) {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   delete master_gpustream;
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipStreamDestroy(master_gpustream));
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamDestroy(master_gpustream));
@@ -68,9 +68,9 @@ void DestroyGpuStream(gpuStream_t& master_gpustream) {
 }
 
 void gpuDeviceSynchronize(gpuStream_t& master_gpustream) {
-  #if SYCL
+  #if LIBRETT_USES_SYCL
   master_gpustream->wait_and_throw();
-  #elif HIP
+  #elif LIBRETT_USES_HIP
   hipCheck(hipStreamSynchronize(master_gpustream));
   #elif LIBRETT_USES_CUDA
   cudaCheck(cudaStreamSynchronize(master_gpustream));
