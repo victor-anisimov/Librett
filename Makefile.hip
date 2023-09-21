@@ -73,7 +73,7 @@ endif
 OPTLEV = -O3 -g
 
 # Defines
-DEFS = -DHIP
+DEFS = -DLIBRETT_USES_HIP
 
 ifdef ENABLE_NVTOOLS
 DEFS += -DENABLE_NVTOOLS
@@ -91,7 +91,7 @@ OBJS = $(OBJSLIB) $(OBJSTEST1) $(OBJSTESTX) $(OBJSBENCH)
 
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
-CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DHIP -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
+CFLAGS = -I${CUDAROOT}/include -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
 endif

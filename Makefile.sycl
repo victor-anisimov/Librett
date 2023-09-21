@@ -59,7 +59,7 @@ endif
 OPTLEV = -O3
 
 # Defines
-DEFS =
+DEFS = -DLIBRETT_USES_SYCL
 
 ifdef ENABLE_NVTOOLS
 DEFS += -DENABLE_NVTOOLS
@@ -79,7 +79,7 @@ GPUROOT = $(subst /bin/,,$(dir $(shell which $(GPU_CC))))
 GPUROOT = $(GPU_PATH)
 
 # JiT compilation
-CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC -DSYCL 
+CFLAGS = -Isrc -std=c++17 $(DEFS) $(OPTLEV) -fPIC
 LDFLAGS =
 
 # AoT compilation
