@@ -42,8 +42,10 @@ else(BUILD_SHARED_LIBS)
 endif(BUILD_SHARED_LIBS)
 
 if(ENABLE_SYCL)
-  target_compile_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
-  target_link_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
+  if(NOT DEFINED ENABLE_SYCL_HIP OR NOT DEFINED ENABLE_SYCL_CUDA)
+    target_compile_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
+    target_link_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
+  endif()
 endif(ENABLE_SYCL)
 
 if(ENABLE_CUDA)
