@@ -718,6 +718,8 @@ const int CACHE_SIZE = 100000;
   const int MAX_NUMWARP = (1024/16);
   #elif LIBRETT_SUBGROUP_SIZE32
   const int MAX_NUMWARP = (1024/32);
+  #elif LIBRETT_SUBGROUP_SIZE64
+  const int MAX_NUMWARP = (1024/64);
   #else
   const int MAX_NUMWARP = (1024/32);
   #endif

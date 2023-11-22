@@ -40,6 +40,8 @@ All rights reserved.
   const int TILEDIM = 16;
   #elif LIBRETT_SUBGROUP_SIZE32
   const int TILEDIM = 32;
+  #elif LIBRETT_SUBGROUP_SIZE64
+  const int TILEDIM = 64;
   #else
   const int TILEDIM = 32;
   #endif

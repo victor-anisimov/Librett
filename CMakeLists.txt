@@ -111,15 +111,10 @@ endif(ENABLE_HIP)
 if(ENABLE_SYCL)
   message(STATUS "Compiling for SYCL platform")
 
-  set(SYCL_GROUP_SIZE 16)
-  if(ENABLE_SYCL_CUDA)
-    set(SYCL_GROUP_SIZE 32)
-  endif()
-
   set(LIBRETT_CXX_FLAGS "-sycl-std=2020 -fsycl -fsycl-device-code-split=per_kernel -fsycl-unnamed-lambda -Wsycl-strict")
 
   if(ENABLE_SYCL_HIP)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=${CMAKE_HIP_ARCHITECTURES} -DLIBRETT_SUBGROUP_SIZE32 -fsycl-default-sub-group-size=32")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=amdgcn-amd-amdhsa -Xsycl-target-backend --offload-arch=${CMAKE_HIP_ARCHITECTURES} -DLIBRETT_SUBGROUP_SIZE64 -fsycl-default-sub-group-size=64")
   elseif(ENABLE_SYCL_CUDA)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBRETT_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda -Xsycl-target-backend --cuda-gpu-arch=sm_${CMAKE_CUDA_ARCHITECTURES} -DLIBRETT_SUBGROUP_SIZE32 -fsycl-default-sub-group-size=32")
   else()
