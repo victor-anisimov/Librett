@@ -58,7 +58,11 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
 #if LIBRETT_USES_SYCL
   sycl::group wrk_grp = item.get_group();
   sycl::sub_group sg = item.get_sub_group();
+  #ifdef LIBRETT_SUBGROUP_SIZE64
+  using tile_t = T[TILEDIM][TILEDIM];
+  #else
   using tile_t = T[TILEDIM][TILEDIM+1];
+  #endif
   tile_t& shTile = *sycl::ext::oneapi::group_local_memory_for_overwrite<tile_t>(wrk_grp);
   const int warpSize = sg.get_local_range().get(0);
 #elif LIBRETT_USES_HIP
