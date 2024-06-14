@@ -21,6 +21,7 @@ option(ENABLE_SYCL  OFF)
 option(ENABLE_SYCL_HIP  OFF)
 option(ENABLE_SYCL_CUDA OFF)
 option(ENABLE_TESTS "Enable tests" ON)
+option(LIBRETT_LINK_STATIC_GPU_LIBS "Link Librett with static GPU libs" OFF)
 
 if (NOT (ENABLE_CUDA OR ENABLE_HIP OR ENABLE_SYCL))
   message(FATAL_ERROR "Need to set one of ENABLE_CUDA/ENABLE_HIP/ENABLE_SYCL")
