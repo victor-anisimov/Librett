@@ -7,6 +7,7 @@ set(ENABLE_SYCL @ENABLE_SYCL@)
 
 if(ENABLE_CUDA)
   enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
 elseif(ENABLE_HIP)
   enable_language(HIP)
   set(ROCM_PATH @ROCM_PATH@)
