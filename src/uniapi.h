@@ -141,10 +141,10 @@ extern SYCL_EXTERNAL sycl::vec<unsigned, 4> ballot(sycl::sub_group, bool);
 
 // Functions
 #ifdef LIBRETT_USES_SYCL
-  #define gpu_shfl_xor(a,b)   sycl::ext::oneapi::experimental::this_sub_group().shuffle_xor(a,b)
-  #define gpu_shuffle(a,b)    sycl::ext::oneapi::experimental::this_sub_group().shuffle(a,b)
-  #define gpu_shfl_down(a,b)  sycl::ext::oneapi::experimental::this_sub_group().shuffle_down(a,b)
-#define gpu_atomicAdd(a,b)    sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>((a)).fetch_add(b)
+  #define gpu_shfl_xor(a,b)   sycl::permute_group_by_xor(sycl::ext::oneapi::this_work_item::get_sub_group(), a, b)
+  #define gpu_shuffle(a,b)    sycl::select_from_group(sycl::ext::oneapi::this_work_item::get_sub_group(), a, b)
+  #define gpu_shfl_down(a,b)  sycl::shift_group_left(sycl::ext::oneapi::this_work_item::get_sub_group(), a, b)
+  #define gpu_atomicAdd(a,b)  sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>((a)).fetch_add(b)
 #elif LIBRETT_USES_HIP
   #define gpu_shfl_xor(a,b)   __shfl_xor(a,b)
   #define gpu_shuffle(a,b)    __shfl(a,b)

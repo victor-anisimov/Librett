@@ -122,13 +122,8 @@ __global__ void transposeTiled(const int numMm, const int volMbar, const int siz
 #else // FOR CUDA, HIP only
     #pragma unroll
     for (int i=warpSize/2; i >= 1; i/=2) {  // AMD change
-      #if LIBRETT_USES_HIP
-        posMajorIn += __shfl_xor(posMajorIn,i);
-        posMajorOut += __shfl_xor(posMajorOut,i);
-      #elif LIBRETT_USES_CUDA
-        posMajorIn += __shfl_xor_sync(0xffffffff,posMajorIn,i);
-        posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
-      #endif
+        posMajorIn += gpu_shfl_xor(posMajorIn,i);
+        posMajorOut += gpu_shfl_xor(posMajorOut,i);
     }
 #endif // SYCL
 
@@ -235,22 +230,10 @@ __global__ void transposePacked(
 #pragma unroll
     for (int j=0; j < numRegStorage; j++) {
       int posMmk = threadIdx_x + j*blockDim_x;
-      #if LIBRETT_USES_SYCL
-        posMmkIn[j]  += ((posMmk / sg.shuffle(Mmk.c_in,i))  % sg.shuffle(Mmk.d_in,i))  * sg.shuffle(Mmk.ct_in,i);
-        posMmkOut[j] += ((posMmk / sg.shuffle(Mmk.c_out,i)) % sg.shuffle(Mmk.d_out,i)) * sg.shuffle(Mmk.ct_out,i);
-        posSh[j]     += ((posMmk / sg.shuffle(Msh.c,i))     % sg.shuffle(Msh.d,i))     * sg.shuffle(Msh.ct,i);
-      #elif LIBRETT_USES_HIP
-        posMmkIn[j]  += ((posMmk / __shfl(Mmk.c_in,i))  % __shfl(Mmk.d_in,i))  * __shfl(Mmk.ct_in,i);
-        posMmkOut[j] += ((posMmk / __shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
-        posSh[j]     += ((posMmk / __shfl(Msh.c,i))     % __shfl(Msh.d,i))     * __shfl(Msh.ct,i);
-      #elif LIBRETT_USES_CUDA
-        posMmkIn[j]  += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_in,i))  % __shfl_sync(0xffffffff,Mmk.d_in,i))
-                                                                        * __shfl_sync(0xffffffff,Mmk.ct_in,i);
-        posMmkOut[j] += ((posMmk / __shfl_sync(0xffffffff,Mmk.c_out,i)) % __shfl_sync(0xffffffff,Mmk.d_out,i))
-                                                                        * __shfl_sync(0xffffffff,Mmk.ct_out,i);
-        posSh[j]     += ((posMmk / __shfl_sync(0xffffffff,Msh.c,i))     % __shfl_sync(0xffffffff,Msh.d,i))
-                                                                        * __shfl_sync(0xffffffff,Msh.ct,i);
-      #endif
+
+      posMmkIn[j]  += ((posMmk / gpu_shuffle(Mmk.c_in,i))  % gpu_shuffle(Mmk.d_in,i))  * gpu_shuffle(Mmk.ct_in,i);
+      posMmkOut[j] += ((posMmk / gpu_shuffle(Mmk.c_out,i)) % gpu_shuffle(Mmk.d_out,i)) * gpu_shuffle(Mmk.ct_out,i);
+      posSh[j]     += ((posMmk / gpu_shuffle(Msh.c,i))     % gpu_shuffle(Msh.d,i))     * gpu_shuffle(Msh.ct,i);
     }
   }
 
@@ -275,13 +258,8 @@ __global__ void transposePacked(
 #else // for CUDA, HIP only
     #pragma unroll
     for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
-      #if LIBRETT_USES_HIP
-	posMbarOut += __shfl_xor(posMbarOut,i);
-	posMbarIn  += __shfl_xor(posMbarIn,i);
-      #elif LIBRETT_USES_CUDA
-        posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
-        posMbarIn  += __shfl_xor_sync(0xffffffff,posMbarIn,i);
-      #endif
+      posMbarOut += gpu_shfl_xor(posMbarOut,i);
+      posMbarIn  += gpu_shfl_xor(posMbarIn,i);
     }
 #endif
 
@@ -398,22 +376,10 @@ __global__ void transposePackedSplit(
 #pragma unroll
     for (int j=0; j < numRegStorage; j++) {
       int t = threadIdx_x + j*blockDim_x;
-      #if LIBRETT_USES_SYCL
-        posMmkIn[j]  += ((t/sg.shuffle(Mmk.c_in,i))  % sg.shuffle(Mmk.d_in,i))  * sg.shuffle(Mmk.ct_in,i);
-        posMmkOut[j] += ((t/sg.shuffle(Mmk.c_out,i)) % sg.shuffle(Mmk.d_out,i)) * sg.shuffle(Mmk.ct_out,i);
-        posSh[j]     += ((t/sg.shuffle(Msh.c,i))     % sg.shuffle(Msh.d,i))     * sg.shuffle(Msh.ct,i);
-      #elif LIBRETT_USES_HIP
-        posMmkIn[j]  += ((t/__shfl(Mmk.c_in,i))  % __shfl(Mmk.d_in,i))  * __shfl(Mmk.ct_in,i);
-        posMmkOut[j] += ((t/__shfl(Mmk.c_out,i)) % __shfl(Mmk.d_out,i)) * __shfl(Mmk.ct_out,i);
-        posSh[j]     += ((t/__shfl(Msh.c,i))     % __shfl(Msh.d,i))     * __shfl(Msh.ct,i);
-      #else
-        posMmkIn[j]  += ((t/__shfl_sync(0xffffffff,Mmk.c_in,i)) % __shfl_sync(0xffffffff,Mmk.d_in,i))
-                                                                * __shfl_sync(0xffffffff,Mmk.ct_in,i);
-        posMmkOut[j] += ((t/__shfl_sync(0xffffffff,Mmk.c_out,i)) % __shfl_sync(0xffffffff,Mmk.d_out,i))
-                                                                 * __shfl_sync(0xffffffff,Mmk.ct_out,i);
-        posSh[j]     += ((t/__shfl_sync(0xffffffff,Msh.c,i)) % __shfl_sync(0xffffffff,Msh.d,i))
-                                                             * __shfl_sync(0xffffffff,Msh.ct,i);
-      #endif
+
+      posMmkIn[j]  += ((t/gpu_shuffle(Mmk.c_in,i))  % gpu_shuffle(Mmk.d_in,i))  * gpu_shuffle(Mmk.ct_in,i);
+      posMmkOut[j] += ((t/gpu_shuffle(Mmk.c_out,i)) % gpu_shuffle(Mmk.d_out,i)) * gpu_shuffle(Mmk.ct_out,i);
+      posSh[j]     += ((t/gpu_shuffle(Msh.c,i))     % gpu_shuffle(Msh.d,i))     * gpu_shuffle(Msh.ct,i);
     }
   }
 
@@ -440,13 +406,8 @@ __global__ void transposePackedSplit(
 #else // HIP, CUDA only
     #pragma unroll
     for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
-      #if LIBRETT_USES_HIP
-        posMbarOut += __shfl_xor(posMbarOut,i);
-        posMbarIn += __shfl_xor(posMbarIn,i);
-      #elif LIBRETT_USES_CUDA
-        posMbarOut += __shfl_xor_sync(0xffffffff,posMbarOut,i);
-        posMbarIn += __shfl_xor_sync(0xffffffff,posMbarIn,i);
-      #endif
+      posMbarOut += gpu_shfl_xor(posMbarOut,i);
+      posMbarIn += gpu_shfl_xor(posMbarIn,i);
     }
 #endif
 
@@ -549,13 +510,8 @@ __global__ void transposeTiledCopy(
 #else // for CUDA, HIP only
     #pragma unroll
     for (int i=warpSize/2; i >= 1; i/=2) {   // AMD change
-      #if LIBRETT_USES_HIP
-        posMajorIn += __shfl_xor(posMajorIn,i);
-        posMajorOut += __shfl_xor(posMajorOut,i);
-      #elif LIBRETT_USES_CUDA
-        posMajorIn  += __shfl_xor_sync(0xffffffff,posMajorIn,i);
-        posMajorOut += __shfl_xor_sync(0xffffffff,posMajorOut,i);
-      #endif
+      posMajorIn += gpu_shfl_xor(posMajorIn,i);
+      posMajorOut += gpu_shfl_xor(posMajorOut,i);
     }
 #endif // SYCL
     int posIn = posMajorIn + posMinorIn;
@@ -1094,7 +1050,7 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut)
               transposePacked<TYPE, NREG>(                              \
                 ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2, ts_sizeMbar_ct3, \
                 plan_Mmk_ct4, plan_Mbar_ct5, plan_Msh_ct6, dataIn_ct7,  \
-                dataOut_ct8, item, dpct_local_acc_ct1.get_pointer());   \
+                dataOut_ct8, item, dpct_local_acc_ct1.get_multi_ptr<sycl::access::decorated::no>().get());   \
             });                                                         \
         });                                                             \
           event.wait();                                                 \
@@ -1150,7 +1106,7 @@ bool librettKernel(librettPlan_t &plan, void *dataIn, void *dataOut)
                       ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,            \
                       plan_cuDimMk_ct6, plan_Mmk_ct7, plan_Mbar_ct8, plan_Msh_ct9,  \
                       dataIn_ct10, dataOut_ct11, item,                          \
-                      dpct_local_acc_ct1.get_pointer());                            \
+                      dpct_local_acc_ct1.get_multi_ptr<sycl::access::decorated::no>().get());                            \
                 });                                                                 \
           }); plan.stream->wait();
         #else // CUDA or HIP

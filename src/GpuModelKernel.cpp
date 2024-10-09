@@ -1051,7 +1051,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
           countPacked<NREG>(ts_volMmk_ct0, ts_volMbar_ct1, ts_sizeMmk_ct2,     \
                             ts_sizeMbar_ct3, plan_Mmk_ct4, plan_Mbar_ct5,      \
                             accWidth_ct6, cacheWidth_ct7, devMemStat_ct8,      \
-                            item, dpct_local_acc_ct1.get_pointer());       \
+                            item, dpct_local_acc_ct1.get_multi_ptr<sycl::access::decorated::no>().get());       \
         });                                                                    \
   });
 #else // CUDA or HIP
@@ -1106,7 +1106,7 @@ bool librettGpuModelKernel(librettPlan_t &plan, const int accWidth, const int ca
               ts_sizeMmk_ct3, ts_sizeMbar_ct4, plan_cuDimMm_ct5,               \
               plan_cuDimMk_ct6, plan_Mmk_ct7, plan_Mbar_ct8, accWidth_ct9,     \
               cacheWidth_ct10, devMemStat_ct11, item,                      \
-              dpct_local_acc_ct1.get_pointer());                               \
+              dpct_local_acc_ct1.get_multi_ptr<sycl::access::decorated::no>().get());                               \
         });                                                                    \
   });
 #else // CUDA or HIP
