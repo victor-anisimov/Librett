@@ -76,13 +76,7 @@ __global__ void checkTransposeKernel(T* data, unsigned int ndata, int rank, Tens
     T dataValT = (i < ndata) ? data[i] : -1;
     int refVal = 0;
     for (int j=0; j < rank; j++) {
-#if LIBRETT_USES_SYCL
-      refVal += ((i / sg.shuffle(tc.c, j)) % sg.shuffle(tc.d, j)) * sg.shuffle(tc.ct, j);
-#elif LIBRETT_USES_HIP
-      refVal += ((i/__shfl(tc.c,j)) % __shfl(tc.d,j))*__shfl(tc.ct,j);
-#elif LIBRETT_USES_CUDA
-      refVal += ((i/__shfl_sync(0xffffffff,tc.c,j)) % __shfl_sync(0xffffffff,tc.d,j))*__shfl_sync(0xffffffff,tc.ct,j);
-#endif
+      refVal += ((i/gpu_shuffle(tc.c,j)) % gpu_shuffle(tc.d,j)) * gpu_shuffle(tc.ct,j);
     }
 
     int dataVal = (dataValT & 0xffffffff)/(sizeof(T)/4);
@@ -258,7 +252,7 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data)
                                        sycl::range<3>(1,1,numthread)),
             [=](sycl::nd_item<3> item) {
                checkTransposeKernel(data, ndata, rank, d_tensorConv_ct3,
-               d_error_ct4, d_fail_ct5, item, dpct_local_acc_ct1.get_pointer());
+               d_error_ct4, d_fail_ct5, item, dpct_local_acc_ct1.get_multi_ptr<sycl::access::decorated::no>().get());
             });
   });
 

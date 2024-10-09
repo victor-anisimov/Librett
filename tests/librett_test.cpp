@@ -30,6 +30,7 @@ All rights reserved.
 #include <ctime>           // std::time
 #include <cstring>         // strcmp
 #include <cmath>
+#include <random>
 #include "librett.h"
 #include "GpuUtils.h"
 #include "GpuMem.hpp"
@@ -257,7 +258,9 @@ bool test2(gpuStream_t& master_gpustream) {
         }
       } while (curvol > volmax || fabs(curvol-vol)/(double)vol > 2.3);
 
-      std::random_shuffle(permutation.begin(), permutation.end());
+      std::random_device rd;  // Obtain a random number from hardware
+      std::mt19937 eng(rd()); // Seed the generator
+      std::shuffle(permutation.begin(), permutation.end(), eng);
 
       if (!test_tensor<long long int>(dim, permutation, master_gpustream)) return false;
       if (!test_tensor<int>(dim, permutation, master_gpustream)) return false;

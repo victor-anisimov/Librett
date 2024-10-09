@@ -43,8 +43,8 @@ endif()
 
 if(ENABLE_SYCL)
   if(NOT DEFINED ENABLE_SYCL_HIP OR NOT DEFINED ENABLE_SYCL_CUDA)
-    target_compile_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
-    target_link_options(librett PRIVATE -fsycl -fsycl-targets=spir64_gen -Xsycl-target-backend "-device 12.60.7")
+    target_compile_options(librett PRIVATE -fsycl -fsycl-targets=intel_gpu_pvc)
+    target_link_options(librett PRIVATE -fsycl -fsycl-targets=intel_gpu_pvc)
   endif()
 endif(ENABLE_SYCL)
 

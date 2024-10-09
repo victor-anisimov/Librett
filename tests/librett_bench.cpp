@@ -467,13 +467,15 @@ bool bench2(int numElem, gpuStream_t& gpuStream) {
 bool bench3(int numElem, gpuStream_t& gpuStream) {
 
   int ranks[8] = {2, 3, 4, 5, 6, 7, 8, 15};
+  std::random_device rd;  // Obtain a random number from hardware
+  std::mt19937 eng(rd()); // Seed the generator
 
   for (int i=0;i <= 7;i++) {
     std::vector<int> dim(ranks[i]);
     std::vector<int> permutation(ranks[i]);
     for (int r=0;r < ranks[i];r++) permutation[r] = r;
     for (int nsample=0;nsample < 50;nsample++) {
-      std::random_shuffle(permutation.begin(), permutation.end());
+      std::shuffle(permutation.begin(), permutation.end(), eng);
       getRandomDim((double)numElem, dim);
       if (!bench_tensor<long long int>(dim, permutation, gpuStream)) return false;
     }
@@ -500,6 +502,8 @@ template <typename T>
 bool bench5(int numElemAvg, int ratio, gpuStream_t& gpuStream) {
 
   std::normal_distribution<double> numElem_dist((double)numElemAvg, (double)numElemAvg*0.2);
+  std::random_device rd;  // Obtain a random number from hardware
+  std::mt19937 eng(rd()); // Seed the generator
 
   const int minDim = 2;
   const int maxDim = 16;
@@ -555,9 +559,9 @@ bool bench5(int numElemAvg, int ratio, gpuStream_t& gpuStream) {
       printf("vol %d cur_ratio %lf | %lf\n", vol, cur_ratio, vol_re);
       printVec(dim);
 
-      std::random_shuffle(dim.begin(), dim.end());
+      std::shuffle(dim.begin(), dim.end(), eng);
       while (isTrivial(permutation)) {
-        std::random_shuffle(permutation.begin(), permutation.end());
+        std::shuffle(permutation.begin(), permutation.end(), eng);
       }
       if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
     }
@@ -713,14 +717,16 @@ bool bench7(gpuStream_t& gpuStream) {
   {
     std::vector<int> dim = {5, 3, 2, 4, 35, 33, 37, 40};
     std::vector<int> permutation(8);
+    std::random_device rd;  // Obtain a random number from hardware
+    std::mt19937 eng(rd()); // Seed the generator
     // Inverse
     for (int r=0;r < dim.size();r++) permutation[r] = dim.size() - 1 - r;
     if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
     // Random
     for (int r=0;r < dim.size();r++) permutation[r] = r;
     for (int nsample=0;nsample < 500;nsample++) {
-      std::random_shuffle(dim.begin(), dim.end());
-      std::random_shuffle(permutation.begin(), permutation.end());
+      std::shuffle(dim.begin(), dim.end(), eng);
+      std::shuffle(permutation.begin(), permutation.end(), eng);
       if (!isTrivial(permutation)) {
         if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
       }
@@ -731,14 +737,16 @@ bool bench7(gpuStream_t& gpuStream) {
   {
     std::vector<int> dim = {2, 3, 4, 3, 2, 2, 3, 2, 20, 18, 22, 24};
     std::vector<int> permutation(12);
+    std::random_device rd;  // Obtain a random number from hardware
+    std::mt19937 eng(rd()); // Seed the generator
     // Inverse
     for (int r=0;r < dim.size();r++) permutation[r] = dim.size() - 1 - r;
     if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
     // Random
     for (int r=0;r < dim.size();r++) permutation[r] = r;
     for (int nsample=0;nsample < 500;nsample++) {
-      std::random_shuffle(dim.begin(), dim.end());
-      std::random_shuffle(permutation.begin(), permutation.end());
+      std::shuffle(dim.begin(), dim.end(), eng);
+      std::shuffle(permutation.begin(), permutation.end(), eng);
       if (!isTrivial(permutation)) {
         if (!bench_tensor<T>(dim, permutation, gpuStream)) return false;
       }
