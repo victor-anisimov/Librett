@@ -14,14 +14,16 @@ and adding SYCL support by Argonne National Laboratory.
 
 ## Credits
 ```
-cuTT     algorithms: Dmitry Lyakh (ORNL), Antti-Pekka Hynninen (ORNL)
-cuTT     original implementation: Antti-Pekka Hynninen (ORNL)
-cuTT     thread safety: Ed Valeev (VT), Dmitry Lyakh (ORNL)
-hipTT    port of cuTT: Luke Roskop (HPE), Dmitry Lyakh (ORNL)
-hipTT    working version: Alessandro Fanfarillo (AMD)
+cuTT     Design the algorithms: Dmitry Lyakh (ORNL), Antti-Pekka Hynninen (ORNL)
+cuTT     Make the original implementation: Antti-Pekka Hynninen (ORNL)
+cuTT     Implement thread safety: Eduard Valeyev (VT), Dmitry Lyakh (ORNL)
+hipTT    Make the initial port of cuTT to HIP: Luke Roskop (HPE), Dmitry Lyakh (ORNL)
+hipTT    Finalize the working version: Alessandro Fanfarillo (AMD)
 LibreTT  SYCL port and CUDA,AMD,INTEL platform integration: Victor Anisimov (ANL)
 LibreTT  CMake enhancements and complex-double datatype: Ajay Panyala (PNNL)
 LibreTT  SYCL portability and remove dependency on DPCT: Abhishek Bagusetty (ANL)
+LibreTT  Enhancements for HIP build: Eduard Valeyev (VT)
+LibreTT  Fix the code for deprecations in C++17 and SYCL: Abhishek Bagusetty (ANL)
 ```
 
 ## Directory Structure
