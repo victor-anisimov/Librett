@@ -85,6 +85,9 @@ install(TARGETS librett
 
 set_target_properties(librett PROPERTIES EXPORT_NAME librett)
 
+# Export include directories. Fixes compatibility with FetchContent.
+target_include_directories(librett PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<INSTALL_INTERFACE:include>)
+
 #Install headers
 install(FILES ${LIBRETT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/librett)
 
