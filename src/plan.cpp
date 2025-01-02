@@ -812,7 +812,7 @@ void printMatlab( const gpuDeviceProp_t &prop, std::list<librettPlan_t> &plans, 
 
 void LaunchConfig::print() {
   printf("numthread %zu %zu %zu numblock %zu %zu %zu shmemsize %d numRegStorage %d\n",
-    numthread_x, numthread_y, numthread_z, numblock_x, numblock_y, numblock_z,
+    (size_t) numthread_x, (size_t) numthread_y, (size_t) numthread_z, (size_t) numblock_x, (size_t) numblock_y, (size_t) numblock_z,
     (int)shmemsize, numRegStorage);
 }
 
