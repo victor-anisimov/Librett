@@ -202,7 +202,17 @@ bool tensor_transpose(std::vector<int> &dim, std::vector<int> &permutation, gpuS
       printf("index: %5d   ijk:", index);
       for(int r=0; r<rank; r++)
         printf(" %3d", ijk[r]);
-      printf("    out[%5d]: %5d  out[%5d]: %5d  tindex: %5d\n", index, out[index], tindex, out[tindex], tindex);
+      if constexpr (std::is_same_v<T, int>) {
+        printf("    out[%5d]: %5d  out[%5d]: %5d  tindex: %5d\n", index,
+               out[index], tindex, out[tindex], tindex);
+      } else if constexpr (std::is_same_v<T, long long>) {
+        printf("    out[%5d]: %5lld  out[%5d]: %5lld  tindex: %5d\n", index,
+               out[index], tindex, out[tindex], tindex);
+      } else if constexpr (std::is_same_v<T, std::complex<double>>) {
+        printf("    out[%5d]: %5lf%+5lf  out[%5d]: %5lf%+5lf  tindex: %5d\n",
+               index, out[index].real(), out[index].imag(), tindex,
+               out[tindex].real(), out[tindex].imag(), tindex);
+      }
     }
 
     // check correctness of the transposed matrix
