@@ -287,7 +287,7 @@ bool TensorTester::checkTranspose(int rank, int *dim, int *permutation, T *data)
         error = h_error[i];
       }
     }
-    printf("TensorTester::checkTranspose FAIL at %d ref %d data %d\n", error.pos, error.refVal, error.dataVal);
+    printf("TensorTester::checkTranspose FAIL at %llu ref %d data %d\n", error.pos, error.refVal, error.dataVal);
     return false;
   }
 
