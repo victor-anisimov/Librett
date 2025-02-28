@@ -35,6 +35,7 @@ static int warp_size = 64;  // AMD change
 //
 #ifdef LIBRETT_USES_SYCL
   #define cudaCheck(stmt) do { int err = stmt; } while (0)
+  #define generalCheck(stmt) cudaCheck(stmt)
 #elif LIBRETT_USES_HIP
   #define hipCheck(stmt) do {                                                       \
     hipError_t err = stmt;                                                          \
@@ -44,6 +45,7 @@ static int warp_size = 64;  // AMD change
       exit(1);                                                                      \
     }                                                                               \
   } while(0)
+  #define generalCheck(stmt) hipCheck(stmt)
 #elif LIBRETT_USES_CUDA
   #define cudaCheck(stmt) do {                                                      \
     cudaError_t err = stmt;                                                         \
@@ -53,6 +55,7 @@ static int warp_size = 64;  // AMD change
       exit(1);                                                                      \
     }                                                                               \
   } while(0)
+  #define generalCheck(stmt) cudaCheck(stmt)
 #endif
 
 #define librettCheck(stmt) do {                                                     \

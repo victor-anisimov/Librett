@@ -711,8 +711,8 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
     {
     #ifndef LIBRETT_USES_SYCL
       #define CALL0(TYPE, NREG) \
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-          transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+          transposePacked<TYPE, NREG>, numthread, lc.shmemsize))
       switch(lc.numRegStorage) {
         #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 	                                if (sizeofType == 8) CALL0(double, ICASE); \
@@ -757,8 +757,8 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
         // key not found in cache, determine value and add it to cache
         #ifndef LIBRETT_USES_SYCL
           #define CALL0(TYPE, NREG) \
-            gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
-              transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
+            generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
+              transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize))
           switch(lc.numRegStorage) {
             #define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); \
 		                            if (sizeofType == 8) CALL0(double, ICASE); \
@@ -777,15 +777,15 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
     {
     #ifndef LIBRETT_USES_SYCL
       if (sizeofType == 4) {
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<float>, numthread, lc.shmemsize);
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<float>, numthread, lc.shmemsize));
       } else if (sizeofType == 8) {
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<double>, numthread, lc.shmemsize);
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<double>, numthread, lc.shmemsize));
       }
       else if (sizeofType == 16) {
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiled<librett_complex>, numthread, lc.shmemsize);
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<librett_complex>, numthread, lc.shmemsize));
       }
     #endif // CUDA or HIP
     }
@@ -795,14 +795,14 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
     {
     #ifndef LIBRETT_USES_SYCL
       if (sizeofType == 4) {
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<float>, numthread, lc.shmemsize);
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<float>, numthread, lc.shmemsize));
       } else if (sizeofType == 8) {
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<double>, numthread, lc.shmemsize);
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<double>, numthread, lc.shmemsize));
       } else if (sizeofType == 16) {
-        gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
-          transposeTiledCopy<librett_complex>, numthread, lc.shmemsize);
+        generalCheck(gpuOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<librett_complex>, numthread, lc.shmemsize));
       }
     #endif // CUDA or HIP
     }
