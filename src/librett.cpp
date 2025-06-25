@@ -396,13 +396,3 @@ void librettInitialize() {
 
 void librettFinalize() {
 }
-
-#if LIBRETT_USES_SYCL
-sycl::vec<unsigned, 4> ballot(sycl::sub_group sg, bool predicate = true) __attribute__((convergent)) {
-  #ifdef __SYCL_DEVICE_ONLY__
-    return __spirv_GroupNonUniformBallot(__spv::Scope::Subgroup, predicate);
-  #else
-    throw sycl::exception(sycl::errc::runtime, "Sub-groups are not supported on host device.");
-  #endif
-}
-#endif
