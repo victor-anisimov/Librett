@@ -101,7 +101,18 @@ SOFTWARE.
   #define gpuMaxThreadsPerBlock    (prop.maxThreadsPerBlock)
   #define gpuMultiProcessorCount   (prop.multiProcessorCount)
   #define gpuWarpSize              (prop.warpSize)
-  #define gpuClockRate             (prop.clockRate / 1000.0)
+
+#if defined(CUDART_VERSION) && (CUDART_VERSION < 12000)
+  #define gpuClockRate (prop.clockRate / 1000.0)
+#else
+  #define gpuClockRate ([](){ \
+      int d, clk; \
+      cudaGetDevice(&d); \
+      cudaDeviceGetAttribute(&clk, cudaDevAttrClockRate, d); \
+      return clk / 1000.0; \
+  })()
+#endif
+
   #define gpuMajor                 (prop.major)
   #define gpuSharedMemPerBlock     (prop.sharedMemPerBlock)
   #define tiledVol_x    tiledVol.x

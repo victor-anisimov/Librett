@@ -814,7 +814,18 @@ void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp,
   double mem_BW = 0.0;
 #else // CUDA or SYCL
   // Memory bandwidth in GB/s
-  double mem_BW = (double)(prop.memoryClockRate*2*(prop.memoryBusWidth/8))/1.0e6;
+  double mem_BW =
+#if defined(CUDART_VERSION) && (CUDART_VERSION < 12000)
+    (double)(prop.memoryClockRate * 2.0 * (prop.memoryBusWidth / 8.0)) / 1.0e6;
+#else
+    ([](int device) {
+        int mem_clock_khz = 0, mem_bus_width = 0;
+        cudaDeviceGetAttribute(&mem_clock_khz, cudaDevAttrMemoryClockRate, device);
+        cudaDeviceGetAttribute(&mem_bus_width, cudaDevAttrGlobalMemoryBusWidth, device);
+        return (mem_clock_khz * 2.0 * (mem_bus_width / 8.0)) / 1.0e6;
+    })([](){ int d; cudaGetDevice(&d); return d; }());
+#endif
+  
   if (prop.ECCEnabled) mem_BW *= (1.0 - 0.125);
   #if LIBRETT_USES_HIP
     return;  // Dmitry Lyakh
