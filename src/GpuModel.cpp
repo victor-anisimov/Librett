@@ -815,7 +815,7 @@ void prepmodel5(const gpuDeviceProp_t &prop, GpuModelProp &gpuModelProp,
 #else // CUDA or SYCL
   // Memory bandwidth in GB/s
   double mem_BW =
-#if defined(CUDART_VERSION) && (CUDART_VERSION < 12000)
+#if defined(LIBRETT_USES_HIP) || !defined(CUDART_VERSION) || (CUDART_VERSION < 12000)
     (double)(prop.memoryClockRate * 2.0 * (prop.memoryBusWidth / 8.0)) / 1.0e6;
 #else
     ([](int device) {

@@ -102,7 +102,7 @@ SOFTWARE.
   #define gpuMultiProcessorCount   (prop.multiProcessorCount)
   #define gpuWarpSize              (prop.warpSize)
 
-#if defined(CUDART_VERSION) && (CUDART_VERSION < 12000)
+#if defined(LIBRETT_USES_HIP) || !defined(CUDART_VERSION) || (CUDART_VERSION < 12000)
   #define gpuClockRate (prop.clockRate / 1000.0)
 #else
   #define gpuClockRate ([](){ \
