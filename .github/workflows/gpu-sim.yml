@@ -1,0 +1,96 @@
+name: GPU Simulator
+
+# Optional, non-required check. The hosted runners have no GPU, so this builds
+# the HIP tests for gfx942 (Release) and runs `librett_test` (tests 1 to 3:
+# every transpose is verified on the host-side pattern check) and `example` on a
+# simulated AMD Instinct MI300X (https://github.com/pantheongpu/pantheonsim).
+# The test sizes are reduced by a patch applied in this job only (see the
+# "Shrink the test sizes" step). A simulator cannot reproduce hardware-specific
+# behavior or timing, so it complements real-GPU testing and does not replace it.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/gpu-sim.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hip-test:
+    name: HIP 7.1 (ROCm and simulated MI300X)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
+      - name: Set up the simulated GPU and ROCm
+        uses: pantheongpu/setup-pantheonsim@ca87fe3143b29166822b923d6050945c5179408c # v0.1.5
+        with:
+          gpu: amd/mi300x
+          cuda-toolkit: none
+          rocm: "7.1"
+
+      # librett_test has no command-line options and allocates two 200M-element
+      # buffers, so on a simulator it is shrunk with sed on the checked-out copy
+      # (the repository is not modified by the PR). -DPERFTEST selects the light
+      # variant the upstream GitLab job also builds (20M elements, tests 4 and 5
+      # skipped; test 4 needs 171M elements). The sed edits then reduce that
+      # further: buffer 20M -> 4.5M elements, the PERFTEST hand-picked shapes in
+      # test 3, the random volume cap and sample count in test 2 (100 -> 4 per
+      # rank) and the largest dimension in the exhaustive rank 2-7 sweep in
+      # test 1 (16 -> 8). Every check in the tests is unchanged.
+      - name: Shrink the test sizes
+        run: |
+          f=tests/librett_test.cpp
+          sed -i \
+            -e 's/int dataSize  = 20000000;/int dataSize  = 4500000;/' \
+            -e 's/dim\[0\] = 651;/dim[0] = 131;/' \
+            -e 's/dim\[1\] = 299;/dim[1] = 99;/' \
+            -e 's/dim\[1\] = 170;/dim[1] = 50;/' \
+            -e 's/dim\[3\] = 97;/dim[3] = 47;/' \
+            -e 's/dim\[1\] = 32;/dim[1] = 16;/' \
+            -e 's/dim\[2\] = 45;/dim[2] = 25;/' \
+            -e 's/dim\[3\] = 63;/dim[3] = 23;/' \
+            -e 's/dim\[4\] = 37;/dim[4] = 17;/' \
+            -e 's/double volmax = (double)dataSize;/double volmax = 500000.0;/' \
+            -e 's/isample < 100;/isample < 4;/' \
+            -e 's/const int maxDim = 16;/const int maxDim = 8;/' \
+            "$f"
+          git diff --stat
+          # fail loudly if any substitution did not apply
+          test "$(git diff -U0 "$f" | grep -c '^+[^+]')" -eq 12
+
+      # find_package(hip) needs the amd_comgr CMake config and the HSA runtime
+      # library its CMake config points at, which the action's compiler-only
+      # install does not include.
+      - name: Install comgr and the HSA runtime
+        run: sudo apt-get install -y comgr hsa-rocr
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=/opt/rocm/bin/hipcc \
+            -DCMAKE_CXX_FLAGS=-DPERFTEST \
+            -DENABLE_HIP=ON \
+            -DCMAKE_HIP_ARCHITECTURES=gfx942 \
+            -DCMAKE_PREFIX_PATH=/opt/rocm
+
+      - name: Build
+        run: cmake --build build -j3
+
+      - name: Test
+        run: vgpu run ctest --test-dir build --output-on-failure --no-tests=error -R "librett_test|example"
